@@ -7,8 +7,9 @@ class FragGraph:
     Nodes are read fragments spanning >= 2 variants
     Edges are inserted between fragments that cover the same variants
     """
-    def __init__(self, g, node_id2hap_id=None):
+    def __init__(self, g, fragments, node_id2hap_id=None):
         self.g = g
+        self.fragments = fragments
         self.n_nodes = g.number_of_nodes()
         self.node_id2hap_id = node_id2hap_id
 
@@ -44,19 +45,23 @@ class FragGraph:
         for node in frag_graph.nodes:
             frag_graph.nodes[node]['x'] = [0.0]
             frag_graph.nodes[node]['y'] = [fragments[node].n_variants]
-        return FragGraph(frag_graph)
+        return FragGraph(frag_graph, fragments)
 
+    def extract_subgraph(self, connected_component):
+        subg = nx.Graph()
+        subg.add_nodes_from((n, self.g.nodes[n]) for n in connected_component)
+        subg.add_edges_from((n, nbr, w)
+                            for n, nbrs in self.g.adj.items() if n in connected_component
+                            for nbr, w in nbrs.items() if nbr in connected_component)
+        subg.graph.update(self.g.graph)
+        subg_frags = [self.fragments[node] for node in subg.nodes]
+        node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
+        subg = nx.relabel_nodes(subg, node_mapping, copy=False)
+        return FragGraph(subg, subg_frags)
 
-def num_conflicting_alleles(f1, f2):
-    start_overlap = max(f1.start, f2.start)
-    end_overlap = min(f1.end, f2.end)
-    n_conflicts = 0
-    n_alleles = 0
-    for i in range(start_overlap, end_overlap + 1, 1):
-        n_alleles += 1
-        if f1.seq[i - f1.start] != f2.seq[i - f2.start]:
-            n_conflicts += 1
-    return n_conflicts, n_alleles
+    def connected_components_subgraphs(self):
+        components = nx.connected_components(self.g)
+        return [self.extract_subgraph(component) for component in components]
 
 
 def generate_rand_frag_graph(h_length=30, n_frags=40):

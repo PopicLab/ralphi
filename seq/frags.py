@@ -89,8 +89,9 @@ class Fragment:
 
 def parse_frag_file(frags_fname):
     fragments = []
-    for frag_line in open(frags_fname, 'r'):
-        fragments.append(Fragment.parse_from_file(frag_line))
+    with open(frags_fname, 'r') as f:
+        for frag_line in f:
+            fragments.append(Fragment.parse_from_file(frag_line))
     return fragments
 
 
