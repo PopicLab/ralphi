@@ -3,7 +3,7 @@ import gym
 from gym import spaces
 import dgl
 import utils.plotting as vis
-import graphs.haploype_graphs as graphs
+import graphs.frag_graph as graphs
 
 
 class State:
@@ -14,7 +14,7 @@ class State:
     def __init__(self, haplotype_graph):
         self.haplotype_graph = haplotype_graph
         self.g = dgl.DGLGraph()
-        self.g.from_networkx(haplotype_graph.graph_nx, edge_attrs=['weight'], node_attrs=['x'])
+        self.g.from_networkx(haplotype_graph.g, edge_attrs=['weight'], node_attrs=['x'])
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes + 1)
         self.H1 = []
@@ -37,7 +37,7 @@ class PhasingEnv(gym.Env):
 
     @staticmethod
     def init_state():
-        g = graphs.generate_rand_haplotype_graph()
+        g = graphs.generate_rand_frag_graph()
         return State(g)
 
     def compute_mfc_reward(self, action):
@@ -48,11 +48,11 @@ class PhasingEnv(gym.Env):
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
-        for nbr in self.state.haplotype_graph.graph_nx.neighbors(action):
+        for nbr in self.state.haplotype_graph.g.neighbors(action):
             if nbr not in self.state.H1:
-                self.current_total_reward += self.state.haplotype_graph.graph_nx[action][nbr]['weight']
+                self.current_total_reward += self.state.haplotype_graph.g[action][nbr]['weight']
             else:
-                self.current_total_reward -= self.state.haplotype_graph.graph_nx[action][nbr]['weight']
+                self.current_total_reward -= self.state.haplotype_graph.g[action][nbr]['weight']
         return (self.current_total_reward - previous_reward) / norm_factor
 
     def is_termination_action(self, action):

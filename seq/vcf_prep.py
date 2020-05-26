@@ -14,24 +14,39 @@ class HetSNPOnly(vcf.filters.Base):
             return True
 
 
-def prepare_vcf(vcf_fname):
+def split_by_chr(vcf_fname, filters):
     """
-    Split the input VCF file by chromosome, keep only heterozygous SNPs
+    Split the input VCF file by chromosome, apply filters
     """
     chroms = ['chr{}'.format(x) for x in range(1, 23)] + ['chrX', 'chrY']
     output_fnames = [vcf_fname + '.{}.vcf'.format(c) for c in chroms]
     vcf_reader = vcf.Reader(open(vcf_fname, 'r'), prepend_chr=True, strict_whitespace=True)
     assert(len(vcf_reader.samples) == 1), "Only single-sample files are expected"
     writers = {chrom: Writer(open(f, 'w'), vcf_reader) for (chrom, f) in zip(chroms, output_fnames)}
-    filters = [HetSNPOnly(None)]
     for record in vcf_reader:
-        for f in filters:
-            if f(record) is None:
-                writers[record.CHROM].write_record(record)
+        keep = all([f(record) is not None for f in filters])
+        if keep:
+            writers[record.CHROM].write_record(record)
+
+
+def filter_vcf(vcf_fname, filters):
+    vcf_reader = vcf.Reader(open(vcf_fname, 'r'), prepend_chr=True, strict_whitespace=True)
+    assert (len(vcf_reader.samples) == 1), "Only single-sample files are expected"
+    output_fname = vcf_fname + '.filtered.vcf'
+    writer = Writer(open(output_fname, 'w'), vcf_reader)
+    for record in vcf_reader:
+        keep = all([f(record) is not None for f in filters])
+        if keep:
+            writer.write_record(record)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare input VCF")
     parser.add_argument('--vcf', help='Input VCF')
+    parser.add_argument('--chr', default=False, help='Split by chromosome')
     args = parser.parse_args()
-    prepare_vcf(args.vcf)
+    if args.chr:
+        split_by_chr(args.vcf, [HetSNPOnly(None)])
+    else:
+        filter_vcf(args.vcf, [HetSNPOnly(None)])
+

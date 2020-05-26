@@ -1,5 +1,6 @@
 import random
 import numpy as np
+from seq.frags import Fragment
 
 
 def generate_rand_haplotype(hap_len):
@@ -29,19 +30,6 @@ def get_random_substring(s, l):
     return s[start:start + l], start
 
 
-class HaplotypeFrag:
-    def __init__(self, seq, start):
-        self.start = start
-        self.seq = seq
-        self.end = start + len(seq) - 1
-
-    def len(self):
-        return len(self.seq)
-
-    def overlaps(self, f):
-        return min(self.end, f.end) - max(self.start, f.start)
-
-
 def get_n_random_substrings_normal_dist(s, n, err=0, mu=5, sig=0.1):
     strings = []
     for i in range(n):
@@ -54,6 +42,6 @@ def get_n_random_substrings_normal_dist(s, n, err=0, mu=5, sig=0.1):
                 ss_err += get_complement_char(ss[j])
             else:
                 ss_err += ss[j]
-        strings.append(HaplotypeFrag(ss_err, start))
+        strings.append(Fragment(start, ss_err))
     return strings
 

@@ -4,8 +4,8 @@ import matplotlib
 import utils.plotting as vis
 import models.actor_critic as algs
 import envs.phasing_env as envs
-import graphs.haploype_graphs as graphs
-matplotlib.use('tkagg')
+import graphs.frag_graph as graphs
+matplotlib.use('Agg')
 
 MODEL_PATH = 'phasing_model.pt'
 env = envs.PhasingEnv()

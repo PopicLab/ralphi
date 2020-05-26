@@ -6,8 +6,8 @@ import numpy as np
 import time
 import torch
 import matplotlib
-import graphs.haploype_graphs as graphs
-matplotlib.use('tkagg')
+import graphs.frag_graph as graphs
+matplotlib.use('Agg')
 
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
 parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
