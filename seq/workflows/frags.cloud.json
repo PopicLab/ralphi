@@ -1,0 +1,6 @@
+{
+  "Frags.chromosomes": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"],
+  "Frags.input_vcf_dir": "gs://genomics-public-data/ftp-trace.ncbi.nih.gov/1000genomes/ftp/release/20130502/",
+  "Frags.input_samples_panel": "gs://fc-e300d5be-28d4-46ff-9e02-ce612ba2f643/gs_panel.txt"
+}
+
