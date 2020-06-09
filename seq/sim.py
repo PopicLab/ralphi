@@ -1,6 +1,6 @@
 import random
 import numpy as np
-from seq.frags import Fragment
+from seq.frags import Fragment, Block
 
 
 def generate_rand_haplotype(hap_len):
@@ -42,6 +42,6 @@ def get_n_random_substrings_normal_dist(s, n, err=0, mu=5, sig=0.1):
                 ss_err += get_complement_char(ss[j])
             else:
                 ss_err += ss[j]
-        strings.append(Fragment(start, ss_err))
+        strings.append(Fragment([Block(start, ss_err)]))
     return strings
 

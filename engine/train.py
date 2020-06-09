@@ -7,7 +7,7 @@ import time
 import torch
 import matplotlib
 import graphs.frag_graph as graphs
-matplotlib.use('Agg')
+matplotlib.use('macosx')
 
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
 parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
@@ -22,12 +22,13 @@ args = parser.parse_args()
 
 
 # Setup the agent and the environment
-env = envs.PhasingEnv()
+panel_file = "data/train/frags/panel.txt"
+env = envs.PhasingEnv(panel_file)
 agent = agents.DiscreteActorCriticAgent(env)
 
 # Play!
-sim_mode = True
-num_episodes = 200
+sim_mode = False
+num_episodes = 500
 episode_rewards = []
 episode_accuracies = []
 for episode in range(num_episodes):
@@ -38,7 +39,7 @@ for episode in range(num_episodes):
     episode_accuracy = 0.0
     if sim_mode:
         node_labels = env.state.g.ndata['x'][:, 0].cpu().squeeze().numpy().tolist()
-        episode_accuracy = graphs.eval_assignment(node_labels, env.state.haplotype_graph.node_id2hap_id)
+        episode_accuracy = graphs.eval_assignment(node_labels, env.state.frag_graph.node_id2hap_id)
     episode_accuracies.append(100*episode_accuracy)
     print('Episode: {}. Reward: {}, Runtime: {}, Accuracy: {} '.format(episode, episode_reward, end_time - start_time,
           episode_accuracy))

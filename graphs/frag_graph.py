@@ -1,4 +1,6 @@
 import seq.sim as seq
+import seq.frags as frags
+from seq.var import Variant
 import networkx as nx
 
 
@@ -24,9 +26,10 @@ class FragGraph:
         frag_graph = nx.Graph()
         for i, f1 in enumerate(fragments):
             frag_graph.add_node(i)
-            for j, f2 in enumerate(fragments):
-                if i == j:
-                    continue
+            if i % 1000 == 0:
+                print("Processing ", i)
+            for j in range(i + 1, len(fragments)):
+                f2 = fragments[j]
                 frag_variant_overlap = f1.overlap(f2)
                 if len(frag_variant_overlap) == 0:
                     continue
@@ -56,12 +59,48 @@ class FragGraph:
         subg.graph.update(self.g.graph)
         subg_frags = [self.fragments[node] for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
+        node_id2hap_id = None
+        if self.node_id2hap_id is not None:
+            node_id2hap_id = {i: self.node_id2hap_id[j] for (i, j) in enumerate(subg.nodes)}
         subg = nx.relabel_nodes(subg, node_mapping, copy=False)
-        return FragGraph(subg, subg_frags)
+        return FragGraph(subg, subg_frags, node_id2hap_id)
 
     def connected_components_subgraphs(self):
         components = nx.connected_components(self.g)
         return [self.extract_subgraph(component) for component in components]
+
+
+class FragGraphGen:
+    def __init__(self, frag_panel_file=None, load_graphs=False, store_graphs=False):
+        self.frag_panel_file = frag_panel_file
+        self.load_graphs = load_graphs
+        self.store_graphs = store_graphs
+
+    def __iter__(self):
+        if self.frag_panel_file is not None:
+            with open(self.frag_panel_file, 'r') as panel:
+                for frag_file_fname in panel:
+                    print("Fragment file: ", frag_file_fname)
+                    fragments = frags.parse_frag_file(frag_file_fname.strip())
+                    graph_file_fname = frag_file_fname.strip() + ".graph"
+                    if self.load_graphs:
+                        g = nx.read_gpickle(graph_file_fname)
+                        graph = FragGraph(g, fragments)
+                    else:
+                        graph = FragGraph.build(fragments)
+                    if self.store_graphs:
+                        nx.write_gpickle(graph.g, graph_file_fname)
+                    print("Fragment graph with ", graph.n_nodes, " nodes and ", graph.g.number_of_edges(), " edges")
+                    for subgraph in graph.connected_components_subgraphs():
+                        if subgraph.n_nodes < 2:
+                            continue
+                        yield subgraph
+            yield None
+        else:
+            while True:
+                graph = generate_rand_frag_graph()
+                for subgraph in graph.connected_components_subgraphs():
+                    yield subgraph
 
 
 def generate_rand_frag_graph(h_length=30, n_frags=40):

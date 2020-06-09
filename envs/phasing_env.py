@@ -11,10 +11,10 @@ class State:
     State consists of the genome fragment graph
     and the nodes assigned to each haplotype (0: H0 1: H1)
     """
-    def __init__(self, haplotype_graph):
-        self.haplotype_graph = haplotype_graph
+    def __init__(self, frag_graph):
+        self.frag_graph = frag_graph
         self.g = dgl.DGLGraph()
-        self.g.from_networkx(haplotype_graph.g, edge_attrs=['weight'], node_attrs=['x'])
+        self.g.from_networkx(frag_graph.g, edge_attrs=['weight'], node_attrs=['x'])
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes + 1)
         self.H1 = []
@@ -23,22 +23,28 @@ class State:
 
 
 class PhasingEnv(gym.Env):
-    """Genome phasing environment"""
-    def __init__(self):
+    """
+    Genome phasing environment
+    """
+    def __init__(self, panel=None, record_solutions=False):
         super(PhasingEnv, self).__init__()
+        self.graph_gen = iter(graphs.FragGraphGen(panel, load_graphs=True, store_graphs=True))
         self.state = self.init_state()
-
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
         self.action_space = spaces.Discrete(self.num_actions)
         self.observation_space = {}
         # other bookkeeping
         self.current_total_reward = 0
+        self.record = record_solutions
+        self.solutions = []
 
-    @staticmethod
-    def init_state():
-        g = graphs.generate_rand_frag_graph()
-        return State(g)
+    def init_state(self):
+        g = next(self.graph_gen)
+        if g is not None:
+            return State(g)
+        else:
+            return None
 
     def compute_mfc_reward(self, action):
         """The reward is the normalized change in MFC score = sum of all conflict edges from the selected node
@@ -48,11 +54,11 @@ class PhasingEnv(gym.Env):
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
-        for nbr in self.state.haplotype_graph.g.neighbors(action):
+        for nbr in self.state.frag_graph.g.neighbors(action):
             if nbr not in self.state.H1:
-                self.current_total_reward += self.state.haplotype_graph.g[action][nbr]['weight']
+                self.current_total_reward += self.state.frag_graph.g[action][nbr]['weight']
             else:
-                self.current_total_reward -= self.state.haplotype_graph.g[action][nbr]['weight']
+                self.current_total_reward -= self.state.frag_graph.g[action][nbr]['weight']
         return (self.current_total_reward - previous_reward) / norm_factor
 
     def is_termination_action(self, action):
@@ -60,6 +66,9 @@ class PhasingEnv(gym.Env):
 
     def is_out_of_moves(self):
         return len(self.state.H1) >= self.state.num_nodes
+
+    def has_state(self):
+        return self.state is not None
 
     def step(self, action):
         """Execute one action from given state """
@@ -78,7 +87,15 @@ class PhasingEnv(gym.Env):
         else:
             r_t = 0
             is_done = True
+            self.finalize()
         return self.state, r_t, is_done
+
+    def finalize(self):
+        if self.record:
+            node_labels = self.state.g.ndata['x'][:, 0].cpu().squeeze().numpy().tolist()
+            for i, frag in enumerate(self.state.frag_graph.fragments):
+                frag.assign_haplotype(node_labels[i])
+            self.solutions.append(self.state.frag_graph.fragments)
 
     def reset(self):
         """
@@ -86,7 +103,7 @@ class PhasingEnv(gym.Env):
         Returns the initial state and the is_done token
         """
         self.state = self.init_state()
-        return self.state, False
+        return self.state, not self.has_state()
 
     def render(self, mode='human'):
         """Display the environment"""
