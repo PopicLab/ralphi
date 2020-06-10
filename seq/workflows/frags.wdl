@@ -17,6 +17,7 @@ workflow Frags {
                 output_vcf_fname = "ALL.chr" + chr + ".fixed.vcf.gz",
                 docker = docker
         }
+
     }
 
     Array[Pair[Array[String], String]] subsets = cross(samples, chromosomes)
@@ -32,7 +33,8 @@ workflow Frags {
                 sample = sample,
                 chr = chr,
                 docker = docker,
-                link = fix_vcf_header.output_vcf
+                link = fix_vcf_header.output_vcf,
+                link_index = fix_vcf_header.output_vcf_index
         }
         call extract_frags {
             input:
@@ -80,6 +82,7 @@ task extract_vcf {
     String chr
     String docker
     Array[File] link
+    Array[File] link_index
 
     command {
         bcftools view --types snps -I -a -ghet -c1 -Ov -s ${sample} --regions ${chr} -o ${output_vcf_fname} ${input_vcf}
