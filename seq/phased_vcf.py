@@ -6,10 +6,9 @@ import copy
 import collections
 
 
-def write_phased_vcf(input_vcf, idx2var):
+def write_phased_vcf(input_vcf, idx2var, output_vcf):
     vcf_reader = vcf.Reader(open(input_vcf, 'r'), strict_whitespace=True)
     assert (len(vcf_reader.samples) == 1), "Only single-sample files are expected"
-    output_vcf = input_vcf + '.dphase.phased.vcf'
     input_format_keys = list(vcf_reader.formats.keys())
     # add phasing related format fields
     vcf_reader.formats['PS'] = _Format('PS', 1, 'Integer', 'ID of Phase Set for Variant')
@@ -48,7 +47,7 @@ def write_phased_vcf(input_vcf, idx2var):
         record.add_format('PD')
         record.add_format('PQ')
 
-        print("total ", n_total, " phased ", n_phased)
+        #print("total ", n_total, " phased ", n_phased)
 
         writer.write_record(record)
         vcf_idx += 1
@@ -57,4 +56,6 @@ def write_phased_vcf(input_vcf, idx2var):
 
 if __name__ == "__main__":
     write_phased_vcf("/Users/vpopic/research/data/VCF/"
-                     "NA12878.ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf", None)
+                     "NA12878.ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf", None,
+                     "/Users/vpopic/research/data/VCF/"
+                     "NA12878.ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.latest.dphase.phased.vcf")

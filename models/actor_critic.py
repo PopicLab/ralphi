@@ -2,7 +2,7 @@ import dgl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.graph_models import GCN
+from models.graph_models import GCN, GCNFirstLayer
 import numpy as np
 
 
@@ -28,6 +28,7 @@ class ActorCriticNet(nn.Module):
         - actor's policy: tensor of probabilities for each action
         - critic's value of the current state
         """
+        #h = torch.cat([genome_graph.ndata['x'], genome_graph.ndata['y'].float()], dim=1)
         h = genome_graph.ndata['x']
         for conv in self.layers:
             h = conv(genome_graph, h)
@@ -50,6 +51,8 @@ class DiscreteActorCriticAgent:
         self.batch_size = 32
 
     def select_action(self):
+        if self.env.state.num_nodes < 2:
+            return 0
         [pi, val] = self.model(self.env.state.g)
         pi = pi.squeeze()
         pi[self.env.get_all_invalid_actions()] = -float('Inf')
@@ -63,7 +66,7 @@ class DiscreteActorCriticAgent:
 
     def run_episode(self):
         print("Run episode.....")
-        self.env.reset()
+        #self.env.reset()
         done = False
         episode_reward = 0
         while not done:

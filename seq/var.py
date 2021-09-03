@@ -32,6 +32,7 @@ class Variant:
 def extract_variants(phased_frag_sets):
     idx2variant = {}
     for i, fragments in enumerate(phased_frag_sets):
+        #print(i, len(fragments))
         for frag in fragments:
             for block in frag.blocks:
                 for var in block.variants:

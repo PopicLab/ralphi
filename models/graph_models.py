@@ -11,6 +11,11 @@ def edge_msg(edges):
     return {'m': weighted_node_feat}
 
 
+def edge_msg2(edges):
+    weighted_node_feat = edges.src['h'][0, :] * edges.src['h'] * edges.data['weight'].unsqueeze(1)
+    return {'m': weighted_node_feat}
+
+
 def reduce(nodes):
     accum = torch.cat((torch.mean(nodes.mailbox['m'], 1), torch.max(nodes.mailbox['m'], 1)[0]), dim=1)
     return {'hm': accum}
@@ -37,6 +42,19 @@ class GCN(nn.Module):
     def forward(self, g, feature):
         g.ndata['h'] = feature
         g.update_all(message_func=edge_msg, reduce_func=reduce)
+        g.apply_nodes(func=self.apply_mod)
+        g.ndata.pop('hm')
+        return g.ndata.pop('h')
+
+
+class GCNFirstLayer(nn.Module):
+    def __init__(self, in_feats, out_feats, activation):
+        super(GCNFirstLayer, self).__init__()
+        self.apply_mod = NodeApplyModule(in_feats, out_feats, activation)
+
+    def forward(self, g, feature):
+        g.ndata['h'] = feature
+        g.update_all(message_func=edge_msg2, reduce_func=reduce)
         g.apply_nodes(func=self.apply_mod)
         g.ndata.pop('hm')
         return g.ndata.pop('h')
