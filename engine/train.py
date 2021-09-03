@@ -5,33 +5,40 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 import torch
+import os.path
 import matplotlib
 import graphs.frag_graph as graphs
-matplotlib.use('macosx')
+#matplotlib.use('macosx')
 
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
+parser.add_argument('--panel', default="../data/train/frags/chr20/panel_gs_chr20_final_local.txt",
+                    help='Input fragment files (training data)')
+parser.add_argument('--uid', default="e_all_all", help='Experiment uid')
 parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
                     help='reward discount factor (default: 0.99)')
 parser.add_argument('--seed', type=int, default=12345, metavar='N',
                     help='random seed (default: 12345)')
 parser.add_argument('--render', action='store_true',
                     help='render the environment')
-parser.add_argument('--log-interval', type=int, default=1, metavar='N',
-                    help='interval between training status logs (default: 10)')
 args = parser.parse_args()
 
-
 # Setup the agent and the environment
-panel_file = "data/train/frags/panel.txt"
-env = envs.PhasingEnv(panel_file)
+env = envs.PhasingEnv(args.panel)
 agent = agents.DiscreteActorCriticAgent(env)
+
+# Bookkeeping
+#experiment_name = os.path.splitext(os.path.basename(args.panel))[0]
+experiment_name = args.uid
+max_episodes = None
+episode = 0
 
 # Play!
 sim_mode = False
-num_episodes = 500
 episode_rewards = []
 episode_accuracies = []
-for episode in range(num_episodes):
+while env.has_state():
+    if max_episodes is not None and episode >= max_episodes:
+        break
     start_time = time.time()
     episode_reward = agent.run_episode()
     end_time = time.time()
@@ -43,6 +50,12 @@ for episode in range(num_episodes):
     episode_accuracies.append(100*episode_accuracy)
     print('Episode: {}. Reward: {}, Runtime: {}, Accuracy: {} '.format(episode, episode_reward, end_time - start_time,
           episode_accuracy))
+    episode += 1
+    env.reset()
+
+# save the model
+MODEL_PATH = '../data/train/models/' + experiment_name + '_phasing_model.pt'
+torch.save(agent.model.state_dict(), MODEL_PATH)
 
 # Plots results
 y = np.asarray(episode_rewards)
@@ -53,15 +66,13 @@ ax2 = plt.axes()
 ax2.plot(x, y)
 plt.xlabel('Episode')
 plt.ylabel('Reward')
+fig2.savefig('../data/train/results/reward.png')
 
 fig3 = plt.figure()
 ax3 = plt.axes()
 ax3.plot(x, z)
 plt.xlabel('Episode')
 plt.ylabel('Accuracy')
+fig3.savefig('../data/train/results/accuracy.png')
 
-plt.show()
-
-# save the model
-MODEL_PATH = 'phasing_model.pt'
-torch.save(agent.model.state_dict(), MODEL_PATH)
+#plt.show()

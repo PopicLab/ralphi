@@ -2,6 +2,11 @@ import seq.sim as seq
 import seq.frags as frags
 from seq.var import Variant
 import networkx as nx
+from google.cloud import storage
+import ntpath
+import os
+import six
+from six.moves.urllib.parse import urlsplit
 
 
 class FragGraph:
@@ -71,19 +76,28 @@ class FragGraph:
 
 
 class FragGraphGen:
-    def __init__(self, frag_panel_file=None, load_graphs=False, store_graphs=False):
+    def __init__(self, frag_panel_file=None, load_graphs=False, store_graphs=False, skip_singletons=True):
         self.frag_panel_file = frag_panel_file
         self.load_graphs = load_graphs
         self.store_graphs = store_graphs
+        self.skip_singletons = skip_singletons
 
     def __iter__(self):
+        #client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
+        #bucket = client.get_bucket('bucket-id-here')
         if self.frag_panel_file is not None:
             with open(self.frag_panel_file, 'r') as panel:
                 for frag_file_fname in panel:
+                    #frag_file_fname = frag_file_fname.replace("\"", "")
                     print("Fragment file: ", frag_file_fname)
-                    fragments = frags.parse_frag_file(frag_file_fname.strip())
-                    graph_file_fname = frag_file_fname.strip() + ".graph"
-                    if self.load_graphs:
+                    frag_file_fname_local = frag_file_fname
+                    #frag_file_fname_local = '/src/data/train/frags/chr20/' + ntpath.basename(frag_file_fname)
+                    # if remote file, download
+                    #with open(frag_file_fname_local + ntpath.basename(frag_file_fname), 'w') as frag_file:
+                    #    client.download_blob_to_file(frag_file_fname, frag_file)
+                    fragments = frags.parse_frag_file(frag_file_fname_local.strip())
+                    graph_file_fname = frag_file_fname_local.strip() + ".graph"
+                    if self.load_graphs and os.path.exists(graph_file_fname):
                         g = nx.read_gpickle(graph_file_fname)
                         graph = FragGraph(g, fragments)
                     else:
@@ -92,9 +106,10 @@ class FragGraphGen:
                         nx.write_gpickle(graph.g, graph_file_fname)
                     print("Fragment graph with ", graph.n_nodes, " nodes and ", graph.g.number_of_edges(), " edges")
                     for subgraph in graph.connected_components_subgraphs():
-                        if subgraph.n_nodes < 2:
+                        if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
                             continue
                         yield subgraph
+                    print("Finished processing file: ", frag_file_fname)
             yield None
         else:
             while True:
