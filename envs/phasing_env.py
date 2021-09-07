@@ -21,8 +21,7 @@ class State:
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes + 1)
         self.H1 = []
-        print("Number of nodes: ", self.num_nodes)
-        print("Number of edges: ", self.g.number_of_edges())
+        print("Number of nodes: ", self.num_nodes, ", number of edges: ", self.g.number_of_edges())
 
 
 class PhasingEnv(gym.Env):
@@ -110,7 +109,7 @@ class PhasingEnv(gym.Env):
     def render(self, mode='human'):
         """Display the environment"""
         node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
-        if mode == 'human':
+        if mode == 'view':
             vis.plot_network(self.state.g.to_networkx(), node_labels)
         else:
             # save the plot to file

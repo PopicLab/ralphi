@@ -105,9 +105,11 @@ class FragGraphGen:
                     if self.store_graphs:
                         nx.write_gpickle(graph.g, graph_file_fname)
                     print("Fragment graph with ", graph.n_nodes, " nodes and ", graph.g.number_of_edges(), " edges")
+                    print("Finding connected components...")
                     for subgraph in graph.connected_components_subgraphs():
                         if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
                             continue
+                        print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                         yield subgraph
                     print("Finished processing file: ", frag_file_fname)
             yield None

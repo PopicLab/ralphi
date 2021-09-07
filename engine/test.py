@@ -1,7 +1,6 @@
 import argparse
 import torch
 import time
-import matplotlib
 import utils.plotting as vis
 import models.actor_critic as algs
 import envs.phasing_env as envs
@@ -11,13 +10,10 @@ import subprocess
 #matplotlib.use('macosx')
 
 parser = argparse.ArgumentParser(description='Test haplotype phasing')
-parser.add_argument('--model', default='../data/train/models/e_all_all_phasing_model.pt',
-                    help='Pretrained model')
-parser.add_argument('--panel', default="../data/test/frags/panel.txt",
-                    help='Test fragment panel file')
-parser.add_argument('--truth',
-                    default="../../data/VCF/NA12878.ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf",
-                    help='Ground truth VCF file')
+parser.add_argument('--model', help='Pretrained model')
+parser.add_argument('--panel', help='Test fragment panel file')
+parser.add_argument('--input_vcf', help='Input VCF file to phase')
+parser.add_argument('--output_vcf', help='Output VCF file')
 args = parser.parse_args()
 
 env = envs.PhasingEnv(args.panel, record_solutions=True, skip_singleton_graphs=False)
@@ -45,10 +41,10 @@ print("NUM EPISODES: ", n_episodes)
 idx2var = var.extract_variants(env.solutions)
 for v in idx2var.values():
     v.assign_haplotype()
+vcf_writer.write_phased_vcf(args.input_vcf, idx2var, args.output_vcf)
+print("Output written to: ", args.output_vcf)
 
-ground_truth_vcf = args.truth
-output_vcf = ground_truth_vcf + '.latest.dphase.phased.vcf'
-vcf_writer.write_phased_vcf(ground_truth_vcf, idx2var, output_vcf)
-subprocess.call(["../third-party/HapCUT2/utilities/calculate_haplotype_statistics.py", "-v1", output_vcf, "-v2",
-                 ground_truth_vcf], shell=True)
+# automatically call the evaluation script if ground truth is given
+#subprocess.call(["../third-party/HapCUT2/utilities/calculate_haplotype_statistics.py", "-v1", args.output, "-v2",
+#                 args.truth], shell=True)
 
