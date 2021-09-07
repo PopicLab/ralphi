@@ -15,6 +15,10 @@ from the input dataset.
 
 ### Code execution
 
+Clone the repository with its submodules:
+
+```git clone --recursive git@github.com:PopicLab/dphase.git```
+
 Prior to running the code, setup a Python virtual environment (as described below) 
 and set the PYTHONPATH as follows: ```export PYTHONPATH=${PYTHONPATH}:${PATH_TO_REPO}```
 
