@@ -2,7 +2,7 @@ import seq.sim as seq
 import seq.frags as frags
 from seq.var import Variant
 import networkx as nx
-from google.cloud import storage
+#from google.cloud import storage
 import ntpath
 import os
 import six
