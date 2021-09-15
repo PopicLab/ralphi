@@ -13,15 +13,14 @@ class State:
     """
     def __init__(self, frag_graph):
         self.frag_graph = frag_graph
-        self.g = dgl.DGLGraph()
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
-        self.g.from_networkx(frag_graph.g, edge_attrs=edge_attrs, node_attrs=['x', 'y'])
+        self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=['x', 'y'])
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes + 1)
         self.H1 = []
-        print("Number of nodes: ", self.num_nodes, ", number of edges: ", self.g.number_of_edges())
+        print("Number of nodes: ", self.num_nodes, ", number of directed edges: ", self.g.number_of_edges())
 
 
 class PhasingEnv(gym.Env):
@@ -30,7 +29,8 @@ class PhasingEnv(gym.Env):
     """
     def __init__(self, panel=None, record_solutions=False, skip_singleton_graphs=True):
         super(PhasingEnv, self).__init__()
-        self.graph_gen = iter(graphs.FragGraphGen(panel, load_graphs=True, store_graphs=True, skip_singletons=skip_singleton_graphs))
+        self.graph_gen = iter(graphs.FragGraphGen(panel, load_graphs=True, store_graphs=True, load_components=True,
+            store_components=True, skip_singletons=skip_singleton_graphs))
         self.state = self.init_state()
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
