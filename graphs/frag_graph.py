@@ -5,6 +5,7 @@ import networkx as nx
 #from google.cloud import storage
 import ntpath
 import os
+import pickle
 import six
 from six.moves.urllib.parse import urlsplit
 
@@ -76,10 +77,13 @@ class FragGraph:
 
 
 class FragGraphGen:
-    def __init__(self, frag_panel_file=None, load_graphs=False, store_graphs=False, skip_singletons=True):
+    def __init__(self, frag_panel_file=None, load_graphs=False, store_graphs=False, load_components=False,
+                 store_components=False, skip_singletons=True):
         self.frag_panel_file = frag_panel_file
         self.load_graphs = load_graphs
         self.store_graphs = store_graphs
+        self.load_components = load_components
+        self.store_components = store_components
         self.skip_singletons = skip_singletons
 
     def __iter__(self):
@@ -105,12 +109,23 @@ class FragGraphGen:
                     if self.store_graphs:
                         nx.write_gpickle(graph.g, graph_file_fname)
                     print("Fragment graph with ", graph.n_nodes, " nodes and ", graph.g.number_of_edges(), " edges")
+
                     print("Finding connected components...")
-                    for subgraph in graph.connected_components_subgraphs():
+                    component_file_fname = frag_file_fname_local.strip() + ".components"
+                    if self.load_components and os.path.exists(component_file_fname):
+                        with open(component_file_fname, 'rb') as f:
+                            connected_components = pickle.load(f)
+                    else:
+                        connected_components = graph.connected_components_subgraphs()
+                        if self.store_components:
+                            with open(component_file_fname, 'wb') as f:
+                                pickle.dump(connected_components, f)
+                    for subgraph in connected_components:
                         if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                         yield subgraph
+
                     print("Finished processing file: ", frag_file_fname)
             yield None
         else:

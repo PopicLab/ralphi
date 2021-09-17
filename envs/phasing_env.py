@@ -30,7 +30,8 @@ class PhasingEnv(gym.Env):
     """
     def __init__(self, panel=None, record_solutions=False, skip_singleton_graphs=True):
         super(PhasingEnv, self).__init__()
-        self.graph_gen = iter(graphs.FragGraphGen(panel, load_graphs=True, store_graphs=True, skip_singletons=skip_singleton_graphs))
+        self.graph_gen = iter(graphs.FragGraphGen(panel, load_graphs=True, store_graphs=True, load_components=True,
+            store_components=True, skip_singletons=skip_singleton_graphs))
         self.state = self.init_state()
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
