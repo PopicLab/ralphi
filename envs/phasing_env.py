@@ -13,14 +13,15 @@ class State:
     """
     def __init__(self, frag_graph):
         self.frag_graph = frag_graph
+        self.g = dgl.DGLGraph()
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
-        self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=['x', 'y'])
+        self.g.from_networkx(frag_graph.g, edge_attrs=edge_attrs, node_attrs=['x', 'y'])
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes + 1)
         self.H1 = []
-        print("Number of nodes: ", self.num_nodes, ", number of directed edges: ", self.g.number_of_edges())
+        print("Number of nodes: ", self.num_nodes, ", number of edges: ", self.g.number_of_edges())
 
 
 class PhasingEnv(gym.Env):
