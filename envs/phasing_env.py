@@ -113,15 +113,6 @@ class PhasingEnv(gym.Env):
         self.state = self.init_state()
         return self.state, not self.has_state()
 
-    def initializeRandomCut(self):
-        # helper to experiment with random cuts
-        for action in range(self.state.num_nodes):
-            flip = random.randint(0, 1)
-            if flip == 0:
-                self.state.g.ndata['x'][action] = 1.0
-                self.state.adjacency_matrix[0][action] = 1.0
-                self.state.H1.append(action)
-
     def getCutValue(self):
         node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
         if not isinstance(node_labels, list):
