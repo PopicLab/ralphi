@@ -4,7 +4,8 @@ from gym import spaces
 import dgl
 import utils.plotting as vis
 import graphs.frag_graph as graphs
-
+import networkx as nx
+import random
 
 class State:
     """
@@ -13,25 +14,25 @@ class State:
     """
     def __init__(self, frag_graph):
         self.frag_graph = frag_graph
-        self.g = dgl.DGLGraph()
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
-        self.g.from_networkx(frag_graph.g, edge_attrs=edge_attrs, node_attrs=['x', 'y'])
+        self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=['x', 'y'])
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes + 1)
         self.H1 = []
-        print("Number of nodes: ", self.num_nodes, ", number of edges: ", self.g.number_of_edges())
+        print("Number of nodes: ", self.frag_graph.n_nodes, ", number of edges: ", self.frag_graph.g.number_of_edges())
 
 
 class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
-    def __init__(self, panel=None, record_solutions=False, skip_singleton_graphs=True):
+    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, prune_graphs_smaller_than=1):
         super(PhasingEnv, self).__init__()
-        self.graph_gen = iter(graphs.FragGraphGen(panel, load_graphs=True, store_graphs=True, load_components=True,
-            store_components=True, skip_singletons=skip_singleton_graphs))
+        self.prune_graphs_smaller_than = prune_graphs_smaller_than
+        self.graph_gen = iter(graphs.FragGraphGen(panel, out_dir, load_graphs=False, store_graphs=False, load_components=False,
+            store_components=False, skip_singletons=skip_singleton_graphs))
         self.state = self.init_state()
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
@@ -43,17 +44,22 @@ class PhasingEnv(gym.Env):
         self.solutions = []
 
     def init_state(self):
-        g = next(self.graph_gen)
-        if g is not None:
+        while True:
+            g = next(self.graph_gen)
+            if g is None:
+                return None
+            if g.n_nodes < self.prune_graphs_smaller_than:
+                continue
             return State(g)
-        else:
-            return None
 
     def compute_mfc_reward(self, action):
         """The reward is the normalized change in MFC score = sum of all conflict edges from the selected node
         to the remaining graph """
 
-        norm_factor = 1  # self.state.num_nodes
+        # experimentally normalizing by number of nodes appears to stablilize actor-critic training
+        # (and this normalization seems to be done in literature as well) -- but should confirm this with a side by side comparison
+        # TODO (Anant): get a long running result of training with and without normalization
+        norm_factor = self.state.num_nodes # 1
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
@@ -106,6 +112,23 @@ class PhasingEnv(gym.Env):
         """
         self.state = self.init_state()
         return self.state, not self.has_state()
+
+    def initializeRandomCut(self):
+        # helper to experiment with random cuts
+        for action in range(self.state.num_nodes):
+            flip = random.randint(0, 1)
+            if flip == 0:
+                self.state.g.ndata['x'][action] = 1.0
+                self.state.adjacency_matrix[0][action] = 1.0
+                self.state.H1.append(action)
+
+    def getCutValue(self):
+        node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
+        if not isinstance(node_labels, list):
+            node_labels = [node_labels]
+        S = {i for i, e in enumerate(node_labels) if e != 0}
+        netXGraph = self.state.frag_graph.g
+        return nx.cut_size(netXGraph, S, weight='weight')
 
     def render(self, mode='human'):
         """Display the environment"""

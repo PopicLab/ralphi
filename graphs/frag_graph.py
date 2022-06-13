@@ -8,6 +8,7 @@ import os
 import pickle
 import six
 from six.moves.urllib.parse import urlsplit
+import random
 
 
 class FragGraph:
@@ -30,12 +31,17 @@ class FragGraph:
     @staticmethod
     def build(fragments):
         frag_graph = nx.Graph()
+        print("constructing fragment graph")
         for i, f1 in enumerate(fragments):
             frag_graph.add_node(i)
             if i % 1000 == 0:
                 print("Processing ", i)
             for j in range(i + 1, len(fragments)):
                 f2 = fragments[j]
+                if f1.vcf_idx_end < f2.vcf_idx_start:
+                    # optimization: since we sort the fragments by vcf_idx_start, do not need to consider
+                    # later fragments for potential edge existence due to overlap
+                    break
                 frag_variant_overlap = f1.overlap(f2)
                 if len(frag_variant_overlap) == 0:
                     continue
@@ -46,8 +52,11 @@ class FragGraph:
                         n_conflicts += 1
                 weight = 1.0 * (-n_variants + 2 * n_conflicts)
                 # TODO(viq): differentiate between no overlap and half conflicts
-                if weight != 0:
-                    frag_graph.add_edge(i, j, weight=weight)
+                # Include zero-weight edges for now so that we ensure a variant only belongs to one connected component,
+                # as otherwise half-conflicts can result in a variant being split between two connected components.
+                # TODO:(Anant): revisit this since these zero-weight edges provide no phasing information
+                # if weight != 0:
+                frag_graph.add_edge(i, j, weight=weight)
 
         # setup node features/attributes
         # for now just a binary value indicating whether the node is part of the solution
@@ -57,19 +66,14 @@ class FragGraph:
         return FragGraph(frag_graph, fragments)
 
     def extract_subgraph(self, connected_component):
-        subg = nx.Graph()
-        subg.add_nodes_from((n, self.g.nodes[n]) for n in connected_component)
-        subg.add_edges_from((n, nbr, w)
-                            for n, nbrs in self.g.adj.items() if n in connected_component
-                            for nbr, w in nbrs.items() if nbr in connected_component)
-        subg.graph.update(self.g.graph)
+        subg = self.g.subgraph(connected_component).copy()
         subg_frags = [self.fragments[node] for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
         node_id2hap_id = None
         if self.node_id2hap_id is not None:
             node_id2hap_id = {i: self.node_id2hap_id[j] for (i, j) in enumerate(subg.nodes)}
-        subg = nx.relabel_nodes(subg, node_mapping, copy=False)
-        return FragGraph(subg, subg_frags, node_id2hap_id)
+        subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
+        return FragGraph(subg_relabeled, subg_frags, node_id2hap_id)
 
     def connected_components_subgraphs(self):
         components = nx.connected_components(self.g)
@@ -77,9 +81,10 @@ class FragGraph:
 
 
 class FragGraphGen:
-    def __init__(self, frag_panel_file=None, load_graphs=False, store_graphs=False, load_components=False,
+    def __init__(self, frag_panel_file=None, out_dir=None, load_graphs=False, store_graphs=False, load_components=False,
                  store_components=False, skip_singletons=True):
         self.frag_panel_file = frag_panel_file
+        self.out_dir = out_dir
         self.load_graphs = load_graphs
         self.store_graphs = store_graphs
         self.load_components = load_components
@@ -120,13 +125,19 @@ class FragGraphGen:
                         if self.store_components:
                             with open(component_file_fname, 'wb') as f:
                                 pickle.dump(connected_components, f)
+                    # decorrelate connected components, since otherwise we may end up processing connected components in
+                    # the order of the corresponding variants which could result in some unwanted correlation
+                    # during training between e.g. if there are certain regions of variants with many errors
+                    random.shuffle(connected_components)
                     for subgraph in connected_components:
                         if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                         yield subgraph
-
                     print("Finished processing file: ", frag_file_fname)
+                    if self.out_dir is not None:
+                        with open(self.out_dir + "/training.log", "a") as f:
+                            f.write(frag_file_fname)
             yield None
         else:
             while True:

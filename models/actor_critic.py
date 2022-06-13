@@ -47,7 +47,8 @@ class DiscreteActorCriticAgent:
         self.env = env
         self.model = ActorCriticNet(1, 264, self.env.num_actions)
         self.gamma = 0.98
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.0003)
+        # very small learning rate appears to stabilize training; TODO (Anant): experiment with LR scheduler
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.000003)
         self.batch_size = 32
 
     def select_action(self):
@@ -64,9 +65,20 @@ class DiscreteActorCriticAgent:
         self.model.actions.append((dist.log_prob(action), val[0]))
         return action.item()
 
+    def select_greedy_action(self):
+        if self.env.state.num_nodes < 2:
+            return 0
+        [pi, val] = self.model(self.env.state.g)
+        pi = pi.squeeze()
+        pi[self.env.get_all_invalid_actions()] = -float('Inf')
+        greedy_choice = torch.argmax(pi)
+        return greedy_choice.item()
+
     def run_episode(self):
         print("Run episode.....")
         #self.env.reset()
+        if self.env.state.num_nodes < 2:
+            return 0
         done = False
         episode_reward = 0
         while not done:
@@ -75,7 +87,24 @@ class DiscreteActorCriticAgent:
             self.model.rewards.append(reward)
             episode_reward += reward
             #print("Action: ", action, "reward", reward, "is_done", done)
-        self.update_model()
+        (actor_loss, critic_loss, sum_loss) = self.update_model()
+        # self.env.render()
+        return episode_reward, actor_loss, critic_loss, sum_loss
+
+    def run_episode_no_updates(self):
+        print("Run episode.....")
+        #self.env.reset()
+        if self.env.state.num_nodes < 2:
+            return 0
+        done = False
+        episode_reward = 0
+        while not done:
+            action = self.select_greedy_action()
+            _, reward, done = self.env.step(action)
+            self.model.rewards.append(reward)
+            episode_reward += reward
+        del self.model.rewards[:]
+        del self.model.actions[:]
         # self.env.render()
         return episode_reward
 
@@ -102,3 +131,4 @@ class DiscreteActorCriticAgent:
         # reset rewards and action buffer
         del self.model.rewards[:]
         del self.model.actions[:]
+        return (torch.stack(loss_policy).sum().item(), torch.stack(loss_value).sum().item(), loss.item())
