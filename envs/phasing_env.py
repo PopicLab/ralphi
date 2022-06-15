@@ -124,8 +124,17 @@ class PhasingEnv(gym.Env):
     def render(self, mode='human'):
         """Display the environment"""
         node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
+        edge_weights = self.state.g.edata['weight'].cpu().squeeze().numpy().tolist()
+        edges_src = self.state.g.edges()[0].cpu().squeeze().numpy().tolist()
+        edges_dst = self.state.g.edges()[1].cpu().squeeze().numpy().tolist()
+        edge_indices = zip(edges_src, edges_dst)
+        edge_weights = dict(zip(edge_indices, edge_weights))
         if mode == 'view':
             vis.plot_network(self.state.g.to_networkx(), node_labels)
+        elif mode == 'weighted_view':
+            vis.plot_weighted_network(self.state.g.to_networkx(), node_labels, edge_weights)
+        elif mode == "bipartite":
+            vis.plot_bipartite_network(self.state.g.to_networkx(), node_labels, edge_weights)
         else:
             # save the plot to file
             pass

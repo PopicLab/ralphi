@@ -94,6 +94,8 @@ while env.has_state():
         torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (args.out_dir, model_no))
         model_no += 1
     episode += 1
+    if args.render:
+        env.render('weighted_view')
     env.reset()
 
 # save the model
