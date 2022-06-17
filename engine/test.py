@@ -26,7 +26,7 @@ while env.has_state():
     start_time = time.time()
     done = False
     while not done:
-        action = agent.select_greedy_action()
+        action = agent.select_action(greedy=True)
         _, _, done = env.step(action)
     end_time = time.time()
     #print("Runtime: ", end_time - start_time)

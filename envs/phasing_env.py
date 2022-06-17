@@ -23,16 +23,14 @@ class State:
         self.H1 = []
         print("Number of nodes: ", self.frag_graph.n_nodes, ", number of edges: ", self.frag_graph.g.number_of_edges())
 
-
 class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
-    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, prune_graphs_smaller_than=1):
+    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1):
         super(PhasingEnv, self).__init__()
-        self.prune_graphs_smaller_than = prune_graphs_smaller_than
         self.graph_gen = iter(graphs.FragGraphGen(panel, out_dir, load_graphs=False, store_graphs=False, load_components=False,
-            store_components=False, skip_singletons=skip_singleton_graphs))
+            store_components=False, skip_singletons=skip_singleton_graphs, min_graph_size=min_graph_size))
         self.state = self.init_state()
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
@@ -44,13 +42,11 @@ class PhasingEnv(gym.Env):
         self.solutions = []
 
     def init_state(self):
-        while True:
-            g = next(self.graph_gen)
-            if g is None:
-                return None
-            if g.n_nodes < self.prune_graphs_smaller_than:
-                continue
+        g = next(self.graph_gen)
+        if g is not None:
             return State(g)
+        else:
+            return None
 
     def compute_mfc_reward(self, action):
         """The reward is the normalized change in MFC score = sum of all conflict edges from the selected node
@@ -113,13 +109,16 @@ class PhasingEnv(gym.Env):
         self.state = self.init_state()
         return self.state, not self.has_state()
 
-    def getCutValue(self):
+    def get_graph_stats(self):
+        return self.get_cut_value(), self.state.frag_graph.g.number_of_nodes(), self.state.frag_graph.g.number_of_edges()
+
+    def get_cut_value(self):
         node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
         if not isinstance(node_labels, list):
             node_labels = [node_labels]
-        S = {i for i, e in enumerate(node_labels) if e != 0}
-        netXGraph = self.state.frag_graph.g
-        return nx.cut_size(netXGraph, S, weight='weight')
+        computed_cut = {i for i, e in enumerate(node_labels) if e != 0}
+        net_x_graph = self.state.frag_graph.g
+        return nx.cut_size(net_x_graph, computed_cut, weight='weight')
 
     def render(self, mode='human'):
         """Display the environment"""
