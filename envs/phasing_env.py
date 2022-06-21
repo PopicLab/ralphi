@@ -4,7 +4,8 @@ from gym import spaces
 import dgl
 import utils.plotting as vis
 import graphs.frag_graph as graphs
-
+import networkx as nx
+import random
 
 class State:
     """
@@ -13,25 +14,23 @@ class State:
     """
     def __init__(self, frag_graph):
         self.frag_graph = frag_graph
-        self.g = dgl.DGLGraph()
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
-        self.g.from_networkx(frag_graph.g, edge_attrs=edge_attrs, node_attrs=['x', 'y'])
+        self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=['x', 'y'])
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes + 1)
         self.H1 = []
-        print("Number of nodes: ", self.num_nodes, ", number of edges: ", self.g.number_of_edges())
-
+        print("Number of nodes: ", self.frag_graph.n_nodes, ", number of edges: ", self.frag_graph.g.number_of_edges())
 
 class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
-    def __init__(self, panel=None, record_solutions=False, skip_singleton_graphs=True):
+    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1):
         super(PhasingEnv, self).__init__()
-        self.graph_gen = iter(graphs.FragGraphGen(panel, load_graphs=True, store_graphs=True, load_components=True,
-            store_components=True, skip_singletons=skip_singleton_graphs))
+        self.graph_gen = iter(graphs.FragGraphGen(panel, out_dir, load_graphs=False, store_graphs=False, load_components=False,
+            store_components=False, skip_singletons=skip_singleton_graphs, min_graph_size=min_graph_size))
         self.state = self.init_state()
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
@@ -53,7 +52,10 @@ class PhasingEnv(gym.Env):
         """The reward is the normalized change in MFC score = sum of all conflict edges from the selected node
         to the remaining graph """
 
-        norm_factor = 1  # self.state.num_nodes
+        # experimentally normalizing by number of nodes appears to stablilize actor-critic training
+        # (and this normalization seems to be done in literature as well) -- but should confirm this with a side by side comparison
+        # TODO (Anant): get a long running result of training with and without normalization
+        norm_factor = self.state.num_nodes # 1
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
@@ -107,11 +109,31 @@ class PhasingEnv(gym.Env):
         self.state = self.init_state()
         return self.state, not self.has_state()
 
+    def get_graph_stats(self):
+        return self.get_cut_value(), self.state.frag_graph.g.number_of_nodes(), self.state.frag_graph.g.number_of_edges()
+
+    def get_cut_value(self):
+        node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
+        if not isinstance(node_labels, list):
+            node_labels = [node_labels]
+        computed_cut = {i for i, e in enumerate(node_labels) if e != 0}
+        net_x_graph = self.state.frag_graph.g
+        return nx.cut_size(net_x_graph, computed_cut, weight='weight')
+
     def render(self, mode='human'):
         """Display the environment"""
         node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
+        edge_weights = self.state.g.edata['weight'].cpu().squeeze().numpy().tolist()
+        edges_src = self.state.g.edges()[0].cpu().squeeze().numpy().tolist()
+        edges_dst = self.state.g.edges()[1].cpu().squeeze().numpy().tolist()
+        edge_indices = zip(edges_src, edges_dst)
+        edge_weights = dict(zip(edge_indices, edge_weights))
         if mode == 'view':
             vis.plot_network(self.state.g.to_networkx(), node_labels)
+        elif mode == 'weighted_view':
+            vis.plot_weighted_network(self.state.g.to_networkx(), node_labels, edge_weights)
+        elif mode == "bipartite":
+            vis.plot_bipartite_network(self.state.g.to_networkx(), node_labels, edge_weights)
         else:
             # save the plot to file
             pass

@@ -28,9 +28,9 @@ def write_phased_vcf(input_vcf, idx2var, output_vcf):
             n_phased += 1
             v = idx2var[vcf_idx]
             if v.h == 0:
-                mapping['GT'] = gt[0] + "|" + gt[2]
+                mapping['GT'] = str(0) + "|" + str(1)
             else:
-                mapping['GT'] = gt[2] + "|" + gt[0]
+                mapping['GT'] = str(1) + "|" + str(0)
             mapping['PS'] = str(v.phase_set)
             mapping['PD'] = str(len(v.frag_variants))
             mapping['PQ'] = '0'

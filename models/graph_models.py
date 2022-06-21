@@ -28,7 +28,7 @@ class NodeApplyModule(nn.Module):
         self.activation = activation
 
     def forward(self, node):
-        i = torch.cat((node.data['h'], node.data['hm']), dim=1)
+        i = torch.cat((node.data['h'], node.data['hm_mean'], node.data['hm_max']), dim=1)
         h = self.linear(i)
         h = self.activation(h)
         return {'h': h}
@@ -41,11 +41,13 @@ class GCN(nn.Module):
 
     def forward(self, g, feature):
         g.ndata['h'] = feature
-        g.update_all(message_func=edge_msg, reduce_func=reduce)
+        # TODO Anant: experiment more with min to account for negative weight edges
+        g.update_all(message_func=fn.u_mul_e('h', 'weight', 'm'), reduce_func=fn.mean('m', 'hm_mean'))
+        g.update_all(message_func=fn.u_mul_e('h', 'weight', 'm'), reduce_func=fn.max('m', 'hm_max'))
         g.apply_nodes(func=self.apply_mod)
-        g.ndata.pop('hm')
+        g.ndata.pop('hm_mean')
+        g.ndata.pop('hm_max')
         return g.ndata.pop('h')
-
 
 class GCNFirstLayer(nn.Module):
     def __init__(self, in_feats, out_feats, activation):
