@@ -7,6 +7,8 @@ import envs.phasing_env as envs
 import seq.var as var
 import seq.phased_vcf as vcf_writer
 import subprocess
+import utils.post_processing
+import pickle
 #matplotlib.use('macosx')
 
 parser = argparse.ArgumentParser(description='Test haplotype phasing')
@@ -14,6 +16,8 @@ parser.add_argument('--model', help='Pretrained model')
 parser.add_argument('--panel', help='Test fragment panel file')
 parser.add_argument('--input_vcf', help='Input VCF file to phase')
 parser.add_argument('--output_vcf', help='Output VCF file')
+parser.add_argument('--out_dir', help='output dir')
+
 args = parser.parse_args()
 
 env = envs.PhasingEnv(args.panel, record_solutions=True, skip_singleton_graphs=False)
@@ -37,10 +41,20 @@ while env.has_state():
     n_episodes += 1
 
 print("NUM EPISODES: ", n_episodes)
+
+with open(args.out_dir + "/phasing_output.pickle", 'wb') as phased_output:
+     pickle.dump(env.solutions, phased_output, protocol=pickle.HIGHEST_PROTOCOL)
+print("Saved phasing output raw solutions to: ", args.out_dir + "/phasing_output.pickle")
+
 # output the phased VCF (phase blocks)
 idx2var = var.extract_variants(env.solutions)
 for v in idx2var.values():
     v.assign_haplotype()
+print("outputted phased VCF (phase blocks)")
+
+idx2var = utils.post_processing.update_split_block_phase_sets(env.solutions, idx2var)
+print("post-processed blocks that were split up due to ambiguous variants")
+
 vcf_writer.write_phased_vcf(args.input_vcf, idx2var, args.output_vcf)
 print("Output written to: ", args.output_vcf)
 

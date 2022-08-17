@@ -17,7 +17,8 @@ parser = argparse.ArgumentParser(description='Train haplotype phasing')
 parser.add_argument('--panel', help='Input fragment files (training data)')
 parser.add_argument('--validation_panel', help='Input fragment files (training data)')
 parser.add_argument('--pretrained_model', default=None,  help='pretrained model to use at a starting point')
-parser.add_argument('--min_graph_size', type=int, default=1, help='Do not train on graphs smaller than prune_nodes (default: 1)')
+parser.add_argument('--min_graph_size', type=int, default=1, help='Do not train on graphs smaller than min_graph_size (default: 1)')
+parser.add_argument('--max_graph_size', type=int, default=float('inf'), help='Do not train on graphs larger than max_graph_size (default: inf)')
 parser.add_argument('--gamma', type=float, default=0.99, help='Reward discount factor (default: 0.99)')
 parser.add_argument('--seed', type=int, default=12345, help='Random seed (default: 12345)')
 parser.add_argument('--out_dir', help='Directory for output files (model, plots)')
@@ -51,7 +52,7 @@ def benchmarking_training_loop(model_no, current_best):
 
 
 # Setup the agent and the environment
-env = envs.PhasingEnv(args.panel, out_dir=args.out_dir, min_graph_size=args.min_graph_size)
+env = envs.PhasingEnv(args.panel, out_dir=args.out_dir, min_graph_size=args.min_graph_size, max_graph_size=args.max_graph_size)
 agent = agents.DiscreteActorCriticAgent(env)
 validation_agent = agents.DiscreteActorCriticAgent(env)
 if args.pretrained_model is not None:

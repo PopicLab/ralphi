@@ -9,7 +9,7 @@ import pickle
 import six
 from six.moves.urllib.parse import urlsplit
 import random
-
+import os, psutil
 
 class FragGraph:
     """
@@ -82,7 +82,7 @@ class FragGraph:
 
 class FragGraphGen:
     def __init__(self, frag_panel_file=None, out_dir=None, load_graphs=False, store_graphs=False, load_components=False,
-                 store_components=False, skip_singletons=True, min_graph_size=1):
+                 store_components=False, skip_singletons=True, min_graph_size=1, max_graph_size=float('inf')):
         self.frag_panel_file = frag_panel_file
         self.out_dir = out_dir
         self.load_graphs = load_graphs
@@ -91,6 +91,7 @@ class FragGraphGen:
         self.store_components = store_components
         self.skip_singletons = skip_singletons
         self.min_graph_size = min_graph_size
+        self.max_graph_size = max_graph_size
 
     def __iter__(self):
         #client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
@@ -134,6 +135,8 @@ class FragGraphGen:
                         if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
                             continue
                         if subgraph.n_nodes < self.min_graph_size:
+                            continue
+                        if subgraph.n_nodes > self.max_graph_size:
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                         yield subgraph

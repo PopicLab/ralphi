@@ -27,10 +27,10 @@ class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
-    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1):
+    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1, max_graph_size=float('inf')):
         super(PhasingEnv, self).__init__()
         self.graph_gen = iter(graphs.FragGraphGen(panel, out_dir, load_graphs=False, store_graphs=False, load_components=False,
-            store_components=False, skip_singletons=skip_singleton_graphs, min_graph_size=min_graph_size))
+            store_components=False, skip_singletons=skip_singleton_graphs, min_graph_size=min_graph_size, max_graph_size=max_graph_size))
         self.state = self.init_state()
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
