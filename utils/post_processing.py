@@ -15,12 +15,12 @@ def update_split_block_phase_sets(solutions, idx2var):
             change_set = False
             max_phase_set += 1
         if change_set:
-            if i[1].h == 2: 
+            if i[1].h == None: 
                 # hit another unphased variant in the same block, so need to change phase set again
                 max_phase_set += 1
             else:
                 i[1].phase_set = max_phase_set
-        if i[1].h == 2: 
+        if i[1].h == None: 
             # hit a variant that shouldn't be phased, so change the phase set of subsequent variants
             cur_phase_set = i[1].phase_set
             change_set = True

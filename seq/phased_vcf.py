@@ -24,7 +24,7 @@ def write_phased_vcf(input_vcf, idx2var, output_vcf):
         # update the genotype field
         mapping = {input_format_keys[i]: record.samples[0].data[i] for i in range(len(input_format_keys))}
         gt = record.genotype(record.samples[0].sample).data.GT
-        if vcf_idx in idx2var and idx2var[vcf_idx].h != 2:  # phased
+        if vcf_idx in idx2var and idx2var[vcf_idx].h != None:  # phased
             n_phased += 1
             v = idx2var[vcf_idx]
             if v.h == 0:

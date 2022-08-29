@@ -134,9 +134,7 @@ class FragGraphGen:
                     for subgraph in connected_components:
                         if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
                             continue
-                        if subgraph.n_nodes < self.min_graph_size:
-                            continue
-                        if subgraph.n_nodes > self.max_graph_size:
+                        if not (self.min_graph_size < subgraph.n_nodes < self.max_graph_size):
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                         yield subgraph

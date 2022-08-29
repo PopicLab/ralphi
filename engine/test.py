@@ -15,7 +15,6 @@ parser = argparse.ArgumentParser(description='Test haplotype phasing')
 parser.add_argument('--model', help='Pretrained model')
 parser.add_argument('--panel', help='Test fragment panel file')
 parser.add_argument('--input_vcf', help='Input VCF file to phase')
-parser.add_argument('--output_vcf', help='Output VCF file')
 parser.add_argument('--out_dir', help='output dir')
 
 args = parser.parse_args()
@@ -55,8 +54,10 @@ print("outputted phased VCF (phase blocks)")
 idx2var = utils.post_processing.update_split_block_phase_sets(env.solutions, idx2var)
 print("post-processed blocks that were split up due to ambiguous variants")
 
-vcf_writer.write_phased_vcf(args.input_vcf, idx2var, args.output_vcf)
-print("Output written to: ", args.output_vcf)
+output_vcf = args.out_dir + "/dphase_phased.vcf"
+
+vcf_writer.write_phased_vcf(args.input_vcf, idx2var, output_vcf)
+print("Output written to: ", output_vcf)
 
 # automatically call the evaluation script if ground truth is given
 #subprocess.call(["../third-party/HapCUT2/utilities/calculate_haplotype_statistics.py", "-v1", args.output, "-v2",

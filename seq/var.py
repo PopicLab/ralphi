@@ -24,7 +24,7 @@ class Variant:
         elif c0 < c1:
             self.h = 1
         else:
-            self.h = 2
+            self.h = None
 
     def __str__(self):
         return "Variant: vcf_idx={} frag_graph_idx={} depth={}".format(self.vcf_idx, self.phase_set,
