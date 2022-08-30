@@ -6,6 +6,7 @@ import utils.plotting as vis
 import graphs.frag_graph as graphs
 import networkx as nx
 import random
+import copy
 
 class State:
     """
@@ -119,7 +120,7 @@ class PhasingEnv(gym.Env):
         such that the two output clusters are in perfect disagreement, and within a cluster we have perfect agreement.
         """
         netx_graph = self.state.frag_graph.g
-        assert(not netx_graph.has_seq_error), "Running exact algorithm on a graph with sequencing error!" 
+        assert(not self.state.frag_graph.has_seq_error), "Running exact algorithm on a graph with sequencing error!" 
         all_pos = netx_graph.copy()
         thingsToChange = []
         for edge in all_pos.edges():
@@ -141,14 +142,14 @@ class PhasingEnv(gym.Env):
             in_cluster_a = False
             in_cluster_b = False
             for compare_comp in cluster_a:
-                if netx_graph.compare_components(comp, compare_comp, thingsToChange):
+                if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
                     in_cluster_b = True
                     break
             if in_cluster_b:
                 cluster_b.append(comp)
                 continue
             for compare_comp in cluster_b:
-                if netx_graph.compare_components(comp, compare_comp, thingsToChange):
+                if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
                     in_cluster_a = True
                     break
             if in_cluster_a:
@@ -174,14 +175,14 @@ class PhasingEnv(gym.Env):
                     in_cluster_a = False
                     in_cluster_b = False
                     for compare_comp in cluster_a:
-                        if netx_graph.compare_components(comp, compare_comp, thingsToChange):
+                        if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
                             in_cluster_b = True
                             break
                     if in_cluster_b:
                         cluster_b.append(comp)
                         continue
                     for compare_comp in cluster_b:
-                        if netx_graph.compare_components(comp, compare_comp, thingsToChange):
+                        if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
                             in_cluster_a = True
                             break
                     if in_cluster_a:

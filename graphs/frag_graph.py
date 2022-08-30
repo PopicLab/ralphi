@@ -73,6 +73,26 @@ class FragGraph:
         return False
 
     def subgraph_has_sequencing_error(self):
+        # Optimization: First do an easy pass to find any simple sequencing errors,
+        # where two fragments both agree and disagree
+        fragments = self.fragments
+        for i, f1 in enumerate(fragments):
+            for j in range(i + 1, len(fragments)):
+                f2 = fragments[j]
+                frag_variant_overlap = f1.overlap(f2)
+                if len(frag_variant_overlap) == 0:
+                    continue
+                n_variants = len(frag_variant_overlap)
+                n_conflicts = 0
+                n_same = 0
+                for variant_pair in frag_variant_overlap:
+                    if variant_pair[0].allele != variant_pair[1].allele:
+                        n_conflicts += 1
+                    else:
+                        n_same += 1     
+                if n_conflicts > 0 and n_same > 0:
+                    return True 
+        
         netx_graph = self.g
         all_pos = netx_graph.copy()
         thingsToChange = []
@@ -102,9 +122,11 @@ class FragGraph:
     def connected_components_subgraphs(self, skip_error_free_graphs=False):
         components = nx.connected_components(self.g)
         subgraphs = []
-        for component in components:
+        for count, component in enumerate(components):
+            if count % 500 == 0:
+               print("Processing ", count)
             subgraph = self.extract_subgraph(component)
-            if subgraph.has_sequencing_error():
+            if subgraph.subgraph_has_sequencing_error():
                  subgraph.has_seq_error = True
                  if skip_error_free_graphs:
                      continue
