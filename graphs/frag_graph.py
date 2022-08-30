@@ -21,7 +21,7 @@ class FragGraph:
         self.fragments = fragments
         self.n_nodes = g.number_of_nodes()
         self.node_id2hap_id = node_id2hap_id
-
+        self.has_seq_error = False
     def set_ground_truth_assignment(self, node_id2hap_id):
         """
         Store the ground truth haplotype assignment available in simulations
@@ -65,6 +65,30 @@ class FragGraph:
             frag_graph.nodes[node]['y'] = [fragments[node].n_variants]
         return FragGraph(frag_graph, fragments)
 
+    def compare_components(self, comp, compare_comp, thingsToChange):
+        for elem in comp:
+            for j in compare_comp:
+                if (elem, j) in thingsToChange or (j, elem) in thingsToChange:
+                    return True
+        return False
+
+    def subgraph_has_sequencing_error(self):
+        netx_graph = self.g
+        all_pos = netx_graph.copy()
+        thingsToChange = []
+        for edge in all_pos.edges():
+            sign = all_pos.get_edge_data(edge[0], edge[1])['weight']
+            if sign > 0:
+                thingsToChange.append(edge)
+        for edge in thingsToChange:
+            all_pos.remove_edge(edge[0], edge[1])
+        S = [c for c in nx.connected_components(all_pos)]
+        # check for case of more complex sequencing error, connected components have only negative edges thus are all in agreement, make sure theres no disagreements within a component
+        for comp in S:
+            if self.compare_components(comp, comp, thingsToChange):
+                return True
+        return False 
+    
     def extract_subgraph(self, connected_component):
         subg = self.g.subgraph(connected_component).copy()
         subg_frags = [self.fragments[node] for node in subg.nodes]
@@ -75,14 +99,22 @@ class FragGraph:
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
         return FragGraph(subg_relabeled, subg_frags, node_id2hap_id)
 
-    def connected_components_subgraphs(self):
+    def connected_components_subgraphs(self, skip_error_free_graphs=False):
         components = nx.connected_components(self.g)
-        return [self.extract_subgraph(component) for component in components]
+        subgraphs = []
+        for component in components:
+            subgraph = self.extract_subgraph(component)
+            if subgraph.has_sequencing_error():
+                 subgraph.has_seq_error = True
+                 if skip_error_free_graphs:
+                     continue
+            subgraphs.append(subgraph)
+        return subgraphs
 
 
 class FragGraphGen:
     def __init__(self, frag_panel_file=None, out_dir=None, load_graphs=False, store_graphs=False, load_components=False,
-                 store_components=False, skip_singletons=True, min_graph_size=1, max_graph_size=float('inf')):
+                 store_components=False, skip_singletons=True, min_graph_size=1, max_graph_size=float('inf'), skip_error_free_graphs=False):
         self.frag_panel_file = frag_panel_file
         self.out_dir = out_dir
         self.load_graphs = load_graphs
@@ -92,6 +124,7 @@ class FragGraphGen:
         self.skip_singletons = skip_singletons
         self.min_graph_size = min_graph_size
         self.max_graph_size = max_graph_size
+        self.skip_error_free_graphs = skip_error_free_graphs
 
     def __iter__(self):
         #client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
@@ -123,7 +156,7 @@ class FragGraphGen:
                         with open(component_file_fname, 'rb') as f:
                             connected_components = pickle.load(f)
                     else:
-                        connected_components = graph.connected_components_subgraphs()
+                        connected_components = graph.connected_components_subgraphs(skip_error_free_graphs=self.skip_error_free_graphs)
                         if self.store_components:
                             with open(component_file_fname, 'wb') as f:
                                 pickle.dump(connected_components, f)
@@ -136,6 +169,7 @@ class FragGraphGen:
                             continue
                         if not (self.min_graph_size < subgraph.n_nodes < self.max_graph_size):
                             continue
+                        
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                         yield subgraph
                     print("Finished processing file: ", frag_file_fname)

@@ -16,16 +16,28 @@ parser.add_argument('--model', help='Pretrained model')
 parser.add_argument('--panel', help='Test fragment panel file')
 parser.add_argument('--input_vcf', help='Input VCF file to phase')
 parser.add_argument('--out_dir', help='output dir')
+parser.add_argument('--num_cores', type=int, default=4, help='number of threads to use for Pytorch (default: 4)')
 
 args = parser.parse_args()
+torch.set_num_threads(args.num_cores)
 
-env = envs.PhasingEnv(args.panel, record_solutions=True, skip_singleton_graphs=False)
+env = envs.PhasingEnv(args.panel, record_solutions=True, skip_singleton_graphs=False, skip_error_free_graphs=False)
 agent = algs.DiscreteActorCriticAgent(env)
 agent.model.load_state_dict(torch.load(args.model))
 n_episodes = 0
 
 # run through all the components of the fragment graph
 while env.has_state():
+    if not env.state.frag_graph.has_seq_error:
+        # solve using exact algorithm
+        print("component is error free")
+        env.solve_error_free_instance()
+        n_episodes += 1
+        env.reset()
+        continue
+    else:
+        print("component has seq error")
+    
     start_time = time.time()
     done = False
     while not done:

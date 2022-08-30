@@ -27,10 +27,10 @@ class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
-    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1, max_graph_size=float('inf')):
+    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1, max_graph_size=float('inf'), skip_error_free_graphs=False):
         super(PhasingEnv, self).__init__()
         self.graph_gen = iter(graphs.FragGraphGen(panel, out_dir, load_graphs=False, store_graphs=False, load_components=False,
-            store_components=False, skip_singletons=skip_singleton_graphs, min_graph_size=min_graph_size, max_graph_size=max_graph_size))
+            store_components=False, skip_singletons=skip_singleton_graphs, min_graph_size=min_graph_size, max_graph_size=max_graph_size, skip_error_free_graphs=skip_error_free_graphs))
         self.state = self.init_state()
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
@@ -108,6 +108,112 @@ class PhasingEnv(gym.Env):
         """
         self.state = self.init_state()
         return self.state, not self.has_state()
+    
+
+    def solve_error_free_instance(self):
+        """
+        In the absense of sequencing error, we can solve this problem optimally by clustering connected components
+        iteratively. Requires deleting all positive edges (such that we create connected componnets only consisting of agreements,
+        and then iteratively (via multiple passes through the components) assigning them to a cluster (A or B) depending on agreements/disagreements with other clusters.
+        Since there are no sequencing errors, there exists a mapping of every component of agreements to a cluster
+        such that the two output clusters are in perfect disagreement, and within a cluster we have perfect agreement.
+        """
+        netx_graph = self.state.frag_graph.g
+        assert(not netx_graph.has_seq_error), "Running exact algorithm on a graph with sequencing error!" 
+        all_pos = netx_graph.copy()
+        thingsToChange = []
+        for edge in all_pos.edges():
+            sign = all_pos.get_edge_data(edge[0], edge[1])['weight']
+            if sign > 0:
+                thingsToChange.append(edge)
+        for edge in thingsToChange:
+            all_pos.remove_edge(edge[0], edge[1])
+        S = [c for c in nx.connected_components(all_pos)]
+        
+        cluster_a = []
+        cluster_b = []
+        try_again = []
+        another_sweep = False
+        for comp in S:
+            if len(cluster_a) == 0:
+                cluster_a.append(comp)
+                continue
+            in_cluster_a = False
+            in_cluster_b = False
+            for compare_comp in cluster_a:
+                if netx_graph.compare_components(comp, compare_comp, thingsToChange):
+                    in_cluster_b = True
+                    break
+            if in_cluster_b:
+                cluster_b.append(comp)
+                continue
+            for compare_comp in cluster_b:
+                if netx_graph.compare_components(comp, compare_comp, thingsToChange):
+                    in_cluster_a = True
+                    break
+            if in_cluster_a:
+                cluster_a.append(comp)
+                continue
+            if not in_cluster_b and not in_cluster_a:
+                #if len(cluster_b) == 0:
+                #    cluster_b.append(comp)
+                #    continue
+                #else:
+                another_sweep = True
+                try_again.append(comp)
+                continue
+
+        if another_sweep:
+            for i in range(len(S)):
+                if len(try_again) == 0:
+                    break
+                #print("trying again", try_again)
+                try_again_tmp = copy.copy(try_again)
+                try_again = []
+                for comp in try_again_tmp:
+                    in_cluster_a = False
+                    in_cluster_b = False
+                    for compare_comp in cluster_a:
+                        if netx_graph.compare_components(comp, compare_comp, thingsToChange):
+                            in_cluster_b = True
+                            break
+                    if in_cluster_b:
+                        cluster_b.append(comp)
+                        continue
+                    for compare_comp in cluster_b:
+                        if netx_graph.compare_components(comp, compare_comp, thingsToChange):
+                            in_cluster_a = True
+                            break
+                    if in_cluster_a:
+                        cluster_a.append(comp)
+                        continue
+                    if not in_cluster_b and not in_cluster_a:
+                        try_again.append(comp)
+                        #print("COMP WAS NOT ASSIGNNED TO ANY CLUSTER")
+                        #exit(1)
+            if len(try_again) != 0:
+                print("COMP WAS NOT ASSIGNNED TO ANY CLUSTER")
+                exit(1)
+        def flatten(l):
+            return [item for sublist in l for item in sublist]
+        cluster_a_lists = flatten([list(comp) for comp in cluster_a])
+        cluster_b_lists = flatten([list(comp) for comp in cluster_b])
+
+        #print("cluster a: ", cluster_a_lists, " cluster_b: ", cluster_b_lists)
+
+        for i, frag in enumerate(self.state.frag_graph.fragments):
+        #    print("i", i)
+            if i in cluster_a_lists:
+                #print("fragment: ", i, " ", frag,  "was in cluster a: ", cluster_a_lists)
+                frag.assign_haplotype(0.0)
+            elif i in cluster_b_lists:
+                #print("fragment: ", i, " ", frag, "was in cluster b: ", cluster_b_lists)
+                frag.assign_haplotype(1.0)
+            else:
+                print("SOMETHING IS VERY WRONG, fragment wasn't assigned to any cluster")
+                exit(1)
+        self.solutions.append(self.state.frag_graph.fragments)
+
 
     def get_graph_stats(self):
         return self.get_cut_value(), self.state.frag_graph.g.number_of_nodes(), self.state.frag_graph.g.number_of_edges()
