@@ -156,10 +156,6 @@ class PhasingEnv(gym.Env):
                 cluster_a.append(comp)
                 continue
             if not in_cluster_b and not in_cluster_a:
-                #if len(cluster_b) == 0:
-                #    cluster_b.append(comp)
-                #    continue
-                #else:
                 another_sweep = True
                 try_again.append(comp)
                 continue
@@ -168,7 +164,6 @@ class PhasingEnv(gym.Env):
             for i in range(len(S)):
                 if len(try_again) == 0:
                     break
-                #print("trying again", try_again)
                 try_again_tmp = copy.copy(try_again)
                 try_again = []
                 for comp in try_again_tmp:
@@ -190,8 +185,6 @@ class PhasingEnv(gym.Env):
                         continue
                     if not in_cluster_b and not in_cluster_a:
                         try_again.append(comp)
-                        #print("COMP WAS NOT ASSIGNNED TO ANY CLUSTER")
-                        #exit(1)
             if len(try_again) != 0:
                 print("COMP WAS NOT ASSIGNNED TO ANY CLUSTER")
                 exit(1)
@@ -200,15 +193,10 @@ class PhasingEnv(gym.Env):
         cluster_a_lists = flatten([list(comp) for comp in cluster_a])
         cluster_b_lists = flatten([list(comp) for comp in cluster_b])
 
-        #print("cluster a: ", cluster_a_lists, " cluster_b: ", cluster_b_lists)
-
         for i, frag in enumerate(self.state.frag_graph.fragments):
-        #    print("i", i)
             if i in cluster_a_lists:
-                #print("fragment: ", i, " ", frag,  "was in cluster a: ", cluster_a_lists)
                 frag.assign_haplotype(0.0)
             elif i in cluster_b_lists:
-                #print("fragment: ", i, " ", frag, "was in cluster b: ", cluster_b_lists)
                 frag.assign_haplotype(1.0)
             else:
                 print("SOMETHING IS VERY WRONG, fragment wasn't assigned to any cluster")
