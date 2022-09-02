@@ -5,6 +5,9 @@ import dgl
 import utils.plotting as vis
 import graphs.frag_graph as graphs
 import networkx as nx
+from collections import defaultdict
+from networkx.algorithms import bipartite
+from itertools import product
 import random
 import copy
 
@@ -109,100 +112,49 @@ class PhasingEnv(gym.Env):
         """
         self.state = self.init_state()
         return self.state, not self.has_state()
-    
 
     def solve_error_free_instance(self):
         """
-        In the absense of sequencing error, we can solve this problem optimally by clustering connected components
-        iteratively. Requires deleting all positive edges (such that we create connected componnets only consisting of agreements,
-        and then iteratively (via multiple passes through the components) assigning them to a cluster (A or B) depending on agreements/disagreements with other clusters.
-        Since there are no sequencing errors, there exists a mapping of every component of agreements to a cluster
-        such that the two output clusters are in perfect disagreement, and within a cluster we have perfect agreement.
+        In the absence of sequencing errors, we can solve this problem optimally by 2-coloring the bipartite graph
+        induced by the connected components computed over negative weight edges only.
+        Algorithm:
+         1. let G_neg be the input graph G without positive edges (such that only agreements remain)
+         2. let CC be the connected components of G_neg
+         3. create a new graph G_bipartite where each connected component in CC is a node and an edge (i, j)
+         is added iff there is at least one positive weight edge in G between any node in i and j
+         4. find a 2-way coloring of G_bipartite -- this provides the split into the two haplotypes
         """
-        netx_graph = self.state.frag_graph.g
         assert(not self.state.frag_graph.has_seq_error), "Running exact algorithm on a graph with sequencing error!" 
-        all_pos = netx_graph.copy()
-        thingsToChange = []
-        for edge in all_pos.edges():
-            sign = all_pos.get_edge_data(edge[0], edge[1])['weight']
-            if sign > 0:
-                thingsToChange.append(edge)
-        for edge in thingsToChange:
-            all_pos.remove_edge(edge[0], edge[1])
-        S = [c for c in nx.connected_components(all_pos)]
-        
-        cluster_a = []
-        cluster_b = []
-        try_again = []
-        another_sweep = False
-        for comp in S:
-            if len(cluster_a) == 0:
-                cluster_a.append(comp)
-                continue
-            in_cluster_a = False
-            in_cluster_b = False
-            for compare_comp in cluster_a:
-                if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
-                    in_cluster_b = True
-                    break
-            if in_cluster_b:
-                cluster_b.append(comp)
-                continue
-            for compare_comp in cluster_b:
-                if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
-                    in_cluster_a = True
-                    break
-            if in_cluster_a:
-                cluster_a.append(comp)
-                continue
-            if not in_cluster_b and not in_cluster_a:
-                another_sweep = True
-                try_again.append(comp)
-                continue
-
-        if another_sweep:
-            for i in range(len(S)):
-                if len(try_again) == 0:
-                    break
-                try_again_tmp = copy.copy(try_again)
-                try_again = []
-                for comp in try_again_tmp:
-                    in_cluster_a = False
-                    in_cluster_b = False
-                    for compare_comp in cluster_a:
-                        if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
-                            in_cluster_b = True
-                            break
-                    if in_cluster_b:
-                        cluster_b.append(comp)
-                        continue
-                    for compare_comp in cluster_b:
-                        if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
-                            in_cluster_a = True
-                            break
-                    if in_cluster_a:
-                        cluster_a.append(comp)
-                        continue
-                    if not in_cluster_b and not in_cluster_a:
-                        try_again.append(comp)
-            if len(try_again) != 0:
-                print("COMP WAS NOT ASSIGNNED TO ANY CLUSTER")
-                exit(1)
-        def flatten(l):
-            return [item for sublist in l for item in sublist]
-        cluster_a_lists = flatten([list(comp) for comp in cluster_a])
-        cluster_b_lists = flatten([list(comp) for comp in cluster_b])
-
+        g_neg = self.state.frag_graph.g.copy()
+        conflict_edges = defaultdict(list)
+        for u, v, edge_data in g_neg.edges(data=True):
+            if edge_data['weight'] > 0:
+                g_neg.remove_edge(u, v)
+                conflict_edges[u].append(v)
+                conflict_edges[v].append(u)
+        g_bipartite = nx.Graph()
+        connected_components = [c for c in nx.connected_components(g_neg)]
+        for i in range(len(connected_components)):
+            g_bipartite.add_node(i)
+            for j in range(i+1, len(connected_components)):
+                # check if a conflict edge exists between these two components
+                for u, v in product(connected_components[i], connected_components[j]):
+                    if v in conflict_edges[u]:
+                        g_bipartite.add_edge(i, j)
+                        break
+        hap_a_partition, hap_b_partition = bipartite.sets(g_bipartite)
+        hap_a = [list(connected_components[i]) for i in hap_a_partition]
+        hap_b = [list(connected_components[i]) for i in hap_b_partition]
+        hap_a_nodes = [node for cc in hap_a for node in cc]
+        hap_b_nodes = [node for cc in hap_b for node in cc]
         for i, frag in enumerate(self.state.frag_graph.fragments):
-            if i in cluster_a_lists:
+            if i in hap_a_nodes:
                 frag.assign_haplotype(0.0)
-            elif i in cluster_b_lists:
+            elif i in hap_b_nodes:
                 frag.assign_haplotype(1.0)
             else:
-                print("SOMETHING IS VERY WRONG, fragment wasn't assigned to any cluster")
-                exit(1)
+                raise RuntimeError("Fragment wasn't assigned to any cluster")
         self.solutions.append(self.state.frag_graph.fragments)
-
 
     def get_graph_stats(self):
         return self.get_cut_value(), self.state.frag_graph.g.number_of_nodes(), self.state.frag_graph.g.number_of_edges()
