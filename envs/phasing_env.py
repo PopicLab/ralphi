@@ -113,6 +113,100 @@ class PhasingEnv(gym.Env):
         self.state = self.init_state()
         return self.state, not self.has_state()
 
+    def cluster_solve_error_free_instance(self):
+        """
+        In the absense of sequencing error, we can solve this problem optimally by clustering connected components
+        iteratively. Requires deleting all positive edges (such that we create connected componnets only consisting of agreements,
+        and then iteratively (via multiple passes through the components) assigning them to a cluster (A or B) depending on agreements/disagreements with other clusters.
+        Since there are no sequencing errors, there exists a mapping of every component of agreements to a cluster
+        such that the two output clusters are in perfect disagreement, and within a cluster we have perfect agreement.
+        """
+        netx_graph = self.state.frag_graph.g
+        assert (not self.state.frag_graph.has_seq_error), "Running exact algorithm on a graph with sequencing error!"
+        all_pos = netx_graph.copy()
+        thingsToChange = []
+        for edge in all_pos.edges():
+            sign = all_pos.get_edge_data(edge[0], edge[1])['weight']
+            if sign > 0:
+                thingsToChange.append(edge)
+        for edge in thingsToChange:
+            all_pos.remove_edge(edge[0], edge[1])
+        S = [c for c in nx.connected_components(all_pos)]
+
+        cluster_a = []
+        cluster_b = []
+        try_again = []
+        another_sweep = False
+        for comp in S:
+            if len(cluster_a) == 0:
+                cluster_a.append(comp)
+                continue
+            in_cluster_a = False
+            in_cluster_b = False
+            for compare_comp in cluster_a:
+                if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
+                    in_cluster_b = True
+                    break
+            if in_cluster_b:
+                cluster_b.append(comp)
+                continue
+            for compare_comp in cluster_b:
+                if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
+                    in_cluster_a = True
+                    break
+            if in_cluster_a:
+                cluster_a.append(comp)
+                continue
+            if not in_cluster_b and not in_cluster_a:
+                another_sweep = True
+                try_again.append(comp)
+                continue
+
+        if another_sweep:
+            for i in range(len(S)):
+                if len(try_again) == 0:
+                    break
+                try_again_tmp = copy.copy(try_again)
+                try_again = []
+                for comp in try_again_tmp:
+                    in_cluster_a = False
+                    in_cluster_b = False
+                    for compare_comp in cluster_a:
+                        if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
+                            in_cluster_b = True
+                            break
+                    if in_cluster_b:
+                        cluster_b.append(comp)
+                        continue
+                    for compare_comp in cluster_b:
+                        if self.state.frag_graph.compare_components(comp, compare_comp, thingsToChange):
+                            in_cluster_a = True
+                            break
+                    if in_cluster_a:
+                        cluster_a.append(comp)
+                        continue
+                    if not in_cluster_b and not in_cluster_a:
+                        try_again.append(comp)
+            if len(try_again) != 0:
+                print("COMP WAS NOT ASSIGNNED TO ANY CLUSTER")
+                exit(1)
+
+        def flatten(l):
+            return [item for sublist in l for item in sublist]
+
+        cluster_a_lists = flatten([list(comp) for comp in cluster_a])
+        cluster_b_lists = flatten([list(comp) for comp in cluster_b])
+
+        for i, frag in enumerate(self.state.frag_graph.fragments):
+            if i in cluster_a_lists:
+                frag.assign_haplotype(0.0)
+            elif i in cluster_b_lists:
+                frag.assign_haplotype(1.0)
+            else:
+                print("SOMETHING IS VERY WRONG, fragment wasn't assigned to any cluster")
+                exit(1)
+        self.solutions.append(self.state.frag_graph.fragments)
+
     def solve_error_free_instance(self):
         """
         In the absence of sequencing errors, we can solve this problem optimally by 2-coloring the bipartite graph
@@ -127,7 +221,7 @@ class PhasingEnv(gym.Env):
         assert(not self.state.frag_graph.has_seq_error), "Running exact algorithm on a graph with sequencing error!" 
         g_neg = self.state.frag_graph.g.copy()
         conflict_edges = defaultdict(list)
-        for u, v, edge_data in g_neg.edges(data=True):
+        for u, v, edge_data in self.state.frag_graph.g.edges(data=True):
             if edge_data['weight'] > 0:
                 g_neg.remove_edge(u, v)
                 conflict_edges[u].append(v)
@@ -159,8 +253,9 @@ class PhasingEnv(gym.Env):
     def get_graph_stats(self):
         return self.get_cut_value(), self.state.frag_graph.g.number_of_nodes(), self.state.frag_graph.g.number_of_edges()
 
-    def get_cut_value(self):
-        node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
+    def get_cut_value(self, node_labels=None):
+        if not node_labels:
+            node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
         if not isinstance(node_labels, list):
             node_labels = [node_labels]
         computed_cut = {i for i, e in enumerate(node_labels) if e != 0}
