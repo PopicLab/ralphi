@@ -2,7 +2,7 @@ import seq.sim as seq
 import seq.frags as frags
 from seq.var import Variant
 import networkx as nx
-#from google.cloud import storage
+# from google.cloud import storage
 import ntpath
 import os
 import pickle
@@ -10,18 +10,23 @@ import six
 from six.moves.urllib.parse import urlsplit
 import random
 import os, psutil
+from collections import defaultdict
+import itertools
+
 
 class FragGraph:
     """
     Nodes are read fragments spanning >= 2 variants
     Edges are inserted between fragments that cover the same variants
     """
+
     def __init__(self, g, fragments, node_id2hap_id=None):
         self.g = g
         self.fragments = fragments
         self.n_nodes = g.number_of_nodes()
         self.node_id2hap_id = node_id2hap_id
-        self.has_seq_error = False
+        self.has_seq_error = self.has_sequencing_error()
+
     def set_ground_truth_assignment(self, node_id2hap_id):
         """
         Store the ground truth haplotype assignment available in simulations
@@ -34,7 +39,7 @@ class FragGraph:
         print("constructing fragment graph")
         for i, f1 in enumerate(fragments):
             frag_graph.add_node(i)
-            if i % 1000 == 0:
+            if i and i % 1000 == 0:
                 print("Processing ", i)
             for j in range(i + 1, len(fragments)):
                 f2 = fragments[j]
@@ -65,50 +70,36 @@ class FragGraph:
             frag_graph.nodes[node]['y'] = [fragments[node].n_variants]
         return FragGraph(frag_graph, fragments)
 
-    def compare_components(self, comp, compare_comp, thingsToChange):
-        for elem in comp:
-            for j in compare_comp:
-                if (elem, j) in thingsToChange or (j, elem) in thingsToChange:
+    def has_sequencing_error(self):
+        # 1. find edges with alleles that both agree and disagree
+        for u, v in self.g.edges():
+            frag_variant_overlap = self.fragments[u].overlap(self.fragments[v])
+            n_conflicts = 0
+            for variant_pair in frag_variant_overlap:
+                if variant_pair[0].allele != variant_pair[1].allele:
+                    n_conflicts += 1
+            if n_conflicts and len(frag_variant_overlap) != n_conflicts:
+                return True
+
+        # 2. check for disagreements within each connected component of the graph induced by negative edges
+        g_neg, conflict_edges = self.extract_negative_edge_subgraph()
+        for cc in nx.connected_components(g_neg):
+            for u, v in itertools.combinations(cc, 2):
+                # check if a conflict edge exists between these two nodes
+                if v in conflict_edges[u]:
                     return True
         return False
 
-    def subgraph_has_sequencing_error(self):
-        # Optimization: First do an easy pass to find any simple sequencing errors,
-        # where two fragments both agree and disagree
-        fragments = self.fragments
-        for i, f1 in enumerate(fragments):
-            for j in range(i + 1, len(fragments)):
-                f2 = fragments[j]
-                frag_variant_overlap = f1.overlap(f2)
-                if len(frag_variant_overlap) == 0:
-                    continue
-                n_variants = len(frag_variant_overlap)
-                n_conflicts = 0
-                n_same = 0
-                for variant_pair in frag_variant_overlap:
-                    if variant_pair[0].allele != variant_pair[1].allele:
-                        n_conflicts += 1
-                    else:
-                        n_same += 1     
-                if n_conflicts > 0 and n_same > 0:
-                    return True 
-        
-        netx_graph = self.g
-        all_pos = netx_graph.copy()
-        thingsToChange = []
-        for edge in all_pos.edges():
-            sign = all_pos.get_edge_data(edge[0], edge[1])['weight']
-            if sign > 0:
-                thingsToChange.append(edge)
-        for edge in thingsToChange:
-            all_pos.remove_edge(edge[0], edge[1])
-        S = [c for c in nx.connected_components(all_pos)]
-        # check for case of more complex sequencing error, connected components have only negative edges thus are all in agreement, make sure theres no disagreements within a component
-        for comp in S:
-            if self.compare_components(comp, comp, thingsToChange):
-                return True
-        return False 
-    
+    def extract_negative_edge_subgraph(self):
+        g_neg = self.g.copy()
+        conflict_edges = defaultdict(list)
+        for u, v, edge_data in self.g.edges(data=True):
+            if edge_data['weight'] > 0:
+                g_neg.remove_edge(u, v)
+                conflict_edges[u].append(v)
+                conflict_edges[v].append(u)
+        return g_neg, conflict_edges
+
     def extract_subgraph(self, connected_component):
         subg = self.g.subgraph(connected_component).copy()
         subg_frags = [self.fragments[node] for node in subg.nodes]
@@ -123,20 +114,21 @@ class FragGraph:
         components = nx.connected_components(self.g)
         subgraphs = []
         for count, component in enumerate(components):
-            if count % 500 == 0:
-               print("Processing ", count)
+            if count and count % 500 == 0:
+                print("Processing ", count)
             subgraph = self.extract_subgraph(component)
-            if subgraph.subgraph_has_sequencing_error():
-                 subgraph.has_seq_error = True
-                 if skip_error_free_graphs:
-                     continue
+            if subgraph.has_sequencing_error():
+                subgraph.has_seq_error = True
+                if skip_error_free_graphs:
+                    continue
             subgraphs.append(subgraph)
         return subgraphs
 
 
 class FragGraphGen:
     def __init__(self, frag_panel_file=None, out_dir=None, load_graphs=False, store_graphs=False, load_components=False,
-                 store_components=False, skip_singletons=True, min_graph_size=1, max_graph_size=float('inf'), skip_error_free_graphs=False):
+                 store_components=False, skip_singletons=True, min_graph_size=1, max_graph_size=float('inf'),
+                 skip_error_free_graphs=False):
         self.frag_panel_file = frag_panel_file
         self.out_dir = out_dir
         self.load_graphs = load_graphs
@@ -149,17 +141,17 @@ class FragGraphGen:
         self.skip_error_free_graphs = skip_error_free_graphs
 
     def __iter__(self):
-        #client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
-        #bucket = client.get_bucket('bucket-id-here')
+        # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
+        # bucket = client.get_bucket('bucket-id-here')
         if self.frag_panel_file is not None:
             with open(self.frag_panel_file, 'r') as panel:
                 for frag_file_fname in panel:
-                    #frag_file_fname = frag_file_fname.replace("\"", "")
+                    # frag_file_fname = frag_file_fname.replace("\"", "")
                     print("Fragment file: ", frag_file_fname)
                     frag_file_fname_local = frag_file_fname
-                    #frag_file_fname_local = '/src/data/train/frags/chr20/' + ntpath.basename(frag_file_fname)
+                    # frag_file_fname_local = '/src/data/train/frags/chr20/' + ntpath.basename(frag_file_fname)
                     # if remote file, download
-                    #with open(frag_file_fname_local + ntpath.basename(frag_file_fname), 'w') as frag_file:
+                    # with open(frag_file_fname_local + ntpath.basename(frag_file_fname), 'w') as frag_file:
                     #    client.download_blob_to_file(frag_file_fname, frag_file)
                     fragments = frags.parse_frag_file(frag_file_fname_local.strip())
                     graph_file_fname = frag_file_fname_local.strip() + ".graph"
@@ -178,7 +170,8 @@ class FragGraphGen:
                         with open(component_file_fname, 'rb') as f:
                             connected_components = pickle.load(f)
                     else:
-                        connected_components = graph.connected_components_subgraphs(skip_error_free_graphs=self.skip_error_free_graphs)
+                        connected_components = graph.connected_components_subgraphs(
+                            skip_error_free_graphs=self.skip_error_free_graphs)
                         if self.store_components:
                             with open(component_file_fname, 'wb') as f:
                                 pickle.dump(connected_components, f)
@@ -191,7 +184,7 @@ class FragGraphGen:
                             continue
                         if not (self.min_graph_size < subgraph.n_nodes < self.max_graph_size):
                             continue
-                        
+
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                         yield subgraph
                     print("Finished processing file: ", frag_file_fname)
@@ -225,7 +218,7 @@ def eval_assignment_helper(assignments, node2hap):
         assigned_h = assignments[i]
         if true_h == assigned_h:
             correct += 1
-    return 1.0*correct/len(assignments)
+    return 1.0 * correct / len(assignments)
 
 
 def eval_assignment(assignments, node2hap):
@@ -234,5 +227,3 @@ def eval_assignment(assignments, node2hap):
         node2hap[node] = 1 - node2hap[node]
     acc2 = eval_assignment_helper(assignments, node2hap)
     return max(acc1, acc2)
-
-

@@ -125,13 +125,7 @@ class PhasingEnv(gym.Env):
          4. find a 2-way coloring of G_bipartite -- this provides the split into the two haplotypes
         """
         assert(not self.state.frag_graph.has_seq_error), "Running exact algorithm on a graph with sequencing error!" 
-        g_neg = self.state.frag_graph.g.copy()
-        conflict_edges = defaultdict(list)
-        for u, v, edge_data in self.state.frag_graph.g.edges(data=True):
-            if edge_data['weight'] > 0:
-                g_neg.remove_edge(u, v)
-                conflict_edges[u].append(v)
-                conflict_edges[v].append(u)
+        g_neg, conflict_edges = self.state.frag_graph.extract_negative_edge_subgraph()
         g_bipartite = nx.Graph()
         connected_components = [c for c in nx.connected_components(g_neg)]
         for i in range(len(connected_components)):
