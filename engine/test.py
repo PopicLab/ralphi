@@ -28,15 +28,15 @@ n_episodes = 0
 
 # run through all the components of the fragment graph
 while env.has_state():
-    if not env.state.frag_graph.trivial:
+    if env.state.frag_graph.trivial:
         # solve using exact algorithm
-        print("component is error free")
+        print("component is trivial")
         env.solve_error_free_instance()
         n_episodes += 1
         env.reset()
         continue
     else:
-        print("component has seq error")
+        print("component is non-trivial")
     
     start_time = time.time()
     done = False
