@@ -12,6 +12,8 @@ import random
 import os, psutil
 from collections import defaultdict
 import itertools
+import operator
+from networkx.algorithms import bipartite
 
 
 class FragGraph:
@@ -20,12 +22,14 @@ class FragGraph:
     Edges are inserted between fragments that cover the same variants
     """
 
-    def __init__(self, g, fragments, node_id2hap_id=None):
+    def __init__(self, g, fragments, node_id2hap_id=None, check_and_set_trivial=False):
         self.g = g
         self.fragments = fragments
         self.n_nodes = g.number_of_nodes()
         self.node_id2hap_id = node_id2hap_id
-        self.has_seq_error = self.has_sequencing_error()
+        self.trivial = None
+        if check_and_set_trivial:
+            self.trivial = self.is_trivial()
 
     def set_ground_truth_assignment(self, node_id2hap_id):
         """
@@ -34,7 +38,7 @@ class FragGraph:
         self.node_id2hap_id = node_id2hap_id
 
     @staticmethod
-    def build(fragments):
+    def build(fragments, check_and_set_trivial=False):
         frag_graph = nx.Graph()
         print("constructing fragment graph")
         for i, f1 in enumerate(fragments):
@@ -68,39 +72,23 @@ class FragGraph:
         for node in frag_graph.nodes:
             frag_graph.nodes[node]['x'] = [0.0]
             frag_graph.nodes[node]['y'] = [fragments[node].n_variants]
-        return FragGraph(frag_graph, fragments)
+        return FragGraph(frag_graph, fragments, check_and_set_trivial=check_and_set_trivial)
 
-    def has_sequencing_error(self):
-        # 1. find edges with alleles that both agree and disagree
-        for u, v in self.g.edges():
-            frag_variant_overlap = self.fragments[u].overlap(self.fragments[v])
-            n_conflicts = 0
-            for variant_pair in frag_variant_overlap:
-                if variant_pair[0].allele != variant_pair[1].allele:
-                    n_conflicts += 1
-            if n_conflicts and len(frag_variant_overlap) != n_conflicts:
-                return True
+    def is_trivial(self):
+        g_pos, _ = self.prune_edges_by_sign(operator.le)
+        return bipartite.is_bipartite(g_pos)
 
-        # 2. check for disagreements within each connected component of the graph induced by negative edges
-        g_neg, conflict_edges = self.extract_negative_edge_subgraph()
-        for cc in nx.connected_components(g_neg):
-            for u, v in itertools.combinations(cc, 2):
-                # check if a conflict edge exists between these two nodes
-                if v in conflict_edges[u]:
-                    return True
-        return False
-
-    def extract_negative_edge_subgraph(self):
-        g_neg = self.g.copy()
-        conflict_edges = defaultdict(list)
+    def prune_edges_by_sign(self, op):
+        g = self.g.copy()
+        pruned_edges = defaultdict(list)
         for u, v, edge_data in self.g.edges(data=True):
-            if edge_data['weight'] > 0:
-                g_neg.remove_edge(u, v)
-                conflict_edges[u].append(v)
-                conflict_edges[v].append(u)
-        return g_neg, conflict_edges
+            if op(edge_data['weight'], 0):
+                g.remove_edge(u, v)
+                pruned_edges[u].append(v)
+                pruned_edges[v].append(u)
+        return g, pruned_edges
 
-    def extract_subgraph(self, connected_component):
+    def extract_subgraph(self, connected_component, check_and_set_trivial=False):
         subg = self.g.subgraph(connected_component).copy()
         subg_frags = [self.fragments[node] for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
@@ -108,19 +96,17 @@ class FragGraph:
         if self.node_id2hap_id is not None:
             node_id2hap_id = {i: self.node_id2hap_id[j] for (i, j) in enumerate(subg.nodes)}
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
-        return FragGraph(subg_relabeled, subg_frags, node_id2hap_id)
+        return FragGraph(subg_relabeled, subg_frags, node_id2hap_id, check_and_set_trivial)
 
-    def connected_components_subgraphs(self, skip_error_free_graphs=False):
+    def connected_components_subgraphs(self, skip_trivial_graphs=False):
         components = nx.connected_components(self.g)
         subgraphs = []
         for count, component in enumerate(components):
             if count and count % 500 == 0:
                 print("Processing ", count)
-            subgraph = self.extract_subgraph(component)
-            if subgraph.has_sequencing_error():
-                subgraph.has_seq_error = True
-                if skip_error_free_graphs:
-                    continue
+            subgraph = self.extract_subgraph(component, check_and_set_trivial=True)
+            if subgraph.trivial and skip_trivial_graphs:
+                continue
             subgraphs.append(subgraph)
         return subgraphs
 
@@ -128,7 +114,7 @@ class FragGraph:
 class FragGraphGen:
     def __init__(self, frag_panel_file=None, out_dir=None, load_graphs=False, store_graphs=False, load_components=False,
                  store_components=False, skip_singletons=True, min_graph_size=1, max_graph_size=float('inf'),
-                 skip_error_free_graphs=False):
+                 skip_trivial_graphs=False):
         self.frag_panel_file = frag_panel_file
         self.out_dir = out_dir
         self.load_graphs = load_graphs
@@ -138,7 +124,7 @@ class FragGraphGen:
         self.skip_singletons = skip_singletons
         self.min_graph_size = min_graph_size
         self.max_graph_size = max_graph_size
-        self.skip_error_free_graphs = skip_error_free_graphs
+        self.skip_trivial_graphs = skip_trivial_graphs
 
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
@@ -159,7 +145,7 @@ class FragGraphGen:
                         g = nx.read_gpickle(graph_file_fname)
                         graph = FragGraph(g, fragments)
                     else:
-                        graph = FragGraph.build(fragments)
+                        graph = FragGraph.build(fragments, check_and_set_trivial=False)
                     if self.store_graphs:
                         nx.write_gpickle(graph.g, graph_file_fname)
                     print("Fragment graph with ", graph.n_nodes, " nodes and ", graph.g.number_of_edges(), " edges")
@@ -171,7 +157,7 @@ class FragGraphGen:
                             connected_components = pickle.load(f)
                     else:
                         connected_components = graph.connected_components_subgraphs(
-                            skip_error_free_graphs=self.skip_error_free_graphs)
+                            skip_trivial_graphs=self.skip_trivial_graphs)
                         if self.store_components:
                             with open(component_file_fname, 'wb') as f:
                                 pickle.dump(connected_components, f)

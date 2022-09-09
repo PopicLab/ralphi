@@ -10,6 +10,8 @@ from networkx.algorithms import bipartite
 from itertools import product
 import random
 import copy
+import operator
+
 
 class State:
     """
@@ -31,10 +33,15 @@ class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
-    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1, max_graph_size=float('inf'), skip_error_free_graphs=False):
+    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1,
+                 max_graph_size=float('inf'), skip_trivial_graphs=False):
         super(PhasingEnv, self).__init__()
-        self.graph_gen = iter(graphs.FragGraphGen(panel, out_dir, load_graphs=False, store_graphs=False, load_components=False,
-            store_components=False, skip_singletons=skip_singleton_graphs, min_graph_size=min_graph_size, max_graph_size=max_graph_size, skip_error_free_graphs=skip_error_free_graphs))
+        self.graph_gen = iter(graphs.FragGraphGen(panel, out_dir, load_graphs=False, store_graphs=False,
+                                                  load_components=False, store_components=False,
+                                                  skip_singletons=skip_singleton_graphs,
+                                                  min_graph_size=min_graph_size,
+                                                  max_graph_size=max_graph_size,
+                                                  skip_trivial_graphs=skip_trivial_graphs))
         self.state = self.init_state()
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
@@ -124,8 +131,8 @@ class PhasingEnv(gym.Env):
          is added iff there is at least one positive weight edge in G between any node in i and j
          4. find a 2-way coloring of G_bipartite -- this provides the split into the two haplotypes
         """
-        assert(not self.state.frag_graph.has_seq_error), "Running exact algorithm on a graph with sequencing error!" 
-        g_neg, conflict_edges = self.state.frag_graph.extract_negative_edge_subgraph()
+        assert self.state.frag_graph.trivial, "Running exact algorithm on a non-trivial graph!"
+        g_neg, conflict_edges = self.state.frag_graph.prune_edges_by_sign(operator.gt)
         g_bipartite = nx.Graph()
         connected_components = [c for c in nx.connected_components(g_neg)]
         for i in range(len(connected_components)):
