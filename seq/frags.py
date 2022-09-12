@@ -13,6 +13,9 @@ class FragVariantHandle:
     def __str__(self):
         return "Variant: vcf_idx={} allele={} qscore={}".format(self.vcf_idx, self.allele, self.qscore)
 
+    def __eq__(self, v):
+        return (self.vcf_idx, self.allele, self.qscore, self.haplotype) == (v.vcf_idx, v.allele, v.qscore, v.haplotype)
+
 
 class Block:
     def __init__(self, vcf_idx, alleles, qscores=None):
@@ -27,6 +30,10 @@ class Block:
     def __str__(self):
         return "Block: n_variants={} vcf_idx={} variants=\n".format(self.n_variants, self.vcf_idx_start) \
                + '\n'.join(map(str, self.variants))
+
+    def __eq__(self, block):
+        return (self.vcf_idx_start, self.vcf_idx_end, self.n_variants, self.variants) == (
+            block.vcf_idx_start, block.vcf_idx_end, block.n_variants, block.variants)
 
     def overlaps(self, block):
         return (min(self.vcf_idx_end, block.vcf_idx_end) - max(self.vcf_idx_start, block.vcf_idx_start)) >= 0
@@ -55,6 +62,10 @@ class Fragment:
         self.read_barcode = None
         self.haplotype = None
         self.true_haplotype = None
+
+    def __eq__(self, fragment):
+        return (self.vcf_idx_start, self.vcf_idx_end, self.n_blocks, self.n_variants, self.blocks) == (
+            fragment.vcf_idx_start, fragment.vcf_idx_end, fragment.n_blocks, fragment.n_variants, fragment.blocks)
 
     def overlap(self, fragment):
         if min(self.vcf_idx_end, fragment.vcf_idx_end) < max(self.vcf_idx_start, fragment.vcf_idx_start):

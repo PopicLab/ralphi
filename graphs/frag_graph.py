@@ -41,7 +41,21 @@ class FragGraph:
         self.node_id2hap_id = node_id2hap_id
 
     @staticmethod
-    def build(fragments, compute_trivial=False):
+    def build(fragments, compute_trivial=False, compress=False):
+        if compress and fragments:
+            # in a compressed graph: nodes are unique fragments, edge weights correspond to the number
+            # of all fragment instances
+            frags_unique = []  # list of unique fragments, list allows comparisons based on equality only
+            fid2count = defaultdict(int)  # maps the idx in frags_unique to the number of times this fragment was seen
+            for f in fragments:
+                try:
+                    idx = frags_unique.index(f)
+                except ValueError:
+                    frags_unique.append(f)
+                    idx = len(frags_unique) - 1
+                fid2count[idx] += 1
+            fragments = frags_unique
+
         frag_graph = nx.Graph()
         print("constructing fragment graph")
         for i, f1 in enumerate(fragments):
@@ -63,6 +77,8 @@ class FragGraph:
                     if variant_pair[0].allele != variant_pair[1].allele:
                         n_conflicts += 1
                 weight = 1.0 * (-n_variants + 2 * n_conflicts)
+                if compress:
+                    weight = weight * fid2count[i] * fid2count[j]
                 # TODO(viq): differentiate between no overlap and half conflicts
                 # Include zero-weight edges for now so that we ensure a variant only belongs to one connected component,
                 # as otherwise half-conflicts can result in a variant being split between two connected components.
@@ -157,7 +173,7 @@ class FragGraph:
 class FragGraphGen:
     def __init__(self, frag_panel_file=None, out_dir=None, load_graphs=False, store_graphs=False, load_components=False,
                  store_components=False, skip_singletons=True, min_graph_size=1, max_graph_size=float('inf'),
-                 skip_trivial_graphs=False):
+                 skip_trivial_graphs=False, compress=False):
         self.frag_panel_file = frag_panel_file
         self.out_dir = out_dir
         self.load_graphs = load_graphs
@@ -168,6 +184,7 @@ class FragGraphGen:
         self.min_graph_size = min_graph_size
         self.max_graph_size = max_graph_size
         self.skip_trivial_graphs = skip_trivial_graphs
+        self.compress = compress
 
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
@@ -188,7 +205,7 @@ class FragGraphGen:
                         g = nx.read_gpickle(graph_file_fname)
                         graph = FragGraph(g, fragments)
                     else:
-                        graph = FragGraph.build(fragments, compute_trivial=False)
+                        graph = FragGraph.build(fragments, compute_trivial=False, compress=self.compress)
                     if self.store_graphs:
                         nx.write_gpickle(graph.g, graph_file_fname)
                     print("Fragment graph with ", graph.n_nodes, " nodes and ", graph.g.number_of_edges(), " edges")
