@@ -101,7 +101,6 @@ class FragGraph:
                 # check if a conflict edge exists between these two nodes
                 if v in conflict_edges[u]:
                     self.trivial = False
-                    print("inside check")
                     return
 
         # check bipartiteness of the graph induced by connected components of the agreement subgraph and conflict edges
@@ -115,7 +114,6 @@ class FragGraph:
                         g_cc.add_edge(i, j)
                         break
         self.trivial = bipartite.is_bipartite(g_cc)
-        print("bipartite check ", self.trivial)
         if self.trivial:
             hap_a_partition, hap_b_partition = bipartite.sets(g_cc)
             hap_a = [list(connected_components[i]) for i in hap_a_partition]
