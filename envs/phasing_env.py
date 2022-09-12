@@ -66,7 +66,7 @@ class PhasingEnv(gym.Env):
         # experimentally normalizing by number of nodes appears to stablilize actor-critic training
         # (and this normalization seems to be done in literature as well) -- but should confirm this with a side by side comparison
         # TODO (Anant): get a long running result of training with and without normalization
-        norm_factor = self.state.num_nodes # 1
+        norm_factor = self.state.num_nodes  # 1
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
@@ -120,38 +120,13 @@ class PhasingEnv(gym.Env):
         self.state = self.init_state()
         return self.state, not self.has_state()
 
-    def solve_error_free_instance(self):
-        """
-        In the absence of sequencing errors, we can solve this problem optimally by 2-coloring the bipartite graph
-        induced by the connected components computed over negative weight edges only.
-        Algorithm:
-         1. let G_neg be the input graph G without positive edges (such that only agreements remain)
-         2. let CC be the connected components of G_neg
-         3. create a new graph G_bipartite where each connected component in CC is a node and an edge (i, j)
-         is added iff there is at least one positive weight edge in G between any node in i and j
-         4. find a 2-way coloring of G_bipartite -- this provides the split into the two haplotypes
-        """
-        assert self.state.frag_graph.trivial, "Running exact algorithm on a non-trivial graph!"
-        g_neg, conflict_edges = self.state.frag_graph.prune_edges_by_sign(operator.gt)
-        g_bipartite = nx.Graph()
-        connected_components = [c for c in nx.connected_components(g_neg)]
-        for i in range(len(connected_components)):
-            g_bipartite.add_node(i)
-            for j in range(i+1, len(connected_components)):
-                # check if a conflict edge exists between these two components
-                for u, v in product(connected_components[i], connected_components[j]):
-                    if v in conflict_edges[u]:
-                        g_bipartite.add_edge(i, j)
-                        break
-        hap_a_partition, hap_b_partition = bipartite.sets(g_bipartite)
-        hap_a = [list(connected_components[i]) for i in hap_a_partition]
-        hap_b = [list(connected_components[i]) for i in hap_b_partition]
-        hap_a_nodes = [node for cc in hap_a for node in cc]
-        hap_b_nodes = [node for cc in hap_b for node in cc]
+    def lookup_error_free_instance(self):
+        assert self.state.frag_graph.trivial, "Looking up a solution for a non-trivial graph!"
+        assert self.state.frag_graph.hap_a_frags and self.state.frag_graph.hap_b_frags, "The solution was not computed"
         for i, frag in enumerate(self.state.frag_graph.fragments):
-            if i in hap_a_nodes:
+            if i in self.state.frag_graph.hap_a_frags:
                 frag.assign_haplotype(0.0)
-            elif i in hap_b_nodes:
+            elif i in self.state.frag_graph.hap_b_frags:
                 frag.assign_haplotype(1.0)
             else:
                 raise RuntimeError("Fragment wasn't assigned to any cluster")

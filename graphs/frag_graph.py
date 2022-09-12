@@ -12,6 +12,7 @@ import random
 import os, psutil
 from collections import defaultdict
 import itertools
+from itertools import product
 import operator
 from networkx.algorithms import bipartite
 
@@ -22,14 +23,16 @@ class FragGraph:
     Edges are inserted between fragments that cover the same variants
     """
 
-    def __init__(self, g, fragments, node_id2hap_id=None, check_and_set_trivial=False):
+    def __init__(self, g, fragments, node_id2hap_id=None, compute_trivial=False):
         self.g = g
         self.fragments = fragments
         self.n_nodes = g.number_of_nodes()
         self.node_id2hap_id = node_id2hap_id
         self.trivial = None
-        if check_and_set_trivial:
-            self.trivial = self.is_trivial()
+        self.hap_a_frags = None
+        self.hap_b_frags = None
+        if compute_trivial:
+            self.check_and_set_trivial()
 
     def set_ground_truth_assignment(self, node_id2hap_id):
         """
@@ -38,7 +41,7 @@ class FragGraph:
         self.node_id2hap_id = node_id2hap_id
 
     @staticmethod
-    def build(fragments, check_and_set_trivial=False):
+    def build(fragments, compute_trivial=False):
         frag_graph = nx.Graph()
         print("constructing fragment graph")
         for i, f1 in enumerate(fragments):
@@ -64,19 +67,61 @@ class FragGraph:
                 # Include zero-weight edges for now so that we ensure a variant only belongs to one connected component,
                 # as otherwise half-conflicts can result in a variant being split between two connected components.
                 # TODO:(Anant): revisit this since these zero-weight edges provide no phasing information
-                # if weight != 0:
-                frag_graph.add_edge(i, j, weight=weight)
+                if weight != 0:
+                    frag_graph.add_edge(i, j, weight=weight)
 
         # setup node features/attributes
         # for now just a binary value indicating whether the node is part of the solution
         for node in frag_graph.nodes:
             frag_graph.nodes[node]['x'] = [0.0]
             frag_graph.nodes[node]['y'] = [fragments[node].n_variants]
-        return FragGraph(frag_graph, fragments, check_and_set_trivial=check_and_set_trivial)
+        return FragGraph(frag_graph, fragments, compute_trivial=compute_trivial)
 
-    def is_trivial(self):
-        g_pos, _ = self.prune_edges_by_sign(operator.le)
-        return bipartite.is_bipartite(g_pos)
+    def check_and_set_trivial(self):
+        """
+        Checks if the max-cut solution can be trivially computed; if so, the solution is computed and stored.
+
+        In the absence of sequencing errors, we can solve this problem optimally by 2-coloring the bipartite graph
+        induced by the connected components computed over the agreement subgraph and conflict edges.
+        If any connected component contains an internal conflict edge, the solution is not trivial.
+        Algorithm:
+         1. let G_neg be the input graph G without positive edges (such that only agreements remain)
+         2. let CC be the connected components of G_neg
+         3. if a conflict edge exists between a pair of nodes of any component in CC => abort
+         3. create a new graph G_cc where each connected component in CC is a node and an edge (i, j)
+         is added iff there is at least one positive weight edge in G between any node in i and j
+         4. find a 2-way coloring of G_cc -- this provides the split into the two haplotypes
+         """
+
+        # check if a conflict edge exists within a connected component of the agreement subgraph
+        g_neg, conflict_edges = self.prune_edges_by_sign(operator.gt)
+        connected_components = [cc for cc in nx.connected_components(g_neg)]
+        for cc in connected_components:
+            for u, v in itertools.combinations(cc, 2):
+                # check if a conflict edge exists between these two nodes
+                if v in conflict_edges[u]:
+                    self.trivial = False
+                    print("inside check")
+                    return
+
+        # check bipartiteness of the graph induced by connected components of the agreement subgraph and conflict edges
+        g_cc = nx.Graph()
+        for i in range(len(connected_components)):
+            g_cc.add_node(i)
+            for j in range(i + 1, len(connected_components)):
+                # check if a conflict edge exists between these two components
+                for u, v in product(connected_components[i], connected_components[j]):
+                    if v in conflict_edges[u]:
+                        g_cc.add_edge(i, j)
+                        break
+        self.trivial = bipartite.is_bipartite(g_cc)
+        print("bipartite check ", self.trivial)
+        if self.trivial:
+            hap_a_partition, hap_b_partition = bipartite.sets(g_cc)
+            hap_a = [list(connected_components[i]) for i in hap_a_partition]
+            hap_b = [list(connected_components[i]) for i in hap_b_partition]
+            self.hap_a_frags = [f for cc in hap_a for f in cc]
+            self.hap_b_frags = [f for cc in hap_b for f in cc]
 
     def prune_edges_by_sign(self, op):
         g = self.g.copy()
@@ -88,7 +133,7 @@ class FragGraph:
                 pruned_edges[v].append(u)
         return g, pruned_edges
 
-    def extract_subgraph(self, connected_component, check_and_set_trivial=False):
+    def extract_subgraph(self, connected_component, compute_trivial=False):
         subg = self.g.subgraph(connected_component).copy()
         subg_frags = [self.fragments[node] for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
@@ -96,7 +141,7 @@ class FragGraph:
         if self.node_id2hap_id is not None:
             node_id2hap_id = {i: self.node_id2hap_id[j] for (i, j) in enumerate(subg.nodes)}
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
-        return FragGraph(subg_relabeled, subg_frags, node_id2hap_id, check_and_set_trivial)
+        return FragGraph(subg_relabeled, subg_frags, node_id2hap_id, compute_trivial)
 
     def connected_components_subgraphs(self, skip_trivial_graphs=False):
         components = nx.connected_components(self.g)
@@ -104,7 +149,7 @@ class FragGraph:
         for count, component in enumerate(components):
             if count and count % 500 == 0:
                 print("Processing ", count)
-            subgraph = self.extract_subgraph(component, check_and_set_trivial=True)
+            subgraph = self.extract_subgraph(component, compute_trivial=True)
             if subgraph.trivial and skip_trivial_graphs:
                 continue
             subgraphs.append(subgraph)
@@ -145,7 +190,7 @@ class FragGraphGen:
                         g = nx.read_gpickle(graph_file_fname)
                         graph = FragGraph(g, fragments)
                     else:
-                        graph = FragGraph.build(fragments, check_and_set_trivial=False)
+                        graph = FragGraph.build(fragments, compute_trivial=False)
                     if self.store_graphs:
                         nx.write_gpickle(graph.g, graph_file_fname)
                     print("Fragment graph with ", graph.n_nodes, " nodes and ", graph.g.number_of_edges(), " edges")

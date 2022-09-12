@@ -31,7 +31,7 @@ while env.has_state():
     if not env.state.frag_graph.trivial:
         # solve using exact algorithm
         print("component is error free")
-        env.solve_error_free_instance()
+        env.lookup_error_free_instance()
         n_episodes += 1
         env.reset()
         continue
