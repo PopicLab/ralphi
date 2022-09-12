@@ -122,7 +122,8 @@ class PhasingEnv(gym.Env):
 
     def lookup_error_free_instance(self):
         assert self.state.frag_graph.trivial, "Looking up a solution for a non-trivial graph!"
-        assert self.state.frag_graph.hap_a_frags and self.state.frag_graph.hap_b_frags, "The solution was not computed"
+        assert self.state.frag_graph.hap_a_frags is not None and self.state.frag_graph.hap_b_frags is not None, \
+            "The solution was not computed"
         for i, frag in enumerate(self.state.frag_graph.fragments):
             if i in self.state.frag_graph.hap_a_frags:
                 frag.assign_haplotype(0.0)
