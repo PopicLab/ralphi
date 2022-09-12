@@ -5,7 +5,13 @@ import dgl
 import utils.plotting as vis
 import graphs.frag_graph as graphs
 import networkx as nx
+from collections import defaultdict
+from networkx.algorithms import bipartite
+from itertools import product
 import random
+import copy
+import operator
+
 
 class State:
     """
@@ -27,10 +33,15 @@ class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
-    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1, max_graph_size=float('inf')):
+    def __init__(self, panel=None, out_dir=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1,
+                 max_graph_size=float('inf'), skip_trivial_graphs=False):
         super(PhasingEnv, self).__init__()
-        self.graph_gen = iter(graphs.FragGraphGen(panel, out_dir, load_graphs=False, store_graphs=False, load_components=False,
-            store_components=False, skip_singletons=skip_singleton_graphs, min_graph_size=min_graph_size, max_graph_size=max_graph_size))
+        self.graph_gen = iter(graphs.FragGraphGen(panel, out_dir, load_graphs=False, store_graphs=False,
+                                                  load_components=False, store_components=False,
+                                                  skip_singletons=skip_singleton_graphs,
+                                                  min_graph_size=min_graph_size,
+                                                  max_graph_size=max_graph_size,
+                                                  skip_trivial_graphs=skip_trivial_graphs))
         self.state = self.init_state()
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
@@ -55,7 +66,7 @@ class PhasingEnv(gym.Env):
         # experimentally normalizing by number of nodes appears to stablilize actor-critic training
         # (and this normalization seems to be done in literature as well) -- but should confirm this with a side by side comparison
         # TODO (Anant): get a long running result of training with and without normalization
-        norm_factor = self.state.num_nodes # 1
+        norm_factor = self.state.num_nodes  # 1
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
@@ -109,11 +120,25 @@ class PhasingEnv(gym.Env):
         self.state = self.init_state()
         return self.state, not self.has_state()
 
+    def lookup_error_free_instance(self):
+        assert self.state.frag_graph.trivial, "Looking up a solution for a non-trivial graph!"
+        assert self.state.frag_graph.hap_a_frags is not None and self.state.frag_graph.hap_b_frags is not None, \
+            "The solution was not computed"
+        for i, frag in enumerate(self.state.frag_graph.fragments):
+            if i in self.state.frag_graph.hap_a_frags:
+                frag.assign_haplotype(0.0)
+            elif i in self.state.frag_graph.hap_b_frags:
+                frag.assign_haplotype(1.0)
+            else:
+                raise RuntimeError("Fragment wasn't assigned to any cluster")
+        self.solutions.append(self.state.frag_graph.fragments)
+
     def get_graph_stats(self):
         return self.get_cut_value(), self.state.frag_graph.g.number_of_nodes(), self.state.frag_graph.g.number_of_edges()
 
-    def get_cut_value(self):
-        node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
+    def get_cut_value(self, node_labels=None):
+        if not node_labels:
+            node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
         if not isinstance(node_labels, list):
             node_labels = [node_labels]
         computed_cut = {i for i, e in enumerate(node_labels) if e != 0}

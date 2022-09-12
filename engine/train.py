@@ -24,14 +24,16 @@ parser.add_argument('--seed', type=int, default=12345, help='Random seed (defaul
 parser.add_argument('--out_dir', help='Directory for output files (model, plots)')
 parser.add_argument('--max_episodes', default=None, type=int, help='Maximum number of episodes to play')
 parser.add_argument('--render', action='store_true', help='render the environment')
+parser.add_argument('--num_cores', type=int, default=4, help='number of threads to use for Pytorch (default: 4)')
+
 args = parser.parse_args()
 torch.manual_seed(args.seed)
 random.seed(args.seed)
-
+torch.set_num_threads(args.num_cores)
 
 def benchmarking_training_loop(model_no, current_best):
     # benchmark the current model against a held out set of fragment graphs (validation panel)
-    validation_env = envs.PhasingEnv(panel=args.validation_panel)
+    validation_env = envs.PhasingEnv(panel=args.validation_panel, skip_trivial_graphs=True)
     validation_agent.model.load_state_dict(agent.model.state_dict())
     validation_agent.env = validation_env
     validation_sum_of_rewards = 0
@@ -50,9 +52,9 @@ def benchmarking_training_loop(model_no, current_best):
     return current_best
 
 
-
 # Setup the agent and the environment
-env = envs.PhasingEnv(args.panel, out_dir=args.out_dir, min_graph_size=args.min_graph_size, max_graph_size=args.max_graph_size)
+env = envs.PhasingEnv(args.panel, out_dir=args.out_dir, min_graph_size=args.min_graph_size,
+                      max_graph_size=args.max_graph_size, skip_trivial_graphs=True)
 agent = agents.DiscreteActorCriticAgent(env)
 validation_agent = agents.DiscreteActorCriticAgent(env)
 if args.pretrained_model is not None:
