@@ -45,14 +45,22 @@ class FragGraph:
         if compress and fragments:
             # in a compressed graph: nodes are unique fragments, edge weights correspond to the number
             # of all fragment instances
-            frags_unique = [fragments[0]]  # list of unique fragments, list allows comparisons based on equality only
+            frags_unique = []  # list of unique fragments, list allows comparisons based on equality only
             fid2count = defaultdict(int)  # maps the idx in frags_unique to the number of times this fragment was seen
-            fid2count[0] = 1
-            for f in fragments[1:]:
-                if f != frags_unique[-1]:
-                    frags_unique.append(f)
-                idx = len(frags_unique) - 1
-                fid2count[idx] += 1
+            search_block_idx = None
+            for f in fragments:
+                # fragments are sorted by the start index in the vcf
+                if search_block_idx is not None and frags_unique[search_block_idx].vcf_idx_start == f.vcf_idx_start:
+                    try:
+                        fid2count[frags_unique.index(f, search_block_idx)] += 1
+                        continue
+                    except ValueError:
+                        pass
+                else:
+                    search_block_idx = len(frags_unique)
+                # new fragment
+                frags_unique.append(f)
+                fid2count[len(frags_unique) - 1] += 1
             fragments = frags_unique
 
         frag_graph = nx.Graph()

@@ -121,8 +121,6 @@ def parse_frag_file(frags_fname):
     fragments = []
     with open(frags_fname, 'r') as f:
         for frag_line in f:
-            #if len(fragments) > 0 and len(fragments) % 100 == 0:
-            #    print("Processed ", len(fragments), " lines")
             fragments.append(Fragment.parse_from_file(frag_line))
     # sort fragments to optimize graph construction
     fragments = sorted(fragments, key=lambda frag: frag.vcf_idx_start)
