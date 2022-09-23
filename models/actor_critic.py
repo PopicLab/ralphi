@@ -3,8 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models.graph_models import GCN, GCNFirstLayer
-import numpy as np
-
+import time
+import logging
+import engine.config as config
+import engine.constants as constants
 
 class ActorCriticNet(nn.Module):
     def __init__(self, in_dim, hidden_dim, num_actions):
@@ -68,27 +70,38 @@ class DiscreteActorCriticAgent:
         self.model.actions.append((dist.log_prob(action), val[0]))
         return action.item()
 
-    def run_episode(self, greedy=False):
-        print("Run episode.....")
-        #self.env.reset()
+    def run_episode(self, test_mode=False, episode_id=None):
+        start_time = time.time()
         if self.env.state.num_nodes < 2:
             return 0
         done = False
         episode_reward = 0
         while not done:
-            action = self.select_action(greedy)
+            action = self.select_action(test_mode)
             _, reward, done = self.env.step(action)
-            self.model.rewards.append(reward)
             episode_reward += reward
-            #print("Action: ", action, "reward", reward, "is_done", done)
-        if greedy:
-            del self.model.rewards[:]
-            del self.model.actions[:]
-            # self.env.render()
-            return episode_reward
-        (actor_loss, critic_loss, sum_loss) = self.update_model()
+            if not test_mode:
+                self.model.rewards.append(reward)
+        if not test_mode:
+            loss = self.update_model()
+            self.log_episode_stats(episode_id, episode_reward, loss, time.time() - start_time)
         # self.env.render()
-        return episode_reward, actor_loss, critic_loss, sum_loss
+        return episode_reward
+
+    def log_episode_stats(self, episode_id, reward, loss, runtime):
+        graph_stats = self.env.get_graph_stats()
+        logging.getLogger(config.MAIN_LOG).info("Episode: %d. Reward: %d, ActorLoss: %d, CriticLoss: %d, TotalLoss: %d,"
+                                                "CutSize: %d, Runtime: %d" %
+                                                (episode_id, reward,
+                                                 loss[constants.LossTypes.actor_loss],
+                                                 loss[constants.LossTypes.critic_loss],
+                                                 loss[constants.LossTypes.total_loss],
+                                                 graph_stats[constants.GraphStats.cut_value],
+                                                 runtime))
+        logging.getLogger(config.STATS_LOG_TRAIN).info(",".join([id, reward,
+                                                                 ",".join(loss.values()),
+                                                                 ",".join(graph_stats.values()),
+                                                                 runtime]))
 
     def update_model(self):
         R = 0
@@ -113,4 +126,9 @@ class DiscreteActorCriticAgent:
         # reset rewards and action buffer
         del self.model.rewards[:]
         del self.model.actions[:]
-        return (torch.stack(loss_policy).sum().item(), torch.stack(loss_value).sum().item(), loss.item())
+        return {
+           constants.LossTypes.actor_loss: torch.stack(loss_policy).sum().item(),
+           constants.LossTypes.critic_loss: torch.stack(loss_value).sum().item(),
+           constants.LossTypes.total_loss: loss.item()
+        }
+

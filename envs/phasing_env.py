@@ -5,6 +5,7 @@ import dgl
 import utils.plotting as vis
 import graphs.frag_graph as graphs
 import networkx as nx
+import engine.constants as constants
 from collections import defaultdict
 from networkx.algorithms import bipartite
 from itertools import product
@@ -135,7 +136,11 @@ class PhasingEnv(gym.Env):
         self.solutions.append(self.state.frag_graph.fragments)
 
     def get_graph_stats(self):
-        return self.get_cut_value(), self.state.frag_graph.g.number_of_nodes(), self.state.frag_graph.g.number_of_edges()
+        return {
+            constants.GraphStats.num_nodes: self.state.frag_graph.g.number_of_nodes(),
+            constants.GraphStats.num_edges: self.state.frag_graph.g.number_of_edges(),
+            constants.GraphStats.cut_value: self.get_cut_value(),
+        }
 
     def get_cut_value(self, node_labels=None):
         if not node_labels:
