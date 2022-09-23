@@ -45,7 +45,6 @@ def validate(current_best_reward):
     logging.getLogger(config.STATS_LOG_VALIDATE).info(",".join([episode_id, sum_of_cuts, sum_of_rewards]))
     return sum_of_rewards
 
-
 # Run the training
 sim_mode = False
 episode_accuracies = []
@@ -67,11 +66,9 @@ while agent.env.has_state():
         node_labels = agent.env.state.g.ndata['x'][:, 0].cpu().squeeze().numpy().tolist()
         episode_accuracy = graphs.eval_assignment(node_labels, agent.env.state.frag_graph.node_id2hap_id)
         episode_accuracies.append(100*episode_accuracy)
-
     if config.render:
         agent.env.render('weighted_view')
     agent.env.reset()
 
 # save the model
 torch.save(agent.model.state_dict(), config.model_path)
-

@@ -54,6 +54,9 @@ class Fragment:
             for block in self.blocks:
                 self.n_variants += block.n_variants
 
+        # number of copies of this fragment
+        self.n_copies = 1
+
         self.read_id = None
         self.paired = None
         self.insert_size = None

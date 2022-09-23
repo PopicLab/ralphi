@@ -15,6 +15,7 @@ import itertools
 from itertools import product
 import operator
 from networkx.algorithms import bipartite
+import logging
 
 
 class FragGraph:
@@ -46,13 +47,12 @@ class FragGraph:
             # in a compressed graph: nodes are unique fragments, edge weights correspond to the number
             # of all fragment instances
             frags_unique = []  # list of unique fragments, list allows comparisons based on equality only
-            fid2count = defaultdict(int)  # maps the idx in frags_unique to the number of times this fragment was seen
             search_block_idx = None
             for f in fragments:
                 # fragments are sorted by the start index in the vcf
                 if search_block_idx is not None and frags_unique[search_block_idx].vcf_idx_start == f.vcf_idx_start:
                     try:
-                        fid2count[frags_unique.index(f, search_block_idx)] += 1
+                        frags_unique[frags_unique.index(f, search_block_idx)].n_copies += 1
                         continue
                     except ValueError:
                         pass
@@ -60,7 +60,6 @@ class FragGraph:
                     search_block_idx = len(frags_unique)
                 # new fragment
                 frags_unique.append(f)
-                fid2count[len(frags_unique) - 1] += 1
             fragments = frags_unique
 
         frag_graph = nx.Graph()
@@ -85,7 +84,7 @@ class FragGraph:
                         n_conflicts += 1
                 weight = 1.0 * (-n_variants + 2 * n_conflicts)
                 if compress:
-                    weight = weight * fid2count[i] * fid2count[j]
+                    weight = weight * f1.n_copies * f2.n_copies
                 # TODO(viq): differentiate between no overlap and half conflicts
                 # Include zero-weight edges for now so that we ensure a variant only belongs to one connected component,
                 # as otherwise half-conflicts can result in a variant being split between two connected components.
@@ -178,13 +177,10 @@ class FragGraph:
 
 
 class FragGraphGen:
-    def __init__(self, frag_panel_file=None, out_dir=None, load_graphs=False, store_graphs=False, load_components=False,
-                 store_components=False, skip_singletons=True, min_graph_size=1, max_graph_size=float('inf'),
+    def __init__(self, frag_panel_file=None, load_components=False, store_components=False,
+                 skip_singletons=True, min_graph_size=1, max_graph_size=float('inf'),
                  skip_trivial_graphs=False, compress=False):
         self.frag_panel_file = frag_panel_file
-        self.out_dir = out_dir
-        self.load_graphs = load_graphs
-        self.store_graphs = store_graphs
         self.load_components = load_components
         self.store_components = store_components
         self.skip_singletons = skip_singletons
@@ -199,30 +195,16 @@ class FragGraphGen:
         if self.frag_panel_file is not None:
             with open(self.frag_panel_file, 'r') as panel:
                 for frag_file_fname in panel:
-                    # frag_file_fname = frag_file_fname.replace("\"", "")
-                    print("Fragment file: ", frag_file_fname)
-                    frag_file_fname_local = frag_file_fname
-                    # frag_file_fname_local = '/src/data/train/frags/chr20/' + ntpath.basename(frag_file_fname)
-                    # if remote file, download
-                    # with open(frag_file_fname_local + ntpath.basename(frag_file_fname), 'w') as frag_file:
-                    #    client.download_blob_to_file(frag_file_fname, frag_file)
-                    fragments = frags.parse_frag_file(frag_file_fname_local.strip())
-                    graph_file_fname = frag_file_fname_local.strip() + ".graph"
-                    if self.load_graphs and os.path.exists(graph_file_fname):
-                        g = nx.read_gpickle(graph_file_fname)
-                        graph = FragGraph(g, fragments)
-                    else:
-                        graph = FragGraph.build(fragments, compute_trivial=False, compress=self.compress)
-                    if self.store_graphs:
-                        nx.write_gpickle(graph.g, graph_file_fname)
-                    print("Fragment graph with ", graph.n_nodes, " nodes and ", graph.g.number_of_edges(), " edges")
-
-                    print("Finding connected components...")
-                    component_file_fname = frag_file_fname_local.strip() + ".components"
+                    logging.info("Fragment file: %s" % frag_file_fname)
+                    component_file_fname = frag_file_fname.strip() + ".components"
                     if self.load_components and os.path.exists(component_file_fname):
                         with open(component_file_fname, 'rb') as f:
                             connected_components = pickle.load(f)
                     else:
+                        fragments = frags.parse_frag_file(frag_file_fname.strip())
+                        graph = FragGraph.build(fragments, compute_trivial=False, compress=self.compress)
+                        print("Fragment graph with ", graph.n_nodes, " nodes and ", graph.g.number_of_edges(), " edges")
+                        print("Finding connected components...")
                         connected_components = graph.connected_components_subgraphs(
                             skip_trivial_graphs=self.skip_trivial_graphs)
                         if self.store_components:
@@ -237,13 +219,9 @@ class FragGraphGen:
                             continue
                         if not (self.min_graph_size <= subgraph.n_nodes <= self.max_graph_size):
                             continue
-
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                         yield subgraph
                     print("Finished processing file: ", frag_file_fname)
-                    if self.out_dir is not None:
-                        with open(self.out_dir + "/training.log", "a") as f:
-                            f.write(frag_file_fname)
             yield None
         else:
             while True:
