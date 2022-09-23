@@ -47,13 +47,12 @@ class FragGraph:
             # in a compressed graph: nodes are unique fragments, edge weights correspond to the number
             # of all fragment instances
             frags_unique = []  # list of unique fragments, list allows comparisons based on equality only
-            fid2count = defaultdict(int)  # maps the idx in frags_unique to the number of times this fragment was seen
             search_block_idx = None
             for f in fragments:
                 # fragments are sorted by the start index in the vcf
                 if search_block_idx is not None and frags_unique[search_block_idx].vcf_idx_start == f.vcf_idx_start:
                     try:
-                        fid2count[frags_unique.index(f, search_block_idx)] += 1
+                        frags_unique[frags_unique.index(f, search_block_idx)].n_copies += 1
                         continue
                     except ValueError:
                         pass
@@ -61,7 +60,6 @@ class FragGraph:
                     search_block_idx = len(frags_unique)
                 # new fragment
                 frags_unique.append(f)
-                fid2count[len(frags_unique) - 1] += 1
             fragments = frags_unique
 
         frag_graph = nx.Graph()
@@ -86,7 +84,7 @@ class FragGraph:
                         n_conflicts += 1
                 weight = 1.0 * (-n_variants + 2 * n_conflicts)
                 if compress:
-                    weight = weight * fid2count[i] * fid2count[j]
+                    weight = weight * f1.n_copies * f2.n_copies
                 # TODO(viq): differentiate between no overlap and half conflicts
                 # Include zero-weight edges for now so that we ensure a variant only belongs to one connected component,
                 # as otherwise half-conflicts can result in a variant being split between two connected components.
