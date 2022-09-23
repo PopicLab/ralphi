@@ -10,7 +10,9 @@ import matplotlib
 import csv
 import random
 import graphs.frag_graph as graphs
+import logging
 import utils.logging
+import sys
 #matplotlib.use('macosx')
 
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
@@ -44,7 +46,7 @@ def benchmarking_training_loop(model_no, current_best):
         validation_sum_of_cuts += validation_env.get_cut_value()
         validation_env.reset()
     print("Episode: ", episode, "Sum of Cuts: ", validation_sum_of_cuts, "Sum of Rewards: ", validation_sum_of_rewards)
-    logger.write_validation_stats(episode, validation_sum_of_cuts, validation_sum_of_rewards)
+    stats_logger.write_validation_stats(episode, validation_sum_of_cuts, validation_sum_of_rewards)
     if validation_sum_of_cuts > current_best:
         current_best = validation_sum_of_cuts
         torch.save(agent.model.state_dict(), "%s/dphase_model_best.pt" % args.out_dir)
@@ -53,14 +55,20 @@ def benchmarking_training_loop(model_no, current_best):
 
 
 # Setup the agent and the environment
-env = envs.PhasingEnv(args.panel, out_dir=args.out_dir, min_graph_size=args.min_graph_size,
-                      max_graph_size=args.max_graph_size, skip_trivial_graphs=True)
+env = envs.PhasingEnv(args.panel, min_graph_size=args.min_graph_size, max_graph_size=args.max_graph_size,
+                      skip_trivial_graphs=True)
 agent = agents.DiscreteActorCriticAgent(env)
 validation_agent = agents.DiscreteActorCriticAgent(env)
 if args.pretrained_model is not None:
     agent.model.load_state_dict(torch.load(args.pretrained_model))
 
-logger = utils.logging.Logger(args.out_dir)
+# logging
+# noinspection PyArgumentList
+logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
+                    handlers=[logging.FileHandler(args.out_dir + '/training.log', mode='w'),
+                              logging.StreamHandler(sys.stdout)])
+
+stats_logger = utils.logging.Logger(args.out_dir)
 
 # Play!
 sim_mode = False
@@ -87,7 +95,7 @@ while env.has_state():
     print('Episode: {}. Reward: {}, CutSize: {}, Runtime: {}, Accuracy: {}, ActorLoss: {}, CriticLoss: {}, SumLoss: {} '.format(episode, episode_reward, cut_size, end_time - start_time,
           episode_accuracy, actor_loss, critic_loss, sum_loss))
 
-    logger.write_episode_stats(episode, g_num_nodes, g_num_edges, episode_reward, cut_size, actor_loss, critic_loss, sum_loss, end_time - start_time)
+    stats_logger.write_episode_stats(episode, g_num_nodes, g_num_edges, episode_reward, cut_size, actor_loss, critic_loss, sum_loss, end_time - start_time)
 
     if episode % 5000 == 0 and args.validation_panel is not None:
         best_sum_of_cuts = benchmarking_training_loop(model_no, best_sum_of_cuts)
