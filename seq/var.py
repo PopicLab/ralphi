@@ -14,11 +14,11 @@ class Variant:
     def assign_haplotype(self):
         c0 = 0
         c1 = 0
-        for v in self.frag_variants:
+        for v, n_copies in self.frag_variants:
             if (v.haplotype == 0 and v.allele == '0') or (v.haplotype == 1 and v.allele == '1'):
-                c0 += 1
+                c0 += n_copies
             elif (v.haplotype == 0 and v.allele == '1') or (v.haplotype == 1 and v.allele == '0'):
-                c1 += 1
+                c1 += n_copies
         if c0 > c1:
             self.h = 0
         elif c0 < c1:
@@ -41,6 +41,6 @@ def extract_variants(phased_frag_sets):
                     if var.vcf_idx not in idx2variant:
                         idx2variant[var.vcf_idx] = Variant(var.vcf_idx)
                     idx2variant[var.vcf_idx].phase_set = i
-                    idx2variant[var.vcf_idx].frag_variants.append(var)
+                    idx2variant[var.vcf_idx].frag_variants.append((var, frag.n_copies))
     return idx2variant
 
