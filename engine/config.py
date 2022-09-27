@@ -97,13 +97,13 @@ class TestConfig(Config):
         # logging
         # noinspection PyArgumentList
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
-                            handlers=[logging.FileHandler(self.out_dir + '/training.log', mode='w'),
+                            handlers=[logging.FileHandler(self.log_dir + '/main.log', mode='w'),
                                       logging.StreamHandler(sys.stdout)])
         logging.info(self)
 
     def __str__(self):
-        s = super().__str__()
-        s += '\n\t'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
+        s = " ===== Config =====\n"
+        s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
         return s
 
 

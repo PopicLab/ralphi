@@ -16,7 +16,7 @@ parser.add_argument('--config', help='Testing configuration YAML')
 args = parser.parse_args()
 # -----------------
 
-config = config_utils.load_config(args.config)
+config = config_utils.load_config(args.config, config_type=config_utils.CONFIG_TYPE.TEST)
 torch.set_num_threads(config.num_cores)
 env = envs.PhasingEnv(config.panel,
                       record_solutions=config.record_solutions,
@@ -29,13 +29,13 @@ agent.model.load_state_dict(torch.load(config.model))
 n_episodes = 0
 while env.has_state():
     if env.state.frag_graph.trivial:
-        logging.debug("component is trivial")
+        logging.debug("Component is trivial")
         env.lookup_error_free_instance()
         n_episodes += 1
         env.reset()
         continue
 
-    logging.debug("component is non-trivial")
+    logging.debug("Component is non-trivial")
     start_time = time.time()
     done = False
     while not done:
@@ -55,5 +55,5 @@ idx2var = var.extract_variants(env.solutions)
 for v in idx2var.values():
     v.assign_haplotype()
 idx2var = utils.post_processing.update_split_block_phase_sets(env.solutions, idx2var)
-logging.info("post-processed blocks that were split up due to ambiguous variants")
+logging.info("Post-processed blocks that were split up due to ambiguous variants")
 vcf_writer.write_phased_vcf(config.input_vcf, idx2var, config.output_vcf)
