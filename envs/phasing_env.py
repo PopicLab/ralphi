@@ -42,6 +42,8 @@ class PhasingEnv(gym.Env):
                                                   min_graph_size=min_graph_size, max_graph_size=max_graph_size,
                                                   skip_trivial_graphs=skip_trivial_graphs, compress=compress))
         self.state = self.init_state()
+        if not self.has_state():
+            raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
         self.action_space = spaces.Discrete(self.num_actions)

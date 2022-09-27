@@ -70,7 +70,7 @@ class DiscreteActorCriticAgent:
         self.model.actions.append((dist.log_prob(action), val[0]))
         return action.item()
 
-    def run_episode(self, test_mode=False, episode_id=None):
+    def run_episode(self, config, test_mode=False, episode_id=None):
         start_time = time.time()
         if self.env.state.num_nodes < 2:
             return 0
@@ -85,23 +85,24 @@ class DiscreteActorCriticAgent:
         if not test_mode:
             loss = self.update_model()
             self.log_episode_stats(episode_id, episode_reward, loss, time.time() - start_time)
-        # self.env.render()
+        if config.render:
+            self.env.render(config.render_view)
         return episode_reward
 
     def log_episode_stats(self, episode_id, reward, loss, runtime):
         graph_stats = self.env.get_graph_stats()
         logging.getLogger(config.MAIN_LOG).info("Episode: %d. Reward: %d, ActorLoss: %d, CriticLoss: %d, TotalLoss: %d,"
-                                                "CutSize: %d, Runtime: %d" %
+                                                " CutSize: %d, Runtime: %d" %
                                                 (episode_id, reward,
                                                  loss[constants.LossTypes.actor_loss],
                                                  loss[constants.LossTypes.critic_loss],
                                                  loss[constants.LossTypes.total_loss],
                                                  graph_stats[constants.GraphStats.cut_value],
                                                  runtime))
-        logging.getLogger(config.STATS_LOG_TRAIN).info(",".join([id, reward,
-                                                                 ",".join(loss.values()),
-                                                                 ",".join(graph_stats.values()),
-                                                                 runtime]))
+        logging.getLogger(config.STATS_LOG_TRAIN).info(",".join([str(episode_id), str(reward),
+                                                                 ",".join(str(loss) for loss in loss.values()),
+                                                                 ",".join(str(stat) for stat in graph_stats.values()),
+                                                                 str(runtime)]))
 
     def update_model(self):
         R = 0

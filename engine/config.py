@@ -38,10 +38,9 @@ class Config:
         Path(self.out_dir).mkdir(parents=True, exist_ok=True)
 
         # ...shared training and testing configs...
-        logging.info(self)
 
     def __str__(self):
-        s = " ===== Config ====="
+        s = " ===== Config =====\n"
         s += '\n\t'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
         return s
 
@@ -54,28 +53,37 @@ class TrainingConfig(Config):
         self.best_model_path = self.out_dir + "/dphase_model_best.pt"
 
         # logging
+        # main log file
         self.log_file_main = self.log_dir + 'main.log'
-        self.log_file_stats = self.log_dir + 'episodes_stats.csv'
-        formatter = logging.Formatter('[%(levelname)s] %(message)s')
         file_handler = logging.FileHandler(self.log_file_main, mode='w')
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
         stream_handler = logging.StreamHandler(sys.stdout)
-        stream_handler.setFormatter(formatter)
+        stream_handler.setFormatter(file_handler.formatter)
         logger_main = logging.getLogger(MAIN_LOG)
         logger_main.setLevel(level=logging.INFO)
         logger_main.addHandler(file_handler)
-        logger_main.addHandler(logging.StreamHandler(sys.stdout))
+        logger_main.addHandler(stream_handler)
+        # training stats log file
+        self.log_file_stats_train = self.log_dir + 'train_episodes_stats.csv'
+        file_handler = logging.FileHandler(self.log_file_stats_train, mode='w')
+        file_handler.setFormatter(logging.Formatter('%(message)s'))
         logger_stats_train = logging.getLogger(STATS_LOG_TRAIN)
         logger_stats_train.setLevel(level=logging.INFO)
+        logger_stats_train.addHandler(file_handler)
         logger_stats_train.info(",".join(STATS_LOG_COLS_TRAIN))
+        # validation stats log file
+        self.log_file_stats_validate = self.log_dir + 'validate_episodes_stats.csv'
+        file_handler = logging.FileHandler(self.log_file_stats_validate, mode='w')
+        file_handler.setFormatter(logging.Formatter('%(message)s'))
         logger_stats_validate = logging.getLogger(STATS_LOG_VALIDATE)
         logger_stats_validate.setLevel(level=logging.INFO)
+        logger_stats_validate.addHandler(file_handler)
         logger_stats_validate.info(",".join(STATS_LOG_COLS_VALIDATE))
-        logging.info(self)
+        logger_main.info(self)
 
     def __str__(self):
-        s = super().__str__()
-        s += '\n\t'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
+        s = " ===== Config =====\n"
+        s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
         return s
 
 
