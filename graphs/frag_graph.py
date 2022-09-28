@@ -63,11 +63,9 @@ class FragGraph:
             fragments = frags_unique
 
         frag_graph = nx.Graph()
-        print("constructing fragment graph")
+        print("Constructing fragment graph from %d fragments" % len(fragments))
         for i, f1 in enumerate(fragments):
             frag_graph.add_node(i)
-            if i and i % 1000 == 0:
-                print("Processing ", i)
             for j in range(i + 1, len(fragments)):
                 f2 = fragments[j]
                 if f1.vcf_idx_end < f2.vcf_idx_start:
@@ -167,8 +165,6 @@ class FragGraph:
         components = nx.connected_components(self.g)
         subgraphs = []
         for count, component in enumerate(components):
-            if count and count % 500 == 0:
-                print("Processing ", count)
             subgraph = self.extract_subgraph(component, compute_trivial=True)
             if subgraph.trivial and skip_trivial_graphs:
                 continue
@@ -214,6 +210,7 @@ class FragGraphGen:
                     # the order of the corresponding variants which could result in some unwanted correlation
                     # during training between e.g. if there are certain regions of variants with many errors
                     random.shuffle(connected_components)
+                    print("Number of connected components: ", len(connected_components))
                     for subgraph in connected_components:
                         if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
                             continue

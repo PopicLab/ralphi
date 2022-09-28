@@ -5,6 +5,7 @@ import dgl
 import utils.plotting as vis
 import graphs.frag_graph as graphs
 import networkx as nx
+import engine.constants as constants
 from collections import defaultdict
 from networkx.algorithms import bipartite
 from itertools import product
@@ -41,6 +42,8 @@ class PhasingEnv(gym.Env):
                                                   min_graph_size=min_graph_size, max_graph_size=max_graph_size,
                                                   skip_trivial_graphs=skip_trivial_graphs, compress=compress))
         self.state = self.init_state()
+        if not self.has_state():
+            raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
         self.num_actions = self.state.num_nodes + 1
         self.action_space = spaces.Discrete(self.num_actions)
@@ -132,7 +135,11 @@ class PhasingEnv(gym.Env):
         self.solutions.append(self.state.frag_graph.fragments)
 
     def get_graph_stats(self):
-        return self.get_cut_value(), self.state.frag_graph.g.number_of_nodes(), self.state.frag_graph.g.number_of_edges()
+        return {
+            constants.GraphStats.num_nodes: self.state.frag_graph.g.number_of_nodes(),
+            constants.GraphStats.num_edges: self.state.frag_graph.g.number_of_edges(),
+            constants.GraphStats.cut_value: self.get_cut_value(),
+        }
 
     def get_cut_value(self, node_labels=None):
         if not node_labels:

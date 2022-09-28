@@ -1,0 +1,13 @@
+panel_train: "path/to/fragments" # Fragment files for training
+panel_validate: "path/to/fragments" # Fragment files for validation
+pretrained_model: null  # path to pretrained model; null or "path/to/model"
+min_graph_size: 1 # Minimum size of graphs to use for training
+max_graph_size: 1 # Maximum size of graphs to use for training
+skip_trivial_graphs: False
+gamma: 0.99 # Reward discount factor
+seed: 12345 # Random seed
+max_episodes: null # Maximum number of episodes to run
+render: False # Enables the rendering of the environment
+render_view: "weighted_view" # Controls how the graph is rendered
+num_cores: 4 # Number of threads to use for Pytorch
+interval_validate: 5000 # Number of episodes between model validation runs
