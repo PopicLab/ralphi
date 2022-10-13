@@ -35,12 +35,12 @@ class PhasingEnv(gym.Env):
     Genome phasing environment
     """
     def __init__(self, panel=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1,
-                 max_graph_size=float('inf'), skip_trivial_graphs=False, compress=False):
+                 max_graph_size=float('inf'), skip_trivial_graphs=False, compress=False, debug=False):
         super(PhasingEnv, self).__init__()
         self.graph_gen = iter(graphs.FragGraphGen(panel, load_components=False, store_components=False,
                                                   skip_singletons=skip_singleton_graphs,
                                                   min_graph_size=min_graph_size, max_graph_size=max_graph_size,
-                                                  skip_trivial_graphs=skip_trivial_graphs, compress=compress))
+                                                  skip_trivial_graphs=skip_trivial_graphs, compress=compress, debug=debug))
         self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
@@ -138,8 +138,21 @@ class PhasingEnv(gym.Env):
         return {
             constants.GraphStats.num_nodes: self.state.frag_graph.g.number_of_nodes(),
             constants.GraphStats.num_edges: self.state.frag_graph.g.number_of_edges(),
-            constants.GraphStats.cut_value: self.get_cut_value(),
+            constants.GraphStats.density: self.get_density(),
+            constants.GraphStats.radius: self.get_radius(),
+            constants.GraphStats.diameter: self.get_diameter(),
+            constants.GraphStats.n_variants: self.state.frag_graph.compute_number_of_variants(),
+            constants.GraphStats.cut_value: self.get_cut_value()
         }
+
+    def get_density(self):
+        return nx.density(self.state.frag_graph.g)
+
+    def get_radius(self):
+        return nx.radius(self.state.frag_graph.g)
+
+    def get_diameter(self):
+        return nx.diameter(self.state.frag_graph.g)
 
     def get_cut_value(self, node_labels=None):
         if not node_labels:

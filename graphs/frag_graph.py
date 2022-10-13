@@ -97,6 +97,14 @@ class FragGraph:
             frag_graph.nodes[node]['y'] = [fragments[node].n_variants]
         return FragGraph(frag_graph, fragments, compute_trivial=compute_trivial)
 
+    def compute_number_of_variants(self):
+        vcf_positions = set()
+        for frag in self.fragments:
+            for block in frag.blocks:
+                for var in block.variants:
+                    vcf_positions.add(var.vcf_idx)
+        return len(vcf_positions)
+
     def check_and_set_trivial(self):
         """
         Checks if the max-cut solution can be trivially computed; if so, the solution is computed and stored.
@@ -175,7 +183,7 @@ class FragGraph:
 class FragGraphGen:
     def __init__(self, frag_panel_file=None, load_components=False, store_components=False,
                  skip_singletons=True, min_graph_size=1, max_graph_size=float('inf'),
-                 skip_trivial_graphs=False, compress=False):
+                 skip_trivial_graphs=False, compress=False, debug=False):
         self.frag_panel_file = frag_panel_file
         self.load_components = load_components
         self.store_components = store_components
@@ -184,7 +192,7 @@ class FragGraphGen:
         self.max_graph_size = max_graph_size
         self.skip_trivial_graphs = skip_trivial_graphs
         self.compress = compress
-
+        self.debug = debug
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
@@ -206,10 +214,17 @@ class FragGraphGen:
                         if self.store_components:
                             with open(component_file_fname, 'wb') as f:
                                 pickle.dump(connected_components, f)
-                    # decorrelate connected components, since otherwise we may end up processing connected components in
-                    # the order of the corresponding variants which could result in some unwanted correlation
-                    # during training between e.g. if there are certain regions of variants with many errors
-                    random.shuffle(connected_components)
+
+                    if self.debug:
+                        # returns graphs sorted by size to help analyze performance
+                        connected_components.sort(key=operator.attrgetter('n_nodes'))
+                    else:
+                        # decorrelate connected components, since otherwise we may end up processing connected components in
+                        # the order of the corresponding variants which could result in some unwanted correlation
+                        # during training between e.g. if there are certain regions of variants with many errors
+                        random.shuffle(connected_components)
+
+
                     print("Number of connected components: ", len(connected_components))
                     for subgraph in connected_components:
                         if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):

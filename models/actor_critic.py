@@ -7,6 +7,7 @@ import time
 import logging
 import engine.config as config
 import engine.constants as constants
+import wandb
 
 class ActorCriticNet(nn.Module):
     def __init__(self, in_dim, hidden_dim, num_actions):
@@ -84,7 +85,10 @@ class DiscreteActorCriticAgent:
                 self.model.rewards.append(reward)
         if not test_mode:
             loss = self.update_model()
+            cut_size = self.env.get_cut_value()
             self.log_episode_stats(episode_id, episode_reward, loss, time.time() - start_time)
+            wandb.log({"Training Episode Reward": episode_reward})
+            wandb.log({"Training Cut Size": cut_size})
         if config.render:
             self.env.render(config.render_view)
         return episode_reward
@@ -121,12 +125,15 @@ class DiscreteActorCriticAgent:
         # reset gradients
         self.optimizer.zero_grad()
         loss = torch.stack(loss_policy).sum() + torch.stack(loss_value).sum()
+        wandb.log({"loss": loss})
         loss.backward()
         self.optimizer.step()
 
         # reset rewards and action buffer
         del self.model.rewards[:]
         del self.model.actions[:]
+        wandb.log({"actor loss": torch.stack(loss_policy).sum().item()})
+        wandb.log({"critic loss": torch.stack(loss_value).sum().item()})
         return {
            constants.LossTypes.actor_loss: torch.stack(loss_policy).sum().item(),
            constants.LossTypes.critic_loss: torch.stack(loss_value).sum().item(),

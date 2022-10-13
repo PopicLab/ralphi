@@ -4,6 +4,10 @@ from enum import Enum
 class GraphStats(str, Enum):
     num_nodes = "num_nodes"
     num_edges = "num_edges"
+    density = "density"
+    radius = "radius"
+    diameter = "diameter"
+    n_variants = "n_variants"
     cut_value = "cut_value"
 
 class LossTypes(str, Enum):
