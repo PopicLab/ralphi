@@ -84,11 +84,11 @@ class DiscreteActorCriticAgent:
             if not test_mode:
                 self.model.rewards.append(reward)
         if not test_mode:
-            loss = self.update_model()
+            loss = self.update_model(episode_id)
             cut_size = self.env.get_cut_value()
             self.log_episode_stats(episode_id, episode_reward, loss, time.time() - start_time)
-            wandb.log({"Training Episode Reward": episode_reward})
-            wandb.log({"Training Cut Size": cut_size})
+            wandb.log({"Episode": episode_id, "Training Episode Reward": episode_reward})
+            wandb.log({"Episode": episode_id, "Training Cut Size": cut_size})
         if config.render:
             self.env.render(config.render_view)
         return episode_reward
@@ -108,7 +108,7 @@ class DiscreteActorCriticAgent:
                                                                  ",".join(str(stat) for stat in graph_stats.values()),
                                                                  str(runtime)]))
 
-    def update_model(self):
+    def update_model(self, episode_id=None):
         R = 0
         rewards = []
         for r in self.model.rewards[::-1]:
@@ -125,15 +125,15 @@ class DiscreteActorCriticAgent:
         # reset gradients
         self.optimizer.zero_grad()
         loss = torch.stack(loss_policy).sum() + torch.stack(loss_value).sum()
-        wandb.log({"loss": loss})
+        wandb.log({"Episode": episode_id, "loss": loss})
         loss.backward()
         self.optimizer.step()
 
         # reset rewards and action buffer
         del self.model.rewards[:]
         del self.model.actions[:]
-        wandb.log({"actor loss": torch.stack(loss_policy).sum().item()})
-        wandb.log({"critic loss": torch.stack(loss_value).sum().item()})
+        wandb.log({"Episode": episode_id, "actor loss": torch.stack(loss_policy).sum().item()})
+        wandb.log({"Episode": episode_id, "critic loss": torch.stack(loss_value).sum().item()})
         return {
            constants.LossTypes.actor_loss: torch.stack(loss_policy).sum().item(),
            constants.LossTypes.critic_loss: torch.stack(loss_value).sum().item(),

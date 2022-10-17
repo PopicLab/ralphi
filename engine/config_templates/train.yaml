@@ -1,5 +1,6 @@
 panel_train: "path/to/fragments" # Fragment files for training
-panel_validate: "path/to/fragments" # Fragment files for validation
+panel_validation_frags: "path/to/fragments" # Fragment files for validation
+panel_validation_vcfs: "path/to/VCFs" # VCF files for validation
 pretrained_model: null  # path to pretrained model; null or "path/to/model"
 min_graph_size: 1 # Minimum size of graphs to use for training
 max_graph_size: 1 # Maximum size of graphs to use for training

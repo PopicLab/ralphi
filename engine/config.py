@@ -23,7 +23,7 @@ STATS_LOG_COLS_TRAIN = ['Episode',
                         constants.GraphStats.num_edges,
                         constants.GraphStats.cut_value,
                         'Runtime']
-STATS_LOG_COLS_VALIDATE = ['Episode', 'SumOfCuts', 'SumOfRewards']
+STATS_LOG_COLS_VALIDATE = ['Descriptor', 'Episode', 'SumOfCuts', 'SumOfRewards', 'Switch Count', 'Mismatch Count', 'Flat Count', 'Phased Count', 'AN50', 'N50']
 
 class Config:
     def __init__(self, config_file):
@@ -51,6 +51,7 @@ class TrainingConfig(Config):
         super().__init__(config_file)
         self.model_path = self.out_dir + "/dphase_model_final.pt"
         self.best_model_path = self.out_dir + "/dphase_model_best.pt"
+        self.validation_output_vcf = self.out_dir + "/validation_output_vcf.vcf"
 
         # logging
         # main log file

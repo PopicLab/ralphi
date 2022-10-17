@@ -215,10 +215,7 @@ class FragGraphGen:
                             with open(component_file_fname, 'wb') as f:
                                 pickle.dump(connected_components, f)
 
-                    if self.debug:
-                        # returns graphs sorted by size to help analyze performance
-                        connected_components.sort(key=operator.attrgetter('n_nodes'))
-                    else:
+                    if not self.debug:
                         # decorrelate connected components, since otherwise we may end up processing connected components in
                         # the order of the corresponding variants which could result in some unwanted correlation
                         # during training between e.g. if there are certain regions of variants with many errors
