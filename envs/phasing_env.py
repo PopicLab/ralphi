@@ -35,12 +35,12 @@ class PhasingEnv(gym.Env):
     Genome phasing environment
     """
     def __init__(self, panel=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1,
-                 max_graph_size=float('inf'), skip_trivial_graphs=False, compress=False, debug=False):
+                 max_graph_size=float('inf'), skip_trivial_graphs=False, compress=False, debug=False, graph_distribution=None):
         super(PhasingEnv, self).__init__()
         self.graph_gen = iter(graphs.FragGraphGen(panel, load_components=False, store_components=False,
                                                   skip_singletons=skip_singleton_graphs,
                                                   min_graph_size=min_graph_size, max_graph_size=max_graph_size,
-                                                  skip_trivial_graphs=skip_trivial_graphs, compress=compress, debug=debug))
+                                                  skip_trivial_graphs=skip_trivial_graphs, compress=compress, debug=debug, graph_distribution=graph_distribution))
         self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
@@ -133,6 +133,14 @@ class PhasingEnv(gym.Env):
             else:
                 raise RuntimeError("Fragment wasn't assigned to any cluster")
         self.solutions.append(self.state.frag_graph.fragments)
+
+    def get_simple_graph_stats(self):
+        return {
+            constants.GraphStats.num_nodes: self.state.frag_graph.g.number_of_nodes(),
+            constants.GraphStats.num_edges: self.state.frag_graph.g.number_of_edges(),
+            constants.GraphStats.density: self.get_density(),
+            constants.GraphStats.cut_value: self.get_cut_value()
+        }
 
     def get_graph_stats(self):
         return {

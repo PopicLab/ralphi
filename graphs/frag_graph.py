@@ -183,7 +183,7 @@ class FragGraph:
 class FragGraphGen:
     def __init__(self, frag_panel_file=None, load_components=False, store_components=False,
                  skip_singletons=True, min_graph_size=1, max_graph_size=float('inf'),
-                 skip_trivial_graphs=False, compress=False, debug=False):
+                 skip_trivial_graphs=False, compress=False, debug=False, graph_distribution=None):
         self.frag_panel_file = frag_panel_file
         self.load_components = load_components
         self.store_components = store_components
@@ -193,10 +193,22 @@ class FragGraphGen:
         self.skip_trivial_graphs = skip_trivial_graphs
         self.compress = compress
         self.debug = debug
+        self.graph_distribution = graph_distribution
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
-        if self.frag_panel_file is not None:
+        if self.graph_distribution is not None:
+            print("first originally:", nx.number_of_nodes(self.graph_distribution.combined_connected_components[0].g))
+            random.shuffle(self.graph_distribution.combined_connected_components)
+            print("first after shuffle:", nx.number_of_nodes(self.graph_distribution.combined_connected_components[0].g))
+            for subgraph in self.graph_distribution.combined_connected_components:
+                if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
+                    continue
+                if not (self.min_graph_size <= subgraph.n_nodes <= self.max_graph_size):
+                    continue
+                print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
+                yield subgraph
+        elif self.frag_panel_file is not None:
             with open(self.frag_panel_file, 'r') as panel:
                 for frag_file_fname in panel:
                     logging.info("Fragment file: %s" % frag_file_fname)

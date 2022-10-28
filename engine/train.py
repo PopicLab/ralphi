@@ -1,4 +1,5 @@
 import argparse
+import dataset_gen.graph_generator
 import models.actor_critic as agents
 import envs.phasing_env as envs
 import torch
@@ -11,6 +12,7 @@ import seq.phased_vcf as vcf_writer
 import utils.post_processing
 import os
 import third_party.HapCUT2.utilities.calculate_haplotype_statistics as benchmark
+import sys
 
 # ------ CLI ------
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
@@ -20,6 +22,12 @@ args = parser.parse_args()
 
 # Load the config
 config = config_utils.load_config(args.config)
+
+# logging
+logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
+                            handlers=[logging.FileHandler(config.log_dir + '/training.log', mode='w'),
+                                                              logging.StreamHandler(sys.stdout)])
+
 torch.manual_seed(config.seed)
 random.seed(config.seed)
 torch.set_num_threads(config.num_cores)
@@ -29,17 +37,22 @@ if os.path.exists(config.out_dir + "/benchmark.txt"):
 
 # set up performance tracking
 if config.debug:
-    wandb.init(project="debugging", entity="dphase")
+    wandb.init(project="debugging", entity="dphase", dir=config.log_dir)
 else:
     # automatically results in ignoring all wandb calls
-    wandb.init(project="debugging", entity="dphase", mode="disabled")
+    wandb.init(project="debugging", entity="dphase", dir=config.log_dir, mode="disabled")
+
+training_distribution = None
+if config.define_training_distribution:
+    training_distribution = dataset_gen.graph_generator.TrainingDistribution(config.panel_train, load_components=True, store_components=False,
+                     compress=False, skip_trivial_graphs=True)
 
 
 # Setup the agent and the training environment
 env_train = envs.PhasingEnv(config.panel_train,
                             min_graph_size=config.min_graph_size,
                             max_graph_size=config.max_graph_size,
-                            skip_trivial_graphs=config.skip_trivial_graphs)
+                            skip_trivial_graphs=config.skip_trivial_graphs, graph_distribution=training_distribution)
 agent = agents.DiscreteActorCriticAgent(env_train)
 if config.pretrained_model is not None:
     agent.model.load_state_dict(torch.load(config.pretrained_model))
@@ -68,7 +81,7 @@ def validate(model_checkpoint_id, episode_id):
 
         if config.debug:
             # ✨ W&B: Create a Table to store predictions for each test step
-            columns=["id", "number of nodes", "number of edges", "density", "radius", "diameter", "number of variants", "cut value"]
+            columns=["id", "number of nodes", "number of edges", "density", "cut value"]
             test_table = wandb.Table(columns=columns)
 
             # solutions on graphs 0 to 10 nodes
@@ -106,10 +119,10 @@ def validate(model_checkpoint_id, episode_id):
             cut_val = agent.env.get_cut_value()
             sum_of_cuts += cut_val
             if config.debug:
-                graph_stats = agent.env.get_graph_stats()
+                graph_stats = agent.env.get_simple_graph_stats()
+                #graph_stats = agent.env.get_graph_stats()
                 test_table.add_data(episode_no, graph_stats["num_nodes"], graph_stats["num_edges"],
-                                    graph_stats["density"], graph_stats["radius"], graph_stats["diameter"],
-                                    graph_stats["n_variants"], graph_stats["cut_value"])
+                                    graph_stats["density"], graph_stats["cut_value"])
                 episode_num_nodes = agent.env.state.num_nodes
                 episode_frags = agent.env.state.frag_graph.fragments
                 if 0 <= episode_num_nodes <= 10:
@@ -146,8 +159,9 @@ def validate(model_checkpoint_id, episode_id):
 
         overall_sum_of_cuts += sum_of_cuts
 
-        def log_error_rates(solutions, sum_of_cuts, sum_of_rewards, descriptor="_default_"):
+        def log_error_rates(solutions, sum_of_cuts, sum_of_rewards, descriptor="_default_", simple=False):
             CHROM, benchmark_result = compute_error_rates(solutions, validation_input_vcf)
+            original_CHROM = CHROM
             switch_count = benchmark_result.switch_count[CHROM]
             mismatch_count = benchmark_result.mismatch_count[CHROM]
             flat_count = benchmark_result.flat_count[CHROM]
@@ -188,7 +202,25 @@ def validate(model_checkpoint_id, episode_id):
             if descriptor == "_default_":
                 wandb.log({"Episode": episode_id,"validation_predictions_" + CHROM + "_" + str(model_checkpoint_id): test_table})
             # output the phased VCF (phase blocks)
-        log_error_rates(agent.env.solutions, sum_of_cuts, sum_of_rewards, "_default_")
+            return original_CHROM
+
+        original_CHROM = log_error_rates(agent.env.solutions, sum_of_cuts, sum_of_rewards, "_default_")
+        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_0to10Nodes_"+ original_CHROM: sum_of_rewards_0_to_10})
+        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_0to10Nodes_"+ original_CHROM: sum_of_cuts_0_to_10})
+        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_11_to_50_" + original_CHROM: sum_of_rewards_11_to_50})
+        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_11_to_50_" + original_CHROM: sum_of_cuts_11_to_50})
+        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_51_to_100_" + original_CHROM: sum_of_rewards_51_to_100})
+        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_51_to_100_" + original_CHROM: sum_of_cuts_51_to_100})
+        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_101_to_200_" + original_CHROM: sum_of_rewards_101_to_200})
+        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_101_to_200_" + original_CHROM: sum_of_cuts_101_to_200})
+        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_201_to_500_" + original_CHROM: sum_of_rewards_201_to_500})
+        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_201_to_500_" + original_CHROM: sum_of_cuts_201_to_500})
+        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_501_to_1000_" + original_CHROM: sum_of_rewards_501_to_1000})
+        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_501_to_1000_" + original_CHROM: sum_of_cuts_501_to_1000})
+        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_1001_plus_" + original_CHROM: sum_of_rewards_1001_plus})
+        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_1001_plus_" + original_CHROM: sum_of_cuts_1001_plus})
+
+        """"
         if config.debug:
             log_error_rates(solutions_0_to_10, sum_of_cuts_0_to_10, sum_of_rewards_0_to_10, "_0to10Nodes_")
             log_error_rates(solutions_11_to_50, sum_of_cuts_11_to_50, sum_of_rewards_11_to_50, "_11to50Nodes_")
@@ -197,6 +229,7 @@ def validate(model_checkpoint_id, episode_id):
             log_error_rates(solutions_201_to_500, sum_of_cuts_201_to_500, sum_of_rewards_201_to_500, "_201to500Nodes_")
             log_error_rates(solutions_501_to_1000, sum_of_cuts_501_to_1000, sum_of_rewards_501_to_1000, "_501to1000Nodes_")
             log_error_rates(solutions_1001_plus, sum_of_cuts_1001_plus, sum_of_rewards_1001_plus, "_1001_plus_")
+        """
 
     return overall_sum_of_cuts
 
