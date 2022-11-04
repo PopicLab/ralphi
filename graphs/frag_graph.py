@@ -198,16 +198,16 @@ class FragGraphGen:
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
         if self.graph_distribution is not None:
-            print("first originally:", nx.number_of_nodes(self.graph_distribution.combined_connected_components[0].g))
-            random.shuffle(self.graph_distribution.combined_connected_components)
-            print("first after shuffle:", nx.number_of_nodes(self.graph_distribution.combined_connected_components[0].g))
-            for subgraph in self.graph_distribution.combined_connected_components:
-                if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
-                    continue
-                if not (self.min_graph_size <= subgraph.n_nodes <= self.max_graph_size):
-                    continue
-                print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
-                yield subgraph
+            index_df = self.graph_distribution.sample(frac=1, random_state=1)
+            for index, component_row in index_df.iterrows():
+                with open(component_row.component_path, 'rb') as f:
+                    if not (self.min_graph_size <= component_row["n_nodes"] <= self.max_graph_size):
+                        continue
+                    subgraph = pickle.load(f)[component_row['index']]
+                    if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
+                        continue
+                    print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
+                    yield subgraph
         elif self.frag_panel_file is not None:
             with open(self.frag_panel_file, 'r') as panel:
                 for frag_file_fname in panel:

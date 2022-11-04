@@ -42,17 +42,18 @@ else:
     # automatically results in ignoring all wandb calls
     wandb.init(project="debugging", entity="dphase", dir=config.log_dir, mode="disabled")
 
-training_distribution = None
+
+graph_dataset_indices = None
 if config.define_training_distribution:
-    training_distribution = dataset_gen.graph_generator.TrainingDistribution(config.panel_train, load_components=True, store_components=False,
-                     compress=False, skip_trivial_graphs=True)
+    training_distribution = dataset_gen.graph_generator.TrainingDistribution(config.panel_train, load_components=True, store_components=True, save_indexes=True)
+    graph_dataset_indices = training_distribution.load_graph_dataset_indices()
 
 
 # Setup the agent and the training environment
 env_train = envs.PhasingEnv(config.panel_train,
                             min_graph_size=config.min_graph_size,
                             max_graph_size=config.max_graph_size,
-                            skip_trivial_graphs=config.skip_trivial_graphs, graph_distribution=training_distribution)
+                            skip_trivial_graphs=config.skip_trivial_graphs, graph_distribution=graph_dataset_indices)
 agent = agents.DiscreteActorCriticAgent(env_train)
 if config.pretrained_model is not None:
     agent.model.load_state_dict(torch.load(config.pretrained_model))
