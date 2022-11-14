@@ -35,9 +35,9 @@ class PhasingEnv(gym.Env):
     Genome phasing environment
     """
     def __init__(self, panel=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1,
-                 max_graph_size=float('inf'), skip_trivial_graphs=False, compress=False, debug=False, graph_distribution=None):
+                 max_graph_size=float('inf'), skip_trivial_graphs=False, compress=False, debug=False, graph_distribution=None, preloaded_graphs=None):
         super(PhasingEnv, self).__init__()
-        self.graph_gen = iter(graphs.FragGraphGen(panel, load_components=False, store_components=False,
+        self.graph_gen = iter(graphs.FragGraphGen(panel, load_components=True, store_components=True,
                                                   skip_singletons=skip_singleton_graphs,
                                                   min_graph_size=min_graph_size, max_graph_size=max_graph_size,
                                                   skip_trivial_graphs=skip_trivial_graphs, compress=compress, debug=debug, graph_distribution=graph_distribution))
@@ -67,7 +67,7 @@ class PhasingEnv(gym.Env):
         # experimentally normalizing by number of nodes appears to stablilize actor-critic training
         # (and this normalization seems to be done in literature as well) -- but should confirm this with a side by side comparison
         # TODO (Anant): get a long running result of training with and without normalization
-        norm_factor = self.state.num_nodes  # 1
+        norm_factor = 1 #self.state.num_nodes  # 1
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
@@ -185,6 +185,8 @@ class PhasingEnv(gym.Env):
             vis.plot_weighted_network(self.state.g.to_networkx(), node_labels, edge_weights)
         elif mode == "bipartite":
             vis.plot_bipartite_network(self.state.g.to_networkx(), node_labels, edge_weights)
+        elif mode == "large":
+            vis.visualize_graph(self.state.g.to_networkx(), node_labels, edge_weights)
         else:
             # save the plot to file
             pass

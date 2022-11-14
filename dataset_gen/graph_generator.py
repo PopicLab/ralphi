@@ -9,12 +9,12 @@ import utils.plotting as plt
 import tqdm
 import pandas as pd
 
-
+"""
 parser = argparse.ArgumentParser(description='graph data generation haplotype phasing')
 parser.add_argument('--panel', help='graph fragment panel file')
 
 args = parser.parse_args()
-
+"""
 
 class TrainingDistribution:
     def __init__(self, fragment_files_panel, load_components=False, store_components=False, save_indexes=False,
@@ -97,11 +97,11 @@ class TrainingDistribution:
     def select_graphs_by_boolean(self, comparator=nx.has_bridges):
         return filter(lambda graph: comparator(graph.g), self.combined_graph_indexes)
 
-
+"""
 dist = TrainingDistribution(args.panel, load_components=True, store_components=True, save_indexes=True)
 graph_dataset_indices = dist.load_graph_dataset_indices()
 #dist.load_graphs_given_indices(graph_dataset_indices)
-
+"""
 
 """
 # e.g. examples of using the API to get subsets of graphs

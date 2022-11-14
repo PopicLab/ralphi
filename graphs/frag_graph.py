@@ -183,7 +183,7 @@ class FragGraph:
 class FragGraphGen:
     def __init__(self, frag_panel_file=None, load_components=False, store_components=False,
                  skip_singletons=True, min_graph_size=1, max_graph_size=float('inf'),
-                 skip_trivial_graphs=False, compress=False, debug=False, graph_distribution=None):
+                 skip_trivial_graphs=False, compress=False, debug=False, graph_distribution=None, preloaded_graphs=None):
         self.frag_panel_file = frag_panel_file
         self.load_components = load_components
         self.store_components = store_components
@@ -194,10 +194,22 @@ class FragGraphGen:
         self.compress = compress
         self.debug = debug
         self.graph_distribution = graph_distribution
+        self.preloaded_graphs = preloaded_graphs
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
-        if self.graph_distribution is not None:
+        if self.preloaded_graphs is not None:
+            connected_components = self.preloaded_graphs
+            print("Number of connected components: ", len(connected_components))
+            for subgraph in connected_components:
+                if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
+                    continue
+                if not (self.min_graph_size <= subgraph.n_nodes <= self.max_graph_size):
+                    continue
+                print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
+                yield subgraph
+
+        elif self.graph_distribution is not None:
             index_df = self.graph_distribution.sample(frac=1, random_state=1)
             for index, component_row in index_df.iterrows():
                 with open(component_row.component_path, 'rb') as f:
