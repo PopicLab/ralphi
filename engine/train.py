@@ -38,7 +38,7 @@ if os.path.exists(config.out_dir + "/benchmark.txt"):
 
 # set up performance tracking
 if config.debug:
-    wandb.init(project="simplify-validation", entity="dphase", dir=config.log_dir)
+    wandb.init(project="simplify-validation", entity="dphase", dir=config.log_dir, mode="disabled")
 else:
     # automatically results in ignoring all wandb calls
     wandb.init(project="simplify-validation", entity="dphase", dir=config.log_dir, mode="disabled")
@@ -49,12 +49,23 @@ if config.define_training_distribution:
     training_distribution = dataset_gen.graph_generator.GraphDistribution(config.panel_train, load_components=True, store_components=True, save_indexes=True)
     graph_dataset_indices = training_distribution.load_graph_dataset_indices()
 
+graph_size_lower_bound = int(graph_dataset_indices["n_nodes"].min())
+graph_size_upper_bound = int(graph_dataset_indices["n_nodes"].max())
+bucket_size = int((graph_size_upper_bound - graph_size_lower_bound) / 10)
+
+curriculum_learning_indices = []
+for i in range(graph_size_lower_bound, graph_size_upper_bound, bucket_size):
+    graphs_within_range = graph_dataset_indices[
+        (graph_dataset_indices.n_nodes > i) & (graph_dataset_indices.n_nodes < i + bucket_size)]
+    if not graphs_within_range.empty:
+        curriculum_learning_indices.append(graphs_within_range.sample(n=1000, replace=True, random_state=1))
+curriculum_learning_indices = pd.concat(curriculum_learning_indices)
 
 # Setup the agent and the training environment
 env_train = envs.PhasingEnv(config.panel_train,
                             min_graph_size=config.min_graph_size,
                             max_graph_size=config.max_graph_size,
-                            skip_trivial_graphs=config.skip_trivial_graphs, graph_distribution=graph_dataset_indices)
+                            skip_trivial_graphs=config.skip_trivial_graphs, graph_distribution=curriculum_learning_indices)
 agent = agents.DiscreteActorCriticAgent(env_train)
 if config.pretrained_model is not None:
     agent.model.load_state_dict(torch.load(config.pretrained_model))
