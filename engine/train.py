@@ -1,4 +1,5 @@
 import argparse
+import pandas as pd
 import dataset_gen.graph_generator
 import models.actor_critic as agents
 import envs.phasing_env as envs
@@ -37,15 +38,15 @@ if os.path.exists(config.out_dir + "/benchmark.txt"):
 
 # set up performance tracking
 if config.debug:
-    wandb.init(project="debugging", entity="dphase", dir=config.log_dir)
+    wandb.init(project="simplify-validation", entity="dphase", dir=config.log_dir)
 else:
     # automatically results in ignoring all wandb calls
-    wandb.init(project="debugging", entity="dphase", dir=config.log_dir, mode="disabled")
+    wandb.init(project="simplify-validation", entity="dphase", dir=config.log_dir, mode="disabled")
 
 
 graph_dataset_indices = None
 if config.define_training_distribution:
-    training_distribution = dataset_gen.graph_generator.TrainingDistribution(config.panel_train, load_components=True, store_components=True, save_indexes=True)
+    training_distribution = dataset_gen.graph_generator.GraphDistribution(config.panel_train, load_components=True, store_components=True, save_indexes=True)
     graph_dataset_indices = training_distribution.load_graph_dataset_indices()
 
 
@@ -75,93 +76,46 @@ def validate(model_checkpoint_id, episode_id):
     # TODO: pre-load the validation panel
     overall_sum_of_cuts = 0
     for validation_frag, validation_input_vcf in zip(open(config.panel_validation_frags, 'r').read().splitlines(), open(config.panel_validation_vcfs,'r').read().splitlines()):
-        agent.env = envs.PhasingEnv(panel=validation_frag, skip_trivial_graphs=config.skip_trivial_graphs, skip_singleton_graphs=False, debug=True, record_solutions=True)
+        validation_dataset_indices = None
+        graph_dataset = None
+        if config.define_validation_distribution:
+            #TODO: optimize to only load in these validation graphs once to save on I/O
+            validation_distribution = dataset_gen.graph_generator.GraphDistribution(validation_frag,
+                                                                                     load_components=True,
+                                                                                     store_components=True,
+                                                                                     save_indexes=True)
+            validation_dataset_indices = validation_distribution.load_graph_dataset_indices()
+            graph_size_lower_bound = int(validation_dataset_indices["n_nodes"].min())
+            graph_size_upper_bound = int(validation_dataset_indices["n_nodes"].max())
+            bucket_size = int((graph_size_upper_bound - graph_size_lower_bound) / 10)
+            graph_dataset = []
+
+            for i in range(graph_size_lower_bound, graph_size_upper_bound, bucket_size):
+                graphs_within_range = validation_dataset_indices[(validation_dataset_indices.n_nodes > i) & (validation_dataset_indices.n_nodes < i + bucket_size)]
+                if not graphs_within_range.empty:
+                    graph_dataset.append(graphs_within_range.sample(n=1, replace=True, random_state=1))
+
+            for i in range(0, 100, 10):
+                graphs_within_range = validation_dataset_indices[
+                    (validation_dataset_indices.density > (i/100)) & (validation_dataset_indices.density < ((i + 10)/100))]
+                if not graphs_within_range.empty:
+                    graph_dataset.append(graphs_within_range.sample(n=1, replace=True, random_state=1))
+
+
+            graph_dataset = pd.concat(graph_dataset)
+
+        agent.env = envs.PhasingEnv(panel=validation_frag, skip_trivial_graphs=config.skip_trivial_graphs, skip_singleton_graphs=False, debug=False, record_solutions=True, graph_distribution=graph_dataset)
         sum_of_rewards = 0
         sum_of_cuts = 0
         episode_no = 0
 
         if config.debug:
             # ✨ W&B: Create a Table to store predictions for each test step
-            columns=["id", "number of nodes", "number of edges", "density", "cut value"]
+            columns=["id", "number of nodes", "number of edges", "density", "cut value", "raw cut", "switch_count", "mismatch_count", "flat_count", "phased_count"]
             test_table = wandb.Table(columns=columns)
 
-            # solutions on graphs 0 to 10 nodes
-            solutions_0_to_10 = []
-            sum_of_cuts_0_to_10 = 0
-            sum_of_rewards_0_to_10 = 0
-            # solutions on graphs 11 to 50 nodes
-            solutions_11_to_50 = []
-            sum_of_cuts_11_to_50 = 0
-            sum_of_rewards_11_to_50 = 0
-            # solutions on graphs 51 to 100 nodes
-            solutions_51_to_100 = []
-            sum_of_cuts_51_to_100 = 0
-            sum_of_rewards_51_to_100 = 0
-            # solutions on graphs 101 to 200 nodes
-            solutions_101_to_200 = []
-            sum_of_cuts_101_to_200 = 0
-            sum_of_rewards_101_to_200 = 0
-            # solutions on graphs 201 to 500 nodes
-            solutions_201_to_500 = []
-            sum_of_cuts_201_to_500 = 0
-            sum_of_rewards_201_to_500 = 0
-            # solutions on graphs 501 to 1000 nodes
-            solutions_501_to_1000 = []
-            sum_of_cuts_501_to_1000 = 0
-            sum_of_rewards_501_to_1000 = 0
-            # solutions on graphs 1001 plus nodes
-            solutions_1001_plus = []
-            sum_of_cuts_1001_plus = 0
-            sum_of_rewards_1001_plus = 0
-
-        while agent.env.has_state():
-            reward_val = agent.run_episode(config, test_mode=True)
-            sum_of_rewards += reward_val
-            cut_val = agent.env.get_cut_value()
-            sum_of_cuts += cut_val
-            if config.debug:
-                graph_stats = agent.env.get_simple_graph_stats()
-                #graph_stats = agent.env.get_graph_stats()
-                test_table.add_data(episode_no, graph_stats["num_nodes"], graph_stats["num_edges"],
-                                    graph_stats["density"], graph_stats["cut_value"])
-                episode_num_nodes = agent.env.state.num_nodes
-                episode_frags = agent.env.state.frag_graph.fragments
-                if 0 <= episode_num_nodes <= 10:
-                    solutions_0_to_10.append(episode_frags)
-                    sum_of_cuts_0_to_10 += cut_val
-                    sum_of_rewards_0_to_10 += reward_val
-                elif 11 <= episode_num_nodes <= 50:
-                    solutions_11_to_50.append(episode_frags)
-                    sum_of_cuts_11_to_50 += cut_val
-                    sum_of_rewards_11_to_50 += reward_val
-                elif 51 <= episode_num_nodes <= 100:
-                    solutions_51_to_100.append(episode_frags)
-                    sum_of_cuts_51_to_100 += cut_val
-                    sum_of_rewards_51_to_100 += reward_val
-                elif 101 <= episode_num_nodes <= 200:
-                    solutions_101_to_200.append(episode_frags)
-                    sum_of_cuts_101_to_200 += cut_val
-                    sum_of_rewards_101_to_200 += reward_val
-                elif 201 <= episode_num_nodes <= 500:
-                    solutions_201_to_500.append(episode_frags)
-                    sum_of_cuts_201_to_500 += cut_val
-                    sum_of_rewards_201_to_500 += reward_val
-                elif 501 <= episode_num_nodes <= 1000:
-                    solutions_501_to_1000.append(episode_frags)
-                    sum_of_cuts_501_to_1000 += cut_val
-                    sum_of_rewards_501_to_1000 += reward_val
-                elif 1001 <= episode_num_nodes:
-                    solutions_1001_plus.append(episode_frags)
-                    sum_of_cuts_1001_plus += cut_val
-                    sum_of_rewards_1001_plus += reward_val
-
-            agent.env.reset()
-            episode_no += 1
-
-        overall_sum_of_cuts += sum_of_cuts
-
-        def log_error_rates(solutions, sum_of_cuts, sum_of_rewards, descriptor="_default_", simple=False):
-            CHROM, benchmark_result = compute_error_rates(solutions, validation_input_vcf)
+        def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, descriptor="_default_", simple=False):
+            CHROM, benchmark_result = compute_error_rates(solutions, input_vcf)
             original_CHROM = CHROM
             switch_count = benchmark_result.switch_count[CHROM]
             mismatch_count = benchmark_result.mismatch_count[CHROM]
@@ -169,7 +123,7 @@ def validate(model_checkpoint_id, episode_id):
             phased_count = benchmark_result.phased_count[CHROM]
             AN50 = benchmark_result.get_AN50()
             N50 = benchmark_result.get_N50_phased_portion()
-            CHROM = descriptor + CHROM
+            CHROM = descriptor + ", " + CHROM
 
             with open(config.out_dir + "/benchmark.txt", "a") as out_file:
                 out_file.write("benchmark of model: " + str(model_checkpoint_id) + descriptor + "\n")
@@ -199,38 +153,47 @@ def validate(model_checkpoint_id, episode_id):
             wandb.log({"Episode": episode_id, "Validation Phased Count on " + CHROM: phased_count})
             wandb.log({"Episode": episode_id, "Validation AN50 on " + CHROM: AN50})
             wandb.log({"Episode": episode_id, "Validation AN50 on " + CHROM: N50})
-
+            test_table.add_data(episode_no, graph_stats["num_nodes"], graph_stats["num_edges"],
+                                graph_stats["density"], graph_stats["cut_value"],
+                                agent.env.state.g.ndata['x'][:, 0].cpu().numpy().tolist(), switch_count, mismatch_count, flat_count, phased_count)
             if descriptor == "_default_":
                 wandb.log({"Episode": episode_id,"validation_predictions_" + CHROM + "_" + str(model_checkpoint_id): test_table})
             # output the phased VCF (phase blocks)
             return original_CHROM
 
-        original_CHROM = log_error_rates(agent.env.solutions, sum_of_cuts, sum_of_rewards, "_default_")
-        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_0to10Nodes_"+ original_CHROM: sum_of_rewards_0_to_10})
-        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_0to10Nodes_"+ original_CHROM: sum_of_cuts_0_to_10})
-        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_11_to_50_" + original_CHROM: sum_of_rewards_11_to_50})
-        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_11_to_50_" + original_CHROM: sum_of_cuts_11_to_50})
-        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_51_to_100_" + original_CHROM: sum_of_rewards_51_to_100})
-        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_51_to_100_" + original_CHROM: sum_of_cuts_51_to_100})
-        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_101_to_200_" + original_CHROM: sum_of_rewards_101_to_200})
-        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_101_to_200_" + original_CHROM: sum_of_cuts_101_to_200})
-        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_201_to_500_" + original_CHROM: sum_of_rewards_201_to_500})
-        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_201_to_500_" + original_CHROM: sum_of_cuts_201_to_500})
-        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_501_to_1000_" + original_CHROM: sum_of_rewards_501_to_1000})
-        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_501_to_1000_" + original_CHROM: sum_of_cuts_501_to_1000})
-        wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + "_1001_plus_" + original_CHROM: sum_of_rewards_1001_plus})
-        wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + "_1001_plus_" + original_CHROM: sum_of_cuts_1001_plus})
+        while agent.env.has_state():
+            reward_val = agent.run_episode(config, test_mode=True)
+            sum_of_rewards += reward_val
+            cut_val = agent.env.get_cut_value()
+            sum_of_cuts += cut_val
+            if config.debug:
+                graph_stats = agent.env.get_graph_stats()
+                #test_table.add_data(episode_no, graph_stats["num_nodes"], graph_stats["num_edges"],
+                #                        graph_stats["density"], graph_stats["cut_value"], agent.env.state.g.ndata['x'][:, 0].cpu().numpy().tolist())
 
-        """"
-        if config.debug:
-            log_error_rates(solutions_0_to_10, sum_of_cuts_0_to_10, sum_of_rewards_0_to_10, "_0to10Nodes_")
-            log_error_rates(solutions_11_to_50, sum_of_cuts_11_to_50, sum_of_rewards_11_to_50, "_11to50Nodes_")
-            log_error_rates(solutions_51_to_100, sum_of_cuts_51_to_100, sum_of_rewards_51_to_100, "_51to100Nodes_")
-            log_error_rates(solutions_101_to_200, sum_of_cuts_101_to_200, sum_of_rewards_101_to_200, "_101to200Nodes_")
-            log_error_rates(solutions_201_to_500, sum_of_cuts_201_to_500, sum_of_rewards_201_to_500, "_201to500Nodes_")
-            log_error_rates(solutions_501_to_1000, sum_of_cuts_501_to_1000, sum_of_rewards_501_to_1000, "_501to1000Nodes_")
-            log_error_rates(solutions_1001_plus, sum_of_cuts_1001_plus, sum_of_rewards_1001_plus, "_1001_plus_")
-        """
+                graph_path = "_Nodes_" + str(graph_stats["num_nodes"]) + "_Edges_" + str(
+                    graph_stats["num_edges"]) + "_Density_" + str(graph_stats["density"])
+
+                wandb.log({"Episode": episode_id,
+                           "Cut Value on: " + graph_path: graph_stats["cut_value"]})
+
+                #wandb.log({"Episode": episode_id,
+                #           "Raw Cut on: " + graph_path: agent.env.state.g.ndata['x'][:, 0].cpu().numpy().tolist()})
+
+                vcf_path = config.out_dir + graph_path + ".vcf"
+                agent.env.state.frag_graph.construct_vcf_for_specific_frag_graph(validation_input_vcf,
+                                                                                    vcf_path)
+
+                log_error_rates([agent.env.state.frag_graph.fragments], vcf_path, cut_val, reward_val, graph_path)
+
+
+            agent.env.reset()
+            episode_no += 1
+
+        overall_sum_of_cuts += sum_of_cuts
+        wandb.log({"Episode": episode_id,
+                   "validation_predictions_" + str(model_checkpoint_id): test_table})
+        #original_CHROM = log_error_rates(agent.env.solutions, sum_of_cuts, sum_of_rewards, "_default_")
 
     return overall_sum_of_cuts
 

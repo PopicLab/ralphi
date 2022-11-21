@@ -16,6 +16,8 @@ from itertools import product
 import operator
 from networkx.algorithms import bipartite
 import logging
+import vcf
+from vcf.parser import Reader, Writer, _Format
 
 
 class FragGraph:
@@ -104,6 +106,47 @@ class FragGraph:
                 for var in block.variants:
                     vcf_positions.add(var.vcf_idx)
         return len(vcf_positions)
+
+    def construct_vcf_for_specific_frag_graph(self, input_vcf, output_vcf):
+        print("updating graph indexes to reflect seperated VCF")
+        vcf_positions = set()
+        for frag in self.fragments:
+            for block in frag.blocks:
+                for var in block.variants:
+                    vcf_positions.add(var.vcf_idx)
+        node_mapping = {j: i for (i, j) in enumerate(sorted(vcf_positions))}
+
+        for frag in self.fragments:
+            for block in frag.blocks:
+                for var in block.variants:
+                    var.vcf_idx = node_mapping[var.vcf_idx]
+
+        if os.path.exists(output_vcf):
+            return
+
+        print("constructing vcf for specific graph --", " input vcf: ", input_vcf, " output vcf: ", output_vcf)
+        vcf_reader = vcf.Reader(open(input_vcf, 'r'), strict_whitespace=True)
+        assert (len(vcf_reader.samples) == 1), "Only single-sample files are expected"
+
+        writer = Writer(open(output_vcf, 'w'), vcf_reader)
+        vcf_idx = -1
+
+        max_vcf_idx = max(vcf_positions)
+        for record in vcf_reader:
+            vcf_idx += 1
+            if vcf_idx > max_vcf_idx:
+                break
+            if vcf_idx not in vcf_positions:
+                continue
+            writer.write_record(record)
+        writer.close()
+        print("wrote vcf file to:", output_vcf)
+
+        # save graph as well to help with debugging
+        if not os.path.exists(output_vcf + ".graph"):
+            with open(output_vcf + ".graph", 'wb') as f:
+                pickle.dump(self, f)
+
 
     def check_and_set_trivial(self):
         """
@@ -198,18 +241,7 @@ class FragGraphGen:
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
-        if self.preloaded_graphs is not None:
-            connected_components = self.preloaded_graphs
-            print("Number of connected components: ", len(connected_components))
-            for subgraph in connected_components:
-                if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
-                    continue
-                if not (self.min_graph_size <= subgraph.n_nodes <= self.max_graph_size):
-                    continue
-                print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
-                yield subgraph
-
-        elif self.graph_distribution is not None:
+        if self.graph_distribution is not None:
             index_df = self.graph_distribution.sample(frac=1, random_state=1)
             for index, component_row in index_df.iterrows():
                 with open(component_row.component_path, 'rb') as f:
@@ -220,6 +252,7 @@ class FragGraphGen:
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                     yield subgraph
+            yield None
         elif self.frag_panel_file is not None:
             with open(self.frag_panel_file, 'r') as panel:
                 for frag_file_fname in panel:

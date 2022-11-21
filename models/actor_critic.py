@@ -97,6 +97,9 @@ class DiscreteActorCriticAgent:
 
     def log_episode_stats(self, episode_id, reward, loss, runtime):
         graph_stats = self.env.get_graph_stats()
+        wandb.log({"Episode": episode_id, "Training Number of Nodes": graph_stats[constants.GraphStats.num_nodes]})
+        wandb.log({"Episode": episode_id, "Training Number of Edges": graph_stats[constants.GraphStats.num_edges]})
+        wandb.log({"Episode": episode_id, "Training Density": graph_stats[constants.GraphStats.density]})
         logging.getLogger(config.MAIN_LOG).info("Episode: %d. Reward: %d, ActorLoss: %d, CriticLoss: %d, TotalLoss: %d,"
                                                 " CutSize: %d, Runtime: %d" %
                                                 (episode_id, reward,

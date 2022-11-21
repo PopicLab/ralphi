@@ -16,7 +16,7 @@ parser.add_argument('--panel', help='graph fragment panel file')
 args = parser.parse_args()
 """
 
-class TrainingDistribution:
+class GraphDistribution:
     def __init__(self, fragment_files_panel, load_components=False, store_components=False, save_indexes=False,
                  compress=False, skip_trivial_graphs=True):
         self.combined_graph_indexes = []
@@ -96,6 +96,19 @@ class TrainingDistribution:
         return filter(lambda graph: self.filter_range(graph.g, comparator, min, max), self.combined_graph_indexes)
     def select_graphs_by_boolean(self, comparator=nx.has_bridges):
         return filter(lambda graph: comparator(graph.g), self.combined_graph_indexes)
+"""
+class TrainingDistribution(GraphDistribution):
+    def __init__(self, fragment_files_panel, load_components=False, store_components=False, save_indexes=False,
+                 compress=False, skip_trivial_graphs=True):
+        super().__init__(fragment_files_panel, load_components, store_components, save_indexes,
+                 compress, skip_trivial_graphs)
+        
+class ValidationDistribution(GraphDistribution):
+    def __init__(self, fragment_files_panel, load_components=False, store_components=False, save_indexes=False,
+                 compress=False, skip_trivial_graphs=True):
+        super().__init__(fragment_files_panel, load_components, store_components, save_indexes,
+                 compress, skip_trivial_graphs)
+"""
 
 """
 dist = TrainingDistribution(args.panel, load_components=True, store_components=True, save_indexes=True)

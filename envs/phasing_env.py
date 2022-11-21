@@ -134,22 +134,14 @@ class PhasingEnv(gym.Env):
                 raise RuntimeError("Fragment wasn't assigned to any cluster")
         self.solutions.append(self.state.frag_graph.fragments)
 
-    def get_simple_graph_stats(self):
-        return {
-            constants.GraphStats.num_nodes: self.state.frag_graph.g.number_of_nodes(),
-            constants.GraphStats.num_edges: self.state.frag_graph.g.number_of_edges(),
-            constants.GraphStats.density: self.get_density(),
-            constants.GraphStats.cut_value: self.get_cut_value()
-        }
-
     def get_graph_stats(self):
         return {
             constants.GraphStats.num_nodes: self.state.frag_graph.g.number_of_nodes(),
             constants.GraphStats.num_edges: self.state.frag_graph.g.number_of_edges(),
             constants.GraphStats.density: self.get_density(),
-            constants.GraphStats.radius: self.get_radius(),
-            constants.GraphStats.diameter: self.get_diameter(),
-            constants.GraphStats.n_variants: self.state.frag_graph.compute_number_of_variants(),
+            #constants.GraphStats.radius: self.get_radius(),
+            #constants.GraphStats.diameter: self.get_diameter(),
+            #constants.GraphStats.n_variants: self.state.frag_graph.compute_number_of_variants(),
             constants.GraphStats.cut_value: self.get_cut_value()
         }
 
