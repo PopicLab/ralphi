@@ -212,7 +212,7 @@ def validate(model_checkpoint_id, episode_id):
             wandb.log({"Episode": episode_id, "validation_predictions_" + "chr6_"  + str(model_checkpoint_id): test_table})
         iteration += 1        
 	#original_CHROM = log_error_rates(agent.env.solutions, sum_of_cuts, sum_of_rewards, "_default_")
-        torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
+    torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
     return overall_sum_of_cuts
 
 # Run the training
