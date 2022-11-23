@@ -29,6 +29,8 @@ class GraphDistribution:
         self.compute_components()
 
     def compute_components(self):
+        if os.path.exists(self.fragment_files_panel.strip() + ".index"):
+            return
         with open(self.fragment_files_panel, 'r') as panel:
             for frag_file_fname in tqdm.tqdm(panel):
                 logging.info("Fragment file: %s" % frag_file_fname)

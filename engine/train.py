@@ -38,7 +38,7 @@ if os.path.exists(config.out_dir + "/benchmark.txt"):
 
 # set up performance tracking
 if config.debug:
-    wandb.init(project="simplify-validation", entity="dphase", dir=config.log_dir, mode="disabled")
+    wandb.init(project="simplify-validation", entity="dphase", dir=config.log_dir)
 else:
     # automatically results in ignoring all wandb calls
     wandb.init(project="simplify-validation", entity="dphase", dir=config.log_dir, mode="disabled")
@@ -49,8 +49,9 @@ if config.define_training_distribution:
     training_distribution = dataset_gen.graph_generator.GraphDistribution(config.panel_train, load_components=True, store_components=True, save_indexes=True)
     graph_dataset_indices = training_distribution.load_graph_dataset_indices()
 
-graph_size_lower_bound = int(graph_dataset_indices["n_nodes"].min())
-graph_size_upper_bound = int(graph_dataset_indices["n_nodes"].max())
+
+graph_size_lower_bound = config.min_graph_size #int(graph_dataset_indices["n_nodes"].min())
+graph_size_upper_bound = config.max_graph_size #int(graph_dataset_indices["n_nodes"].max())
 bucket_size = int((graph_size_upper_bound - graph_size_lower_bound) / 10)
 
 curriculum_learning_indices = []
@@ -86,6 +87,7 @@ def validate(model_checkpoint_id, episode_id):
     # benchmark the current model against a held out set of fragment graphs (validation panel)
     # TODO: pre-load the validation panel
     overall_sum_of_cuts = 0
+    iteration = 0
     for validation_frag, validation_input_vcf in zip(open(config.panel_validation_frags, 'r').read().splitlines(), open(config.panel_validation_vcfs,'r').read().splitlines()):
         validation_dataset_indices = None
         graph_dataset = None
@@ -204,8 +206,13 @@ def validate(model_checkpoint_id, episode_id):
         overall_sum_of_cuts += sum_of_cuts
         wandb.log({"Episode": episode_id,
                    "validation_predictions_" + str(model_checkpoint_id): test_table})
-        #original_CHROM = log_error_rates(agent.env.solutions, sum_of_cuts, sum_of_rewards, "_default_")
-
+        if iteration == 0:
+            wandb.log({"Episode": episode_id, "validation_predictions_" + "chr1_"  + str(model_checkpoint_id): test_table})
+        else:
+            wandb.log({"Episode": episode_id, "validation_predictions_" + "chr6_"  + str(model_checkpoint_id): test_table})
+        iteration += 1        
+	#original_CHROM = log_error_rates(agent.env.solutions, sum_of_cuts, sum_of_rewards, "_default_")
+        torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
     return overall_sum_of_cuts
 
 # Run the training

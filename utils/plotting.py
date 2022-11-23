@@ -1,8 +1,8 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib
-#matplotlib.use('Agg')
-matplotlib.use('Tkagg') # alternative if 'agg' gives Tkinter related compiler issues
+matplotlib.use('Agg')
+#matplotlib.use('Tkagg') # alternative if 'agg' gives Tkinter related compiler issues
 
 def plot_network(nx_graph, node_labels=None):
     if node_labels is None:
