@@ -157,7 +157,8 @@ def validate(model_checkpoint_id, episode_id):
                 out_file.write("AN50: " + str(AN50) + "\n")
                 out_file.write("N50: " + str(N50) + "\n")
                 out_file.write(str(benchmark_result) + "\n")
-                out_file.write(str(hap_blocks) + "\n")
+                if switch_count > 0 or mismatch_count > 0:
+                    out_file.write(str(hap_blocks) + "\n")
 
             if descriptor == "_default_":
                 #torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
