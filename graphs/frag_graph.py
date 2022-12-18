@@ -242,8 +242,8 @@ class FragGraphGen:
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
         if self.graph_distribution is not None:
-            #index_df = self.graph_distribution
-            index_df = self.graph_distribution.sample(frac=1, random_state=1)
+            index_df = self.graph_distribution
+            #index_df = self.graph_distribution.sample(frac=1, random_state=1)
             for index, component_row in index_df.iterrows():
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.min_graph_size <= component_row["n_nodes"] <= self.max_graph_size):
