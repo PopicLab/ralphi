@@ -197,8 +197,6 @@ def validate(model_checkpoint_id, episode_id):
             sum_of_cuts += cut_val
             if config.debug:
                 graph_stats = agent.env.get_graph_stats()
-                for u, v, a in agent.env.state.frag_graph.g.edges(data=True):
-                    print("validation graph edge weight: ", a['weight'])
                 graph_path = "_Nodes_" + str(graph_stats["num_nodes"]) + "_Edges_" + str(
                     graph_stats["num_edges"]) + "_Density_" + str(graph_stats["density"])
 
