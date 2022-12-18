@@ -207,7 +207,7 @@ def validate(model_checkpoint_id, episode_id):
                 #wandb.log({"Episode": episode_id,
                 #           "Raw Cut on: " + graph_path: agent.env.state.g.ndata['x'][:, 0].cpu().numpy().tolist()})
 
-                vcf_path = config.out_dir + str(episode_no) + graph_path + ".vcf"
+                vcf_path = config.specific_graphs_path + str(episode_no) + graph_path + ".vcf"
                 agent.env.state.frag_graph.construct_vcf_for_specific_frag_graph(validation_input_vcf,
                                                                                     vcf_path)
                 
