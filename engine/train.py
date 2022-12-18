@@ -14,6 +14,7 @@ import utils.post_processing
 import os
 import third_party.HapCUT2.utilities.calculate_haplotype_statistics as benchmark
 import sys
+import utils.hap_block_visualizer as hap_block_visualizer
 
 # ------ CLI ------
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
@@ -38,10 +39,10 @@ if os.path.exists(config.out_dir + "/benchmark.txt"):
 
 # set up performance tracking
 if config.debug:
-    wandb.init(project="simplify-validation", entity="dphase", dir=config.log_dir)
+    wandb.init(project="chr1_every_graph_leq_100", entity="dphase", dir=config.log_dir)
 else:
     # automatically results in ignoring all wandb calls
-    wandb.init(project="simplify-validation", entity="dphase", dir=config.log_dir, mode="disabled")
+    wandb.init(project="chr1_every_graph_leq_100", entity="dphase", dir=config.log_dir, mode="disabled")
 
 
 graph_dataset_indices = None
@@ -49,7 +50,7 @@ if config.define_training_distribution:
     training_distribution = dataset_gen.graph_generator.GraphDistribution(config.panel_train, load_components=True, store_components=True, save_indexes=True)
     graph_dataset_indices = training_distribution.load_graph_dataset_indices()
 
-
+"""
 graph_size_lower_bound = config.min_graph_size #int(graph_dataset_indices["n_nodes"].min())
 graph_size_upper_bound = config.max_graph_size #int(graph_dataset_indices["n_nodes"].max())
 bucket_size = int((graph_size_upper_bound - graph_size_lower_bound) / 10)
@@ -59,14 +60,15 @@ for i in range(graph_size_lower_bound, graph_size_upper_bound, bucket_size):
     graphs_within_range = graph_dataset_indices[
         (graph_dataset_indices.n_nodes > i) & (graph_dataset_indices.n_nodes < i + bucket_size)]
     if not graphs_within_range.empty:
-        curriculum_learning_indices.append(graphs_within_range.sample(n=1000, replace=True, random_state=1))
+        curriculum_learning_indices.append(graphs_within_range.sample(n=10000, replace=True, random_state=1))
 curriculum_learning_indices = pd.concat(curriculum_learning_indices)
+"""
 
 # Setup the agent and the training environment
 env_train = envs.PhasingEnv(config.panel_train,
                             min_graph_size=config.min_graph_size,
                             max_graph_size=config.max_graph_size,
-                            skip_trivial_graphs=config.skip_trivial_graphs, graph_distribution=curriculum_learning_indices)
+                            skip_trivial_graphs=config.skip_trivial_graphs, graph_distribution=graph_dataset_indices)
 agent = agents.DiscreteActorCriticAgent(env_train)
 if config.pretrained_model is not None:
     agent.model.load_state_dict(torch.load(config.pretrained_model))
@@ -80,7 +82,8 @@ def compute_error_rates(solutions, validation_input_vcf):
     vcf_writer.write_phased_vcf(validation_input_vcf, idx2var, config.validation_output_vcf)
     CHROM = benchmark.get_ref_name(config.validation_output_vcf)
     benchmark_result = benchmark.vcf_vcf_error_rate(config.validation_output_vcf, validation_input_vcf, indels=False)
-    return CHROM, benchmark_result
+    hap_blocks = hap_block_visualizer.pretty_print(solutions, idx2var.items(), validation_input_vcf)
+    return CHROM, benchmark_result, hap_blocks
 
 
 def validate(model_checkpoint_id, episode_id):
@@ -98,7 +101,9 @@ def validate(model_checkpoint_id, episode_id):
                                                                                      store_components=True,
                                                                                      save_indexes=True)
             validation_dataset_indices = validation_distribution.load_graph_dataset_indices()
-            graph_size_lower_bound = int(validation_dataset_indices["n_nodes"].min())
+            graph_dataset=validation_dataset_indices[(validation_dataset_indices.n_nodes <= 100)]
+            """
+	    graph_size_lower_bound = int(validation_dataset_indices["n_nodes"].min())
             graph_size_upper_bound = int(validation_dataset_indices["n_nodes"].max())
             bucket_size = int((graph_size_upper_bound - graph_size_lower_bound) / 10)
             graph_dataset = []
@@ -114,10 +119,10 @@ def validate(model_checkpoint_id, episode_id):
                 if not graphs_within_range.empty:
                     graph_dataset.append(graphs_within_range.sample(n=1, replace=True, random_state=1))
 
-
+	
             graph_dataset = pd.concat(graph_dataset)
-
-        agent.env = envs.PhasingEnv(panel=validation_frag, skip_trivial_graphs=config.skip_trivial_graphs, skip_singleton_graphs=False, debug=False, record_solutions=True, graph_distribution=graph_dataset)
+            """
+        agent.env = envs.PhasingEnv(panel=validation_frag, skip_trivial_graphs=config.skip_trivial_graphs, skip_singleton_graphs=False, debug=True, record_solutions=True, graph_distribution=graph_dataset)
         sum_of_rewards = 0
         sum_of_cuts = 0
         episode_no = 0
@@ -128,10 +133,12 @@ def validate(model_checkpoint_id, episode_id):
             test_table = wandb.Table(columns=columns)
 
         def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, descriptor="_default_", simple=False):
-            CHROM, benchmark_result = compute_error_rates(solutions, input_vcf)
+            CHROM, benchmark_result, hap_blocks = compute_error_rates(solutions, input_vcf)
             original_CHROM = CHROM
             switch_count = benchmark_result.switch_count[CHROM]
+            switch_loc = benchmark_result.switch_loc[CHROM]
             mismatch_count = benchmark_result.mismatch_count[CHROM]
+            mismatch_loc = benchmark_result.mismatch_loc[CHROM]
             flat_count = benchmark_result.flat_count[CHROM]
             phased_count = benchmark_result.phased_count[CHROM]
             AN50 = benchmark_result.get_AN50()
@@ -143,14 +150,17 @@ def validate(model_checkpoint_id, episode_id):
                 out_file.write("sum of cuts: " + str(sum_of_cuts) + "\n")
                 out_file.write("switch count: " + str(switch_count) + "\n")
                 out_file.write("mismatch count: " + str(mismatch_count) + "\n")
+                out_file.write("switch loc: " + str(switch_loc) + "\n")
+                out_file.write("mismatch loc: " + str(mismatch_loc) + "\n")
                 out_file.write("flat count: " + str(flat_count) + "\n")
                 out_file.write("phased count: " + str(phased_count) + "\n")
                 out_file.write("AN50: " + str(AN50) + "\n")
                 out_file.write("N50: " + str(N50) + "\n")
                 out_file.write(str(benchmark_result) + "\n")
+                out_file.write(str(hap_blocks) + "\n")
 
             if descriptor == "_default_":
-                torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
+                #torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
                 # log validation loop stats
                 logging.getLogger(config_utils.MAIN_LOG).info("Validation checkpoint: %d, Sum of Cuts: %d, Sum of Rewards: %d, Switch Count: %d,"
                                                               " Mismatch Count: %d, Flat Count: %d, Phased Count: %d, AN50: %d, N50: %d" %
@@ -166,14 +176,20 @@ def validate(model_checkpoint_id, episode_id):
             wandb.log({"Episode": episode_id, "Validation Phased Count on " + CHROM: phased_count})
             wandb.log({"Episode": episode_id, "Validation AN50 on " + CHROM: AN50})
             wandb.log({"Episode": episode_id, "Validation AN50 on " + CHROM: N50})
-            test_table.add_data(episode_no, graph_stats["num_nodes"], graph_stats["num_edges"],
-                                graph_stats["density"], graph_stats["cut_value"],
-                                agent.env.state.g.ndata['x'][:, 0].cpu().numpy().tolist(), switch_count, mismatch_count, flat_count, phased_count)
+            #test_table.add_data(episode_no, graph_stats["num_nodes"], graph_stats["num_edges"],
+            #                    graph_stats["density"], graph_stats["cut_value"],
+            #                    agent.env.state.g.ndata['x'][:, 0].cpu().numpy().tolist(), switch_count, mismatch_count, flat_count, phased_count)
             if descriptor == "_default_":
                 wandb.log({"Episode": episode_id,"validation_predictions_" + CHROM + "_" + str(model_checkpoint_id): test_table})
             # output the phased VCF (phase blocks)
-            return original_CHROM
+            return original_CHROM, switch_count, mismatch_count, flat_count, phased_count
 
+        total_sum_of_cuts = 0
+        total_sum_of_rewards = 0
+        total_switch = 0
+        total_mismatch = 0
+        total_flat = 0
+        total_phased = 0
         while agent.env.has_state():
             reward_val = agent.run_episode(config, test_mode=True)
             sum_of_rewards += reward_val
@@ -181,9 +197,8 @@ def validate(model_checkpoint_id, episode_id):
             sum_of_cuts += cut_val
             if config.debug:
                 graph_stats = agent.env.get_graph_stats()
-                #test_table.add_data(episode_no, graph_stats["num_nodes"], graph_stats["num_edges"],
-                #                        graph_stats["density"], graph_stats["cut_value"], agent.env.state.g.ndata['x'][:, 0].cpu().numpy().tolist())
-
+                for u, v, a in agent.env.state.frag_graph.g.edges(data=True):
+                    print("validation graph edge weight: ", a['weight'])
                 graph_path = "_Nodes_" + str(graph_stats["num_nodes"]) + "_Edges_" + str(
                     graph_stats["num_edges"]) + "_Density_" + str(graph_stats["density"])
 
@@ -193,25 +208,36 @@ def validate(model_checkpoint_id, episode_id):
                 #wandb.log({"Episode": episode_id,
                 #           "Raw Cut on: " + graph_path: agent.env.state.g.ndata['x'][:, 0].cpu().numpy().tolist()})
 
-                vcf_path = config.out_dir + graph_path + ".vcf"
+                vcf_path = config.out_dir + str(episode_no) + graph_path + ".vcf"
                 agent.env.state.frag_graph.construct_vcf_for_specific_frag_graph(validation_input_vcf,
                                                                                     vcf_path)
-
-                log_error_rates([agent.env.state.frag_graph.fragments], vcf_path, cut_val, reward_val, graph_path)
-
+                
+                ch, sw, mis, flat, phased = log_error_rates([agent.env.state.frag_graph.fragments], vcf_path, cut_val, reward_val, graph_path)
+                total_sum_of_cuts += cut_val
+                total_sum_of_rewards = reward_val
+                total_switch += sw
+                total_mismatch += mis
+                total_flat += flat
+                total_phased += phased
 
             agent.env.reset()
             episode_no += 1
 
         overall_sum_of_cuts += sum_of_cuts
-        wandb.log({"Episode": episode_id,
-                   "validation_predictions_" + str(model_checkpoint_id): test_table})
+        #wandb.log({"Episode": episode_id,
+        #           "validation_predictions_" + str(model_checkpoint_id): test_table})
         if iteration == 0:
-            wandb.log({"Episode": episode_id, "validation_predictions_" + "chr1_"  + str(model_checkpoint_id): test_table})
+            wandb.log({"Episode": episode_id,"Validation Sum of Rewards on " + "_default_chr1": total_sum_of_rewards})
+            wandb.log({"Episode": episode_id,"Validation Sum of Cuts on " + "_default_chr1": total_sum_of_cuts})
+            wandb.log({"Episode": episode_id, "Validation Switch Count on " + "_default_chr1": total_switch})
+            wandb.log({"Episode": episode_id, "Validation Mismatch Count on " + "_default_chr1": total_mismatch})
+            wandb.log({"Episode": episode_id, "Validation Flat Count on " + "_default_chr1": total_flat})
+            wandb.log({"Episode": episode_id, "Validation Phased Count on " + "_default_chr1": total_phased}) 
+            #wandb.log({"Episode": episode_id, "validation_predictions_" + "chr1_"  + str(model_checkpoint_id): test_table})
         else:
             wandb.log({"Episode": episode_id, "validation_predictions_" + "chr6_"  + str(model_checkpoint_id): test_table})
         iteration += 1        
-	#original_CHROM = log_error_rates(agent.env.solutions, sum_of_cuts, sum_of_rewards, "_default_")
+        #original_CHROM = log_error_rates(agent.env.solutions, validation_input_vcf, sum_of_cuts, sum_of_rewards, "_default_")
     torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
     return overall_sum_of_cuts
 
