@@ -26,7 +26,7 @@ class FragGraph:
     Edges are inserted between fragments that cover the same variants
     """
 
-    def __init__(self, g, fragments, node_id2hap_id=None, compute_trivial=False):
+    def __init__(self, g, fragments, node_id2hap_id=None, compute_trivial=False, indexed_graph_stats=None):
         self.g = g
         self.fragments = fragments
         self.n_nodes = g.number_of_nodes()
@@ -34,6 +34,7 @@ class FragGraph:
         self.trivial = None
         self.hap_a_frags = None
         self.hap_b_frags = None
+        self.indexed_graph_stats = indexed_graph_stats
         if compute_trivial:
             self.check_and_set_trivial()
 
@@ -117,7 +118,11 @@ class FragGraph:
         node_mapping = {j: i for (i, j) in enumerate(sorted(vcf_positions))}
 
         for frag in self.fragments:
+            frag.vcf_idx_start = node_mapping[frag.vcf_idx_start]
+            frag.vcf_idx_end = node_mapping[frag.vcf_idx_end]
             for block in frag.blocks:
+                block.vcf_idx_start = node_mapping[block.vcf_idx_start]
+                block.vcf_idx_end = node_mapping[block.vcf_idx_end]
                 for var in block.variants:
                     var.vcf_idx = node_mapping[var.vcf_idx]
 
@@ -241,17 +246,22 @@ class FragGraphGen:
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
-        if self.graph_distribution is not None:
+        if self.preloaded_graphs is not None:
+            for graph in self.preloaded_graphs:
+                yield graph
+            yield None
+        elif self.graph_distribution is not None:
             index_df = self.graph_distribution
             #index_df = self.graph_distribution.sample(frac=1, random_state=1)
             for index, component_row in index_df.iterrows():
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.min_graph_size <= component_row["n_nodes"] <= self.max_graph_size):
                         continue
-                    subgraph = pickle.load(f)[component_row['index']]
+                    subgraph = pickle.load(f) # [component_row['index']]    since graph is cached don't need to index in anymore
                     if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
+                    subgraph.indexed_graph_stats = component_row
                     yield subgraph
             yield None
         elif self.frag_panel_file is not None:
