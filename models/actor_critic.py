@@ -96,10 +96,22 @@ class DiscreteActorCriticAgent:
         return episode_reward
 
     def log_episode_stats(self, episode_id, reward, loss, runtime):
-        graph_stats = self.env.get_graph_stats()
-        wandb.log({"Episode": episode_id, "Training Number of Nodes": graph_stats[constants.GraphStats.num_nodes]})
-        wandb.log({"Episode": episode_id, "Training Number of Edges": graph_stats[constants.GraphStats.num_edges]})
+        graph_stats = self.env.get_indexed_graph_stats()
+        wandb.log({"Episode": episode_id, "Training Number of Nodes": graph_stats[constants.GraphStats.n_nodes]})
+        wandb.log({"Episode": episode_id, "Training Number of Edges": graph_stats[constants.GraphStats.n_edges]})
         wandb.log({"Episode": episode_id, "Training Density": graph_stats[constants.GraphStats.density]})
+        wandb.log({"Episode": episode_id, "Training Articulation Points": graph_stats[constants.GraphStats.articulation_points]})
+        wandb.log({"Episode": episode_id, "Training Diameter": graph_stats[constants.GraphStats.diameter]})
+        wandb.log({"Episode": episode_id, "Training Node Connectivity": graph_stats[constants.GraphStats.node_connectivity]})
+        wandb.log({"Episode": episode_id, "Training Edge Connectivity": graph_stats[constants.GraphStats.edge_connectivity]})
+        wandb.log({"Episode": episode_id, "Training Min Degree": graph_stats[constants.GraphStats.min_degree]})
+        wandb.log({"Episode": episode_id, "Training Max Degree": graph_stats[constants.GraphStats.max_degree]})
+        wandb.log({"Episode": episode_id, "Training Sum of Positive Edge Weights": graph_stats[constants.GraphStats.sum_of_pos_edge_weights]})
+        wandb.log({"Episode": episode_id, "Training Sum of Negative Edge Weights": graph_stats[constants.GraphStats.sum_of_neg_edge_weights]})
+        wandb.log({"Episode": episode_id, "Training Pos Edges": graph_stats[constants.GraphStats.pos_edges]})
+        wandb.log({"Episode": episode_id, "Training Neg Edges": graph_stats[constants.GraphStats.neg_edges]})
+        wandb.log({"Episode": episode_id, "Training Trivial": graph_stats[constants.GraphStats.trivial]})
+
         logging.getLogger(config.MAIN_LOG).info("Episode: %d. Reward: %d, ActorLoss: %d, CriticLoss: %d, TotalLoss: %d,"
                                                 " CutSize: %d, Runtime: %d" %
                                                 (episode_id, reward,

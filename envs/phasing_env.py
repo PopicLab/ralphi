@@ -40,7 +40,7 @@ class PhasingEnv(gym.Env):
         self.graph_gen = iter(graphs.FragGraphGen(panel, load_components=True, store_components=True,
                                                   skip_singletons=skip_singleton_graphs,
                                                   min_graph_size=min_graph_size, max_graph_size=max_graph_size,
-                                                  skip_trivial_graphs=skip_trivial_graphs, compress=compress, debug=debug, graph_distribution=graph_distribution))
+                                                  skip_trivial_graphs=skip_trivial_graphs, compress=compress, debug=debug, graph_distribution=graph_distribution, preloaded_graphs=preloaded_graphs))
         self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
@@ -134,14 +134,38 @@ class PhasingEnv(gym.Env):
                 raise RuntimeError("Fragment wasn't assigned to any cluster")
         self.solutions.append(self.state.frag_graph.fragments)
 
+    def get_indexed_graph_stats(self):
+        return {
+            constants.GraphStats.n_nodes: self.state.frag_graph.indexed_graph_stats["n_nodes"],
+            constants.GraphStats.n_edges: self.state.frag_graph.indexed_graph_stats["n_edges"],
+            constants.GraphStats.density: self.state.frag_graph.indexed_graph_stats["density"],
+            constants.GraphStats.articulation_points: self.state.frag_graph.indexed_graph_stats["articulation_points"],
+            constants.GraphStats.node_connectivity: self.state.frag_graph.indexed_graph_stats["node connectivity"],
+            constants.GraphStats.edge_connectivity: self.state.frag_graph.indexed_graph_stats["edge_connectivity"],
+            constants.GraphStats.diameter: self.state.frag_graph.indexed_graph_stats["diameter"],
+            constants.GraphStats.min_degree: self.state.frag_graph.indexed_graph_stats["min_degree"],
+            constants.GraphStats.max_degree: self.state.frag_graph.indexed_graph_stats["max_degree"],
+            constants.GraphStats.pos_edges: self.state.frag_graph.indexed_graph_stats["pos_edges"],
+            constants.GraphStats.neg_edges: self.state.frag_graph.indexed_graph_stats["neg_edges"],
+            constants.GraphStats.sum_of_pos_edge_weights: self.state.frag_graph.indexed_graph_stats["sum_of_pos_edge_weights"],
+            constants.GraphStats.sum_of_neg_edge_weights: self.state.frag_graph.indexed_graph_stats["sum_of_neg_edge_weights"],
+            constants.GraphStats.trivial: self.state.frag_graph.indexed_graph_stats["trivial"],
+            constants.GraphStats.cut_value: self.get_cut_value()
+        }
     def get_graph_stats(self):
         return {
-            constants.GraphStats.num_nodes: self.state.frag_graph.g.number_of_nodes(),
-            constants.GraphStats.num_edges: self.state.frag_graph.g.number_of_edges(),
+            constants.GraphStats.n_nodes: self.state.frag_graph.g.number_of_nodes(),
+            constants.GraphStats.n_edges: self.state.frag_graph.g.number_of_edges(),
             constants.GraphStats.density: self.get_density(),
             #constants.GraphStats.radius: self.get_radius(),
             #constants.GraphStats.diameter: self.get_diameter(),
             #constants.GraphStats.n_variants: self.state.frag_graph.compute_number_of_variants(),
+            constants.GraphStats.cut_value: self.get_cut_value()
+        }
+    def get_simple_graph_stats(self):
+        return {
+            constants.GraphStats.n_nodes: self.state.frag_graph.g.number_of_nodes(),
+            constants.GraphStats.n_edges: self.state.frag_graph.g.number_of_edges(),
             constants.GraphStats.cut_value: self.get_cut_value()
         }
 
