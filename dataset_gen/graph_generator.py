@@ -62,6 +62,12 @@ class GraphDistribution:
             return
         with open(self.fragment_files_panel, 'r') as panel:
             for frag_file_fname in tqdm.tqdm(panel):
+                if os.path.exists(frag_file_fname.strip() + ".index_per_graph"):
+                    frag_df = pd.read_pickle(frag_file_fname.strip() + ".index_per_graph")
+                    for index, component_row in frag_df.iterrows():
+                        self.combined_graph_indexes.append(component_row.values.tolist())
+                    continue
+
                 logging.info("Fragment file: %s" % frag_file_fname)
                 component_file_fname = frag_file_fname.strip() + ".components"
                 if self.load_components and os.path.exists(component_file_fname):

@@ -113,8 +113,7 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, descripto
     CHROM = descriptor + ", " + CHROM
 
     with open(config.out_dir + "/benchmark.txt", "a") as out_file:
-        out_file.write("benchmark of model: " + str(model_checkpoint_id) + descriptor + "\n")
-        out_file.write("sum of cuts: " + str(sum_of_cuts) + "\n")
+        out_file.write("benchmark of model: " + str(model_checkpoint_id) + "\n")
         out_file.write("switch count: " + str(switch_count) + "\n")
         out_file.write("mismatch count: " + str(mismatch_count) + "\n")
         out_file.write("switch loc: " + str(switch_loc) + "\n")
@@ -123,6 +122,8 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, descripto
         out_file.write("phased count: " + str(phased_count) + "\n")
         out_file.write("AN50: " + str(AN50) + "\n")
         out_file.write("N50: " + str(N50) + "\n")
+        out_file.write("sum of cuts: " + str(sum_of_cuts) + "\n")
+        out_file.write(descriptor + "\n")
         out_file.write(str(benchmark_result) + "\n")
         if switch_count > 0 or mismatch_count > 0:
             out_file.write(str(hap_blocks) + "\n")
@@ -155,6 +156,7 @@ def validate(model_checkpoint_id, episode_id):
     total_mismatch = 0
     total_flat = 0
     total_phased = 0
+    validation_component_stats = []
     for index, component_row in validation_dataset.iterrows():
         with open(component_row.component_path + ".vcf.graph", 'rb') as f:
             subgraph = pickle.load(f)
@@ -197,11 +199,28 @@ def validate(model_checkpoint_id, episode_id):
                 total_flat += flat
                 total_phased += phased
 
+                cur_index = component_row.values.tolist()
+                cur_index.append(sw)
+                cur_index.append(mis)
+                cur_index.append(flat)
+                cur_index.append(phased)
+                cur_index.append(cut_val)
+
+                validation_component_stats.append(cur_index)
+
                 if graph_stats["articulation_points"] > 0:
                     articulation_switch += sw
                     articulation_flat += flat
                     articulation_mismatch += mis
                     articulation_sum_of_cuts += cut_val
+
+    validation_indexing_df = pd.DataFrame(validation_component_stats,
+                                   columns=["component_path", "index", "n_nodes", "n_edges", "density",
+                                            "articulation_points", "node connectivity", "edge_connectivity", "diameter",
+                                            "min_degree", "max_degree", "pos_edges", "neg_edges",
+                                            "sum_of_pos_edge_weights", "sum_of_neg_edge_weights",
+                                            "trivial", "switch", "mismatch", "flat", "phased", "cut_val"])
+    validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))
 
     wandb.log({"Episode": episode_id,"Validation Sum of Rewards on " + "_default_overall": total_sum_of_rewards})
     wandb.log({"Episode": episode_id,"Validation Sum of Cuts on " + "_default_overall": total_sum_of_cuts})
