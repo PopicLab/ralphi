@@ -40,12 +40,12 @@ if os.path.exists(config.out_dir + "/benchmark.txt"):
 
 # set up performance tracking
 if config.debug:
-    wandb.init(project="optimize_indexing", entity="dphase", dir=config.log_dir)
+    wandb.init(project="training_distribution_experiments", entity="dphase", dir=config.log_dir)
 else:
     # automatically results in ignoring all wandb calls
-    wandb.init(project="optimize_indexing", entity="dphase", dir=config.log_dir, mode="disabled")
+    wandb.init(project="training_distribution_experiments", entity="dphase", dir=config.log_dir, mode="disabled")
 
-
+"""
 print("caching training distribution")
 graph_dataset_indices = None
 if config.define_training_distribution:
@@ -54,21 +54,8 @@ if config.define_training_distribution:
     graph_dataset_indices = training_distribution.load_graph_dataset_indices()
 print("finished caching training distribution")
 # graph_dataset_indices = graph_dataset_indices[(graph_dataset_indices.articulation_points != 0)]
-
-
 """
-graph_size_lower_bound = config.min_graph_size #int(graph_dataset_indices["n_nodes"].min())
-graph_size_upper_bound = config.max_graph_size #int(graph_dataset_indices["n_nodes"].max())
-bucket_size = int((graph_size_upper_bound - graph_size_lower_bound) / 10)
-
-curriculum_learning_indices = []
-for i in range(graph_size_lower_bound, graph_size_upper_bound, bucket_size):
-    graphs_within_range = graph_dataset_indices[
-        (graph_dataset_indices.n_nodes > i) & (graph_dataset_indices.n_nodes < i + bucket_size)]
-    if not graphs_within_range.empty:
-        curriculum_learning_indices.append(graphs_within_range.sample(n=10000, replace=True, random_state=1))
-curriculum_learning_indices = pd.concat(curriculum_learning_indices)
-"""
+graph_dataset_indices = pd.read_pickle(config.training_distribution)
 
 # Setup the agent and the training environment
 env_train = envs.PhasingEnv(config.panel_train,
@@ -78,13 +65,20 @@ env_train = envs.PhasingEnv(config.panel_train,
 agent = agents.DiscreteActorCriticAgent(env_train)
 if config.pretrained_model is not None:
     agent.model.load_state_dict(torch.load(config.pretrained_model))
+
+"""
 # TODO: optimize to only load in these validation graphs once to save on I/O
 validation_distribution = dataset_gen.graph_generator.GraphDistribution(fragment_files_panel=config.panel_validation_frags, vcf_panel=config.panel_validation_vcfs,
                                                                         load_components=True,
                                                                         store_components=True,
                                                                         save_indexes=True)
 validation_dataset_indices = validation_distribution.load_graph_dataset_indices()
-validation_dataset = validation_dataset_indices[(validation_dataset_indices.n_nodes <= 100)]
+
+validation_dataset = validation_dataset_indices
+#validation_dataset = validation_dataset_indices[(validation_dataset_indices.n_nodes <= 100)]
+"""
+
+validation_dataset = pd.read_pickle(config.validation_distribution)
 
 def compute_error_rates(solutions, validation_input_vcf):
     # given any subset of phasing solutions, computes errors rates against ground truth VCF
@@ -148,10 +142,6 @@ def validate(model_checkpoint_id, episode_id):
     # TODO: pre-load the validation panel
     total_sum_of_cuts = 0
     total_sum_of_rewards = 0
-    articulation_switch = 0
-    articulation_mismatch = 0
-    articulation_flat = 0
-    articulation_sum_of_cuts = 0
     total_switch = 0
     total_mismatch = 0
     total_flat = 0
@@ -204,34 +194,89 @@ def validate(model_checkpoint_id, episode_id):
                 cur_index.append(mis)
                 cur_index.append(flat)
                 cur_index.append(phased)
+                cur_index.append(reward_val)
                 cur_index.append(cut_val)
 
                 validation_component_stats.append(cur_index)
-
-                if graph_stats["articulation_points"] > 0:
-                    articulation_switch += sw
-                    articulation_flat += flat
-                    articulation_mismatch += mis
-                    articulation_sum_of_cuts += cut_val
 
     validation_indexing_df = pd.DataFrame(validation_component_stats,
                                    columns=["component_path", "index", "n_nodes", "n_edges", "density",
                                             "articulation_points", "node connectivity", "edge_connectivity", "diameter",
                                             "min_degree", "max_degree", "pos_edges", "neg_edges",
                                             "sum_of_pos_edge_weights", "sum_of_neg_edge_weights",
-                                            "trivial", "switch", "mismatch", "flat", "phased", "cut_val"])
+                                            "trivial", "switch", "mismatch", "flat", "phased", "reward_val", "cut_val"])
     validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))
 
-    wandb.log({"Episode": episode_id,"Validation Sum of Rewards on " + "_default_overall": total_sum_of_rewards})
-    wandb.log({"Episode": episode_id,"Validation Sum of Cuts on " + "_default_overall": total_sum_of_cuts})
-    wandb.log({"Episode": episode_id, "Validation Switch Count on " + "_default_overall": total_switch})
-    wandb.log({"Episode": episode_id, "Validation Mismatch Count on " + "_default_overall": total_mismatch})
-    wandb.log({"Episode": episode_id, "Validation Flat Count on " + "_default_overall": total_flat})
-    wandb.log({"Episode": episode_id, "Validation Articulation Switch Count on " + "_default_overall": articulation_switch})
-    wandb.log({"Episode": episode_id, "Validation Articulation Mismatch Count on " + "_default_overall": articulation_mismatch})
-    wandb.log({"Episode": episode_id, "Validation Articulation Flat Count on " + "_default_overall": articulation_flat})
-    wandb.log({"Episode": episode_id, "Validation Articulation Sum of Cuts on " + "_default_overall": articulation_sum_of_cuts})
-    wandb.log({"Episode": episode_id, "Validation Phased Count on " + "_default_overall": total_phased})
+    wandb.log({"Episode": episode_id,"Overall Validation Sum of Rewards on " + "_default_overall": total_sum_of_rewards})
+    wandb.log({"Episode": episode_id,"Overall Validation Sum of Cuts on " + "_default_overall": total_sum_of_cuts})
+    wandb.log({"Episode": episode_id, "Overall Validation Switch Count on " + "_default_overall": total_switch})
+    wandb.log({"Episode": episode_id, "Overall Validation Mismatch Count on " + "_default_overall": total_mismatch})
+    wandb.log({"Episode": episode_id, "Overall Validation Flat Count on " + "_default_overall": total_flat})
+    wandb.log({"Episode": episode_id, "Overall Validation Phased Count on " + "_default_overall": total_phased})
+
+    def log_stats_for_filter(validation_filtered_df, descriptor="Pandas"):
+        wandb.log({"Episode": episode_id, descriptor + " Validation Sum of Rewards on " + "_default_overall": validation_filtered_df["reward_val"].sum()})
+        wandb.log({"Episode": episode_id, descriptor + " Validation Sum of Cuts on " + "_default_overall": validation_filtered_df["cut_val"].sum()})
+        wandb.log({"Episode": episode_id, descriptor + " Validation Switch Count on " + "_default_overall": validation_filtered_df["switch"].sum()})
+        wandb.log({"Episode": episode_id, descriptor + " Validation Mismatch Count on " + "_default_overall": validation_filtered_df["mismatch"].sum()})
+        wandb.log({"Episode": episode_id, descriptor + " Validation Flat Count on " + "_default_overall": validation_filtered_df["flat"].sum()})
+        wandb.log({"Episode": episode_id, descriptor + " Validation Phased Count on " + "_default_overall": validation_filtered_df["phased"].sum()})
+
+    articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] > 0]
+    log_stats_for_filter(articulation_df, "Articulation > 0:")
+    articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] == 0]
+    log_stats_for_filter(articulation_df, "Articulation == 0:")
+
+    diameter_df = validation_indexing_df.loc[validation_indexing_df["diameter"] <= 5]
+    log_stats_for_filter(diameter_df, "Diameter <= 5:")
+    diameter_df = validation_indexing_df.loc[validation_indexing_df["diameter"] > 5]
+    log_stats_for_filter(diameter_df, "Diameter > 5:")
+
+    node_connectivity_df = validation_indexing_df.loc[(2 <= validation_indexing_df["node connectivity"])
+                                                      & (validation_indexing_df["node connectivity"] <= 5)]
+    log_stats_for_filter(node_connectivity_df, "Node Connectivity 2 to 5:")
+
+    node_connectivity_df = validation_indexing_df.loc[(6 <= validation_indexing_df["node connectivity"])
+                                                      & (validation_indexing_df["node connectivity"] <= 11)]
+    log_stats_for_filter(node_connectivity_df, "Node Connectivity 6 to 11:")
+
+    node_connectivity_df = validation_indexing_df.loc[(12 <= validation_indexing_df["node connectivity"])]
+    log_stats_for_filter(node_connectivity_df, "Node Connectivity 12 plus:")
+
+    node_filter_df = validation_indexing_df.loc[(0 <= validation_indexing_df["n_nodes"])
+                                                      & (validation_indexing_df["n_nodes"] <= 100)]
+    log_stats_for_filter(node_filter_df, "0 to 100 nodes:")
+
+    node_filter_df = validation_indexing_df.loc[(101 <= validation_indexing_df["n_nodes"])]
+    log_stats_for_filter(node_filter_df, "101 plus nodes:")
+
+    node_filter_df = validation_indexing_df.loc[(0 <= validation_indexing_df["n_nodes"])
+                                                & (validation_indexing_df["n_nodes"] <= 20)]
+    log_stats_for_filter(node_filter_df, "0 to 20 nodes:")
+
+    node_filter_df = validation_indexing_df.loc[(21 <= validation_indexing_df["n_nodes"])
+                                                & (validation_indexing_df["n_nodes"] <= 50)]
+    log_stats_for_filter(node_filter_df, "21 to 50 nodes:")
+
+    node_filter_df = validation_indexing_df.loc[(51 <= validation_indexing_df["n_nodes"])
+                                                & (validation_indexing_df["n_nodes"] <= 100)]
+    log_stats_for_filter(node_filter_df, "51 to 100 nodes:")
+
+    node_filter_df = validation_indexing_df.loc[(101 <= validation_indexing_df["n_nodes"])
+                                                & (validation_indexing_df["n_nodes"] <= 200)]
+    log_stats_for_filter(node_filter_df, "101 to 200 nodes:")
+
+    node_filter_df = validation_indexing_df.loc[(201 <= validation_indexing_df["n_nodes"])
+                                                & (validation_indexing_df["n_nodes"] <= 500)]
+    log_stats_for_filter(node_filter_df, "201 to 500 nodes:")
+
+    node_filter_df = validation_indexing_df.loc[(501 <= validation_indexing_df["n_nodes"])
+                                                & (validation_indexing_df["n_nodes"] <= 1000)]
+    log_stats_for_filter(node_filter_df, "501 to 1000 nodes:")
+
+    node_filter_df = validation_indexing_df.loc[(1001 <= validation_indexing_df["n_nodes"])]
+    log_stats_for_filter(node_filter_df, "1000 plus nodes:")
+
     torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
     return total_sum_of_rewards
 
@@ -244,7 +289,7 @@ while agent.env.has_state():
     if config.max_episodes is not None and episode_id >= config.max_episodes:
         break
     episode_reward = agent.run_episode(config, episode_id=episode_id)
-    if episode_id % config.interval_validate == 0 and config.panel_validation_frags is not None:
+    if episode_id % config.interval_validate == 0:
         reward = validate(model_checkpoint_id, episode_id)
         model_checkpoint_id += 1
         if reward > best_validation_reward:
