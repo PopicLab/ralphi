@@ -125,6 +125,7 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, descripto
     logging.getLogger(config_utils.STATS_LOG_VALIDATE).info("%s,%s,%s,%s, %s,%s,%s,%s,%s,%s" % (
     CHROM, episode_id, sum_of_cuts, sum_of_rewards, switch_count, mismatch_count, flat_count, phased_count, AN50, N50))
 
+    """
     wandb.log({"Episode": episode_id, "Validation Sum of Rewards on " + CHROM: sum_of_rewards})
     wandb.log({"Episode": episode_id, "Validation Sum of Cuts on " + CHROM: sum_of_cuts})
     wandb.log({"Episode": episode_id, "Validation Switch Count on " + CHROM: switch_count})
@@ -133,6 +134,7 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, descripto
     wandb.log({"Episode": episode_id, "Validation Phased Count on " + CHROM: phased_count})
     wandb.log({"Episode": episode_id, "Validation AN50 on " + CHROM: AN50})
     wandb.log({"Episode": episode_id, "Validation AN50 on " + CHROM: N50})
+    """
 
     # output the phased VCF (phase blocks)
     return original_CHROM, switch_count, mismatch_count, flat_count, phased_count
@@ -196,6 +198,8 @@ def validate(model_checkpoint_id, episode_id):
                 cur_index.append(phased)
                 cur_index.append(reward_val)
                 cur_index.append(cut_val)
+                cur_index.append(ch)
+                print("ch: ", ch)
 
                 validation_component_stats.append(cur_index)
 
@@ -204,7 +208,7 @@ def validate(model_checkpoint_id, episode_id):
                                             "articulation_points", "node connectivity", "edge_connectivity", "diameter",
                                             "min_degree", "max_degree", "pos_edges", "neg_edges",
                                             "sum_of_pos_edge_weights", "sum_of_neg_edge_weights",
-                                            "trivial", "switch", "mismatch", "flat", "phased", "reward_val", "cut_val"])
+                                            "trivial", "switch", "mismatch", "flat", "phased", "reward_val", "cut_val", "chr"])
     validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))
 
     wandb.log({"Episode": episode_id,"Overall Validation Sum of Rewards on " + "_default_overall": total_sum_of_rewards})
@@ -276,6 +280,15 @@ def validate(model_checkpoint_id, episode_id):
 
     node_filter_df = validation_indexing_df.loc[(1001 <= validation_indexing_df["n_nodes"])]
     log_stats_for_filter(node_filter_df, "1000 plus nodes:")
+
+    node_filter_df = validation_indexing_df.loc[validation_indexing_df["chr"] == "chr1"]
+    log_stats_for_filter(node_filter_df, "chr 1:")
+
+    node_filter_df = validation_indexing_df.loc[validation_indexing_df["chr"] == "chr6"]
+    log_stats_for_filter(node_filter_df, "chr 6:")
+
+    node_filter_df = validation_indexing_df.loc[validation_indexing_df["chr"] == "chr11"]
+    log_stats_for_filter(node_filter_df, "chr 11:")
 
     torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
     return total_sum_of_rewards
