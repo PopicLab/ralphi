@@ -73,11 +73,13 @@ class GraphDistribution:
         """
         if os.path.exists(self.fragment_files_panel.strip() + ".index_per_graph"):
             return
+        with open(self.fragment_files_panel, 'r') as fp:
+            panel_len = len(fp.readlines())
         panel = open(self.fragment_files_panel, 'r')
         if self.vcf_panel is not None:
             vcf_panel = open(self.vcf_panel, 'r')
         else:
-            vcf_panel = [None] * len(panel) # placeholder for zip operation
+            vcf_panel = [None] * panel_len # placeholder for zip operation
         for frag_file_fname, vcf_file_fname in zip(tqdm.tqdm(panel), vcf_panel):
             logging.info("Fragment file: %s" % frag_file_fname)
             component_file_fname = frag_file_fname.strip() + ".components"
