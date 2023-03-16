@@ -24,7 +24,7 @@ def reduce(nodes):
 class NodeApplyModule(nn.Module):
     def __init__(self, in_feats, out_feats, activation):
         super(NodeApplyModule, self).__init__()
-        self.linear = nn.Linear(3 * in_feats, out_feats)
+        self.linear = nn.Linear(3*in_feats, out_feats)
         self.activation = activation
 
     def forward(self, node):

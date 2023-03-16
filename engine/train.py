@@ -37,19 +37,21 @@ random.seed(config.seed)
 torch.set_num_threads(config.num_cores)
 
 # set up performance tracking
-if config.debug:
+if config.log_wandb:
     wandb.init(project="dphase_experiments", entity="dphase", dir=config.log_dir)
 else:
     # automatically results in ignoring all wandb calls
     wandb.init(project="dphase_experiments", entity="dphase", dir=config.log_dir, mode="disabled")
 
 
-training_dataset = dataset_gen.graph_generator.GraphDistribution(config.panel_train, load_components=True, store_components=True, save_indexes=True, compress=config.compress)
+training_distribution = dataset_gen.graph_generator.GraphDistribution(config.panel_train, load_components=True, store_components=True, save_indexes=True, compress=config.compress)
+training_dataset = training_distribution.load_graph_dataset_indices()
 
-validation_dataset = dataset_gen.graph_generator.GraphDistribution(fragment_files_panel=config.panel_validation_frags, vcf_panel=config.panel_validation_vcfs,
+validation_distribution = dataset_gen.graph_generator.GraphDistribution(fragment_files_panel=config.panel_validation_frags, vcf_panel=config.panel_validation_vcfs,
                                                                             load_components=True,
                                                                             store_components=True,
                                                                             save_indexes=True, compress=config.compress)
+validation_dataset = validation_distribution.load_graph_dataset_indices()
 # e.g. to only validate on cases with articulation points
 # validation_dataset = validation_dataset[validation_dataset["articulation_points"] != 0]
 
@@ -75,7 +77,7 @@ def compute_error_rates(solutions, validation_input_vcf):
     hap_blocks = hap_block_visualizer.pretty_print(solutions, idx2var.items(), validation_input_vcf)
     return CHROM, benchmark_result, hap_blocks
 
-def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, descriptor="_default_", simple=False):
+def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, descriptor="_default_"):
     CHROM, benchmark_result, hap_blocks = compute_error_rates(solutions, input_vcf)
     original_CHROM = CHROM
     switch_count = benchmark_result.switch_count[CHROM]
@@ -112,6 +114,7 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, descripto
 def validate(model_checkpoint_id, episode_id):
     # benchmark the current model against a held out set of fragment graphs (validation panel)
     validation_component_stats = []
+    print("running validation with model number:  ", model_checkpoint_id, ", at episode: ", episode_id)
     for index, component_row in tqdm.tqdm(validation_dataset.iterrows()):
         with open(component_row.component_path + ".vcf.graph", 'rb') as f:
             subgraph = pickle.load(f)
@@ -119,7 +122,6 @@ def validate(model_checkpoint_id, episode_id):
             if subgraph.n_nodes < 2 and subgraph.fragments[0].n_variants < 2:
                 # only validate on non-singleton graphs with > 1 variant
                 continue
-            print("validating on subgraph with ", subgraph.n_nodes, " nodes...")
             mini_env = envs.PhasingEnv(preloaded_graphs=[subgraph], record_solutions=True)
             agent.env = mini_env
             sum_of_rewards = 0

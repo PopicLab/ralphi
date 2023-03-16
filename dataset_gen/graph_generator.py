@@ -72,7 +72,7 @@ class GraphDistribution:
          as well as pre-computed statistics about the graph such as connectivity, size, density etc.
         """
         if os.path.exists(self.fragment_files_panel.strip() + ".index_per_graph"):
-            return pd.read_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
+            return
         panel = open(self.fragment_files_panel, 'r')
         if self.vcf_panel is not None:
             vcf_panel = open(self.vcf_panel, 'r')
@@ -122,4 +122,3 @@ class GraphDistribution:
                                                     "min_degree", "max_degree", "pos_edges", "neg_edges", "sum_of_pos_edge_weights", "sum_of_neg_edge_weights",
                                                     "trivial"])
                 indexing_df.to_pickle(frag_file_fname.strip() + ".index_per_graph")
-        return self.load_graph_dataset_indices()

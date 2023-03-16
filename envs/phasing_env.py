@@ -134,6 +134,11 @@ class PhasingEnv(gym.Env):
                 raise RuntimeError("Fragment wasn't assigned to any cluster")
         self.solutions.append(self.state.frag_graph.fragments)
 
+    def get_solutions(self):
+        node_labels = self.state.g.ndata['x'][:, 0].cpu().numpy().tolist()
+        for i, frag in enumerate(self.state.frag_graph.fragments):
+            frag.assign_haplotype(node_labels[i])
+        return self.state.frag_graph.fragments
     def get_indexed_graph_stats(self):
         return {
             constants.GraphStats.n_nodes: self.state.frag_graph.indexed_graph_stats["n_nodes"],

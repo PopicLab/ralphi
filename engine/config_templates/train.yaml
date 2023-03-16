@@ -13,4 +13,5 @@ render_view: "weighted_view" # Controls how the graph is rendered
 num_cores: 4 # Number of threads to use for Pytorch
 interval_validate: 500 # Number of episodes between model validation runs
 debug: True
+log_wandb: False
 compress: True
