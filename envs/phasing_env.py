@@ -67,7 +67,7 @@ class PhasingEnv(gym.Env):
         # experimentally normalizing by number of nodes appears to stablilize actor-critic training
         # (and this normalization seems to be done in literature as well) -- but should confirm this with a side by side comparison
         # TODO (Anant): get a long running result of training with and without normalization
-        norm_factor = 1 #self.state.num_nodes  # 1
+        norm_factor = self.state.num_nodes  # 1
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
@@ -152,23 +152,6 @@ class PhasingEnv(gym.Env):
             constants.GraphStats.trivial: self.state.frag_graph.indexed_graph_stats["trivial"],
             constants.GraphStats.cut_value: self.get_cut_value()
         }
-    def get_graph_stats(self):
-        return {
-            constants.GraphStats.n_nodes: self.state.frag_graph.g.number_of_nodes(),
-            constants.GraphStats.n_edges: self.state.frag_graph.g.number_of_edges(),
-            constants.GraphStats.density: self.get_density(),
-            #constants.GraphStats.radius: self.get_radius(),
-            #constants.GraphStats.diameter: self.get_diameter(),
-            #constants.GraphStats.n_variants: self.state.frag_graph.compute_number_of_variants(),
-            constants.GraphStats.cut_value: self.get_cut_value()
-        }
-    def get_simple_graph_stats(self):
-        return {
-            constants.GraphStats.n_nodes: self.state.frag_graph.g.number_of_nodes(),
-            constants.GraphStats.n_edges: self.state.frag_graph.g.number_of_edges(),
-            constants.GraphStats.cut_value: self.get_cut_value()
-        }
-
     def get_density(self):
         return nx.density(self.state.frag_graph.g)
 

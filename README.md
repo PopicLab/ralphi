@@ -29,10 +29,14 @@ The ```engine``` directory contains the following key scripts to train/evaluate 
 
 Execution:
 
-```python engine/train.py --panel=/path/to/panel --out_dir=/path/to/output --max_episodes=N```
+```python engine/train.py --/path/to/config/train.yaml```
 
-```python engine/test.py --panel=/path/to/test/panel --model=/path/to/model --input_vcf=/path/to/input_vcf --output_vcf=/path/to/output_phased_vcf```
+```python engine/test.py  --/path/to/config/test.yaml```
 
+See `````/engine/config_templates/train.yaml````` for an example of a training config file, and 
+`````/engine/config_templates/test.yaml````` for an example of a testing config file. Note that training requires
+specifying a panel of fragment files to train on, as well as a panel of validation VCF files to provide validation
+stats to help quantify performance of the agent as it trains.
 
 ### Input fragment file generation
 
@@ -78,5 +82,6 @@ and benchmarking. The script can be executed as follows:
 2. Activate the environment: 
 ```$> source env/bin/activate```
 
-3. Install all the required packages (in the virtual environment):
+3. Install all the required packages (in the virtual environment): \
+```$> cd env``` \
 ```$> pip --no-cache-dir install -r ../requirements.txt```

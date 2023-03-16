@@ -54,7 +54,6 @@ class DiscreteActorCriticAgent:
         # very small learning rate appears to stabilize training; TODO (Anant): experiment with LR scheduler
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.000003)
         self.batch_size = 32
-        #self.eps = np.finfo(np.float32).eps.item()
 
     def select_action(self, greedy=False):
         if self.env.state.num_nodes < 2:
@@ -132,10 +131,6 @@ class DiscreteActorCriticAgent:
             R = r + self.gamma * R
             rewards.insert(0, R)
         rewards = torch.tensor(rewards)
-        #if rewards.size(dim=0) <= 1:
-        #    rewards = (rewards - rewards.mean()) / (torch.Tensor([0]) + self.eps)
-        #else:
-        #    rewards = (rewards - rewards.mean()) / (rewards.std() + self.eps)
         loss_policy = []
         loss_value = []
         for (log_prob, value), reward in zip(self.model.actions, rewards):

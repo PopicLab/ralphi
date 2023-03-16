@@ -4,6 +4,7 @@ import torch
 from pathlib import Path
 import logging
 import sys
+import os
 import engine.constants as constants
 
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
@@ -93,6 +94,9 @@ class TrainingConfig(Config):
         logger_stats_validate.addHandler(file_handler)
         logger_stats_validate.info(",".join(STATS_LOG_COLS_VALIDATE))
         logger_main.info(self)
+
+        if os.path.exists(self.out_dir + "/benchmark.txt"):
+            os.remove(self.out_dir + "/benchmark.txt")
 
     def __str__(self):
         s = " ===== Config =====\n"

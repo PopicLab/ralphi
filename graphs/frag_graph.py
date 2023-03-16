@@ -18,6 +18,7 @@ from networkx.algorithms import bipartite
 import logging
 import vcf
 from vcf.parser import Reader, Writer, _Format
+import tqdm
 
 
 class FragGraph:
@@ -67,7 +68,7 @@ class FragGraph:
 
         frag_graph = nx.Graph()
         print("Constructing fragment graph from %d fragments" % len(fragments))
-        for i, f1 in enumerate(fragments):
+        for i, f1 in enumerate(tqdm.tqdm(fragments)):
             frag_graph.add_node(i)
             for j in range(i + 1, len(fragments)):
                 f2 = fragments[j]
@@ -100,21 +101,21 @@ class FragGraph:
             frag_graph.nodes[node]['y'] = [fragments[node].n_variants]
         return FragGraph(frag_graph, fragments, compute_trivial=compute_trivial)
 
-    def compute_number_of_variants(self):
+    def compute_variants_set(self):
+        """
+        Returns:
+        set of variants (by position), number of variants
+        """
         vcf_positions = set()
         for frag in self.fragments:
             for block in frag.blocks:
                 for var in block.variants:
                     vcf_positions.add(var.vcf_idx)
-        return len(vcf_positions)
+        return vcf_positions, len(vcf_positions)
 
     def construct_vcf_for_specific_frag_graph(self, input_vcf, output_vcf):
         print("updating graph indexes to reflect seperated VCF")
-        vcf_positions = set()
-        for frag in self.fragments:
-            for block in frag.blocks:
-                for var in block.variants:
-                    vcf_positions.add(var.vcf_idx)
+        vcf_positions, _ = self.compute_variants_set()
         node_mapping = {j: i for (i, j) in enumerate(sorted(vcf_positions))}
 
         for frag in self.fragments:
@@ -147,7 +148,6 @@ class FragGraph:
         writer.close()
         print("wrote vcf file to:", output_vcf)
 
-        # save graph as well to help with debugging
         if not os.path.exists(output_vcf + ".graph"):
             with open(output_vcf + ".graph", 'wb') as f:
                 pickle.dump(self, f)
@@ -220,7 +220,7 @@ class FragGraph:
     def connected_components_subgraphs(self, skip_trivial_graphs=False):
         components = nx.connected_components(self.g)
         subgraphs = []
-        for count, component in enumerate(components):
+        for component in tqdm.tqdm(components):
             subgraph = self.extract_subgraph(component, compute_trivial=True)
             if subgraph.trivial and skip_trivial_graphs:
                 continue
@@ -252,7 +252,6 @@ class FragGraphGen:
             yield None
         elif self.graph_distribution is not None:
             index_df = self.graph_distribution
-            #index_df = self.graph_distribution.sample(frac=1, random_state=1)
             for index, component_row in index_df.iterrows():
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.min_graph_size <= component_row["n_nodes"] <= self.max_graph_size):
@@ -282,14 +281,11 @@ class FragGraphGen:
                         if self.store_components:
                             with open(component_file_fname, 'wb') as f:
                                 pickle.dump(connected_components, f)
-
                     if not self.debug:
                         # decorrelate connected components, since otherwise we may end up processing connected components in
                         # the order of the corresponding variants which could result in some unwanted correlation
                         # during training between e.g. if there are certain regions of variants with many errors
                         random.shuffle(connected_components)
-
-
                     print("Number of connected components: ", len(connected_components))
                     for subgraph in connected_components:
                         if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):

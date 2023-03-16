@@ -14,7 +14,9 @@ class FragVariantHandle:
         return "Variant: vcf_idx={} allele={} qscore={}".format(self.vcf_idx, self.allele, self.qscore)
 
     def __eq__(self, v):
-        return (self.vcf_idx, self.allele, self.qscore, self.haplotype) == (v.vcf_idx, v.allele, v.qscore, v.haplotype)
+        # temporarily disable equality check by qscore, since on simulated data this is not meaningful for compression
+        #return (self.vcf_idx, self.allele, self.qscore, self.haplotype) == (v.vcf_idx, v.allele, v.qscore, v.haplotype)
+        return(self.vcf_idx, self.allele, self.haplotype) == (v.vcf_idx, v.allele, v.haplotype)
 
 
 class Block:

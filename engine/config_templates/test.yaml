@@ -1,8 +1,10 @@
-panel: "path/to/fragments" # Fragment files for testing
-model: null  # path to pretrained model"
-input_vcf: "/path/to/vcf" # Input VCF to phase
+panel: "/Users/amaheshw/Documents/BroadInstituteReading/Code/data/phasing/validation/frags/NA12877_panel.txt" # Fragment files for testing
+model: "/Users/amaheshw/Documents/BroadInstituteReading/Code/experiments/test/HG00113ValidationAnalysis/Model7200/dphase_model_32.pt"
+input_vcf: "/Users/amaheshw/Documents/BroadInstituteReading/Code/data/phasing/VCF/IlluminaPlatinum/NA12877/NA12877/chr11/NA12877.chr11.filtered.noindels.vcf"
+# Input VCF to phase
 render: False # Enables the rendering of the environment
 num_cores: 4 # Number of threads to use for Pytorch
 record_solutions: True
 skip_singleton_graphs: True
-skip_trivial_graphs: False
+skip_trivial_graphs: True
+compress: True
