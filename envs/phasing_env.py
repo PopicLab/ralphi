@@ -5,14 +5,6 @@ import dgl
 import utils.plotting as vis
 import graphs.frag_graph as graphs
 import networkx as nx
-import engine.constants as constants
-from collections import defaultdict
-from networkx.algorithms import bipartite
-from itertools import product
-import random
-import copy
-import operator
-
 
 class State:
     """
@@ -139,24 +131,10 @@ class PhasingEnv(gym.Env):
         for i, frag in enumerate(self.state.frag_graph.fragments):
             frag.assign_haplotype(node_labels[i])
         return self.state.frag_graph.fragments
-    def get_indexed_graph_stats(self):
-        return {
-            constants.GraphStats.n_nodes: self.state.frag_graph.indexed_graph_stats["n_nodes"],
-            constants.GraphStats.n_edges: self.state.frag_graph.indexed_graph_stats["n_edges"],
-            constants.GraphStats.density: self.state.frag_graph.indexed_graph_stats["density"],
-            constants.GraphStats.articulation_points: self.state.frag_graph.indexed_graph_stats["articulation_points"],
-            constants.GraphStats.node_connectivity: self.state.frag_graph.indexed_graph_stats["node connectivity"],
-            constants.GraphStats.edge_connectivity: self.state.frag_graph.indexed_graph_stats["edge_connectivity"],
-            constants.GraphStats.diameter: self.state.frag_graph.indexed_graph_stats["diameter"],
-            constants.GraphStats.min_degree: self.state.frag_graph.indexed_graph_stats["min_degree"],
-            constants.GraphStats.max_degree: self.state.frag_graph.indexed_graph_stats["max_degree"],
-            constants.GraphStats.pos_edges: self.state.frag_graph.indexed_graph_stats["pos_edges"],
-            constants.GraphStats.neg_edges: self.state.frag_graph.indexed_graph_stats["neg_edges"],
-            constants.GraphStats.sum_of_pos_edge_weights: self.state.frag_graph.indexed_graph_stats["sum_of_pos_edge_weights"],
-            constants.GraphStats.sum_of_neg_edge_weights: self.state.frag_graph.indexed_graph_stats["sum_of_neg_edge_weights"],
-            constants.GraphStats.trivial: self.state.frag_graph.indexed_graph_stats["trivial"],
-            constants.GraphStats.cut_value: self.get_cut_value()
-        }
+
+    def get_graph_stats(self):
+        return self.state.frag_graph.get_graph_properties()
+
     def get_density(self):
         return nx.density(self.state.frag_graph.g)
 

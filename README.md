@@ -29,9 +29,9 @@ The ```engine``` directory contains the following key scripts to train/evaluate 
 
 Execution:
 
-```python engine/train.py --/path/to/config/train.yaml```
+```python engine/train.py --config /path/to/config/train.yaml```
 
-```python engine/test.py  --/path/to/config/test.yaml```
+```python engine/test.py  --config /path/to/config/test.yaml```
 
 See `````/engine/config_templates/train.yaml````` for an example of a training config file, and 
 `````/engine/config_templates/test.yaml````` for an example of a testing config file. Note that training requires
@@ -83,5 +83,4 @@ and benchmarking. The script can be executed as follows:
 ```$> source env/bin/activate```
 
 3. Install all the required packages (in the virtual environment): \
-```$> cd env``` \
 ```$> pip --no-cache-dir install -r ../requirements.txt```

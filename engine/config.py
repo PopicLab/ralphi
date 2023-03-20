@@ -5,7 +5,6 @@ from pathlib import Path
 import logging
 import sys
 import os
-import engine.constants as constants
 
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)

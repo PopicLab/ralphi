@@ -41,9 +41,7 @@ while env.has_state():
     while not done:
         action = agent.select_action(greedy=True)
         _, _, done = env.step(action)
-    end_time = time.time()
-    runtime = int(end_time) - int(start_time)
-    logging.debug("Runtime: %d " % runtime)
+    logging.debug("Runtime: %f " % time.time() - start_time)
     env.reset()
     n_episodes += 1
 logging.info("Total number of episodes: %d " % n_episodes)
@@ -57,7 +55,5 @@ for v in idx2var.values():
     v.assign_haplotype()
 idx2var = utils.post_processing.update_split_block_phase_sets(env.solutions, idx2var)
 logging.info("Post-processed blocks that were split up due to ambiguous variants")
-total_end_time = time.time()
-runtime = int(total_end_time) - int(total_start_time)
-logging.info("Overall Runtime: %d " % runtime)
+logging.info("Overall Runtime: %f " % time.time() - total_start_time)
 vcf_writer.write_phased_vcf(config.input_vcf, idx2var, config.output_vcf)

@@ -19,7 +19,3 @@ class GraphStats(str, Enum):
     sum_of_pos_edge_weights = "sum_of_pos_edge_weights"
     sum_of_neg_edge_weights = "sum_of_neg_edge_weights"
     trivial = "trivial"
-class LossTypes(str, Enum):
-    actor_loss = "actor_loss"
-    critic_loss = "critic_loss"
-    total_loss = "total_loss"

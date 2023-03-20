@@ -40,6 +40,22 @@ def filter_vcf(vcf_fname, filters):
             writer.write_record(record)
 
 
+def extract_vcf_for_specific_variants(vcf_positions, input_vcf, output_vcf):
+    print("constructing vcf for specific graph --", " input vcf: ", input_vcf, " output vcf: ", output_vcf)
+    vcf_reader = vcf.Reader(open(input_vcf, 'r'), strict_whitespace=True)
+    assert (len(vcf_reader.samples) == 1), "Only single-sample files are expected"
+
+    writer = Writer(open(output_vcf, 'w'), vcf_reader)
+    max_vcf_idx = max(vcf_positions)
+    for vcf_idx, record in enumerate(vcf_reader):
+        if vcf_idx > max_vcf_idx:
+            break
+        if vcf_idx not in vcf_positions:
+            continue
+        writer.write_record(record)
+    writer.close()
+    print("wrote vcf file to:", output_vcf)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare input VCF")
     parser.add_argument('--vcf', help='Input VCF')
