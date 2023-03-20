@@ -13,7 +13,7 @@ import logging
 import tqdm
 import pandas as pd
 import warnings
-from seq.vcf_prep import extract_vcf_for_specific_variants
+from seq.vcf_prep import extract_vcf_for_variants
 import wandb
 
 class GraphProperties:
@@ -170,7 +170,7 @@ class FragGraph:
                     vcf_positions.add(var.vcf_idx)
         return vcf_positions, len(vcf_positions)
 
-    def construct_vcf_for_specific_frag_graph(self, input_vcf, output_vcf):
+    def construct_vcf_for_frag_graph(self, input_vcf, output_vcf):
         print("updating graph indexes to reflect seperated VCF")
         vcf_positions, _ = self.compute_variants_set()
         node_mapping = {j: i for (i, j) in enumerate(sorted(vcf_positions))}
@@ -188,7 +188,7 @@ class FragGraph:
             warnings.warn(output_vcf + ' already exists!')
             return
 
-        extract_vcf_for_specific_variants(vcf_positions, input_vcf, output_vcf)
+        extract_vcf_for_variants(vcf_positions, input_vcf, output_vcf)
 
         if not os.path.exists(output_vcf + ".graph"):
             with open(output_vcf + ".graph", 'wb') as f:
@@ -421,7 +421,7 @@ class GraphDataset:
                 component_path = frag_file_fname.strip() + ".components" + "_" + str(i)
                 if vcf_file_fname is not None:
                     if not os.path.exists(component_path + ".vcf"):
-                        component.construct_vcf_for_specific_frag_graph(vcf_file_fname.strip(),
+                        component.construct_vcf_for_frag_graph(vcf_file_fname.strip(),
                                                                         component_path + ".vcf")
                         print("saved vcf to: ", component_path + ".vcf")
                 else:
