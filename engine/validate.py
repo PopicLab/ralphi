@@ -63,13 +63,13 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
     validation_component_stats = []
     print("running validation with model number:  ", model_checkpoint_id, ", at episode: ", episode_id)
     for index, component_row in tqdm.tqdm(validation_dataset.iterrows()):
-        with open(component_row.component_path + ".vcf.graph", 'rb') as f:
+        with open(component_row.component_path, 'rb') as f:
             subgraph = pickle.load(f)
             subgraph.indexed_graph_stats = component_row
             if subgraph.n_nodes < 2 and subgraph.fragments[0].n_variants < 2:
                 # only validate on non-singleton graphs with > 1 variant
                 continue
-            mini_env = envs.PhasingEnv(preloaded_graphs=[subgraph], record_solutions=True)
+            mini_env = envs.PhasingEnv(config, preloaded_graphs=subgraph, record_solutions=True)
             agent.env = mini_env
             sum_of_rewards = 0
             sum_of_cuts = 0

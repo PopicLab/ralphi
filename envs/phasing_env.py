@@ -26,14 +26,14 @@ class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
-    def __init__(self, panel=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1,
-                 max_graph_size=float('inf'), skip_trivial_graphs=False, compress=False, debug=False, graph_distribution=None, preloaded_graphs=None):
+    def __init__(self, config, record_solutions=False, graph_distribution=None, preloaded_graphs=None):
         super(PhasingEnv, self).__init__()
-        self.graph_gen = iter(graphs.FragGraphGen(panel, load_components=True, store_components=True,
-                                                  skip_singletons=skip_singleton_graphs,
-                                                  min_graph_size=min_graph_size, max_graph_size=max_graph_size,
-                                                  skip_trivial_graphs=skip_trivial_graphs, compress=compress, debug=debug, graph_distribution=graph_distribution, preloaded_graphs=preloaded_graphs))
-        self.state = self.init_state()
+        self.config = config
+        if preloaded_graphs:
+            self.state = State(preloaded_graphs)
+        else:
+            self.graph_gen = iter(graphs.FragGraphGen(config, graph_distribution=graph_distribution))
+            self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
@@ -59,7 +59,10 @@ class PhasingEnv(gym.Env):
         # experimentally normalizing by number of nodes appears to stablilize actor-critic training
         # (and this normalization seems to be done in literature as well) -- but should confirm this with a side by side comparison
         # TODO (Anant): get a long running result of training with and without normalization
-        norm_factor = self.state.num_nodes  # 1
+        if self.config.normalization:
+            norm_factor = self.state.num_nodes
+        else:
+            norm_factor = 1
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph

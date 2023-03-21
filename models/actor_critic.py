@@ -11,18 +11,17 @@ import wandb
 import numpy as np
 
 class ActorCriticNet(nn.Module):
-    def __init__(self, in_dim, hidden_dim, num_actions):
+    def __init__(self, in_dim, hidden_dim, num_layers):
         super(ActorCriticNet, self).__init__()
         # linear transformation will be applied to the last dimension of the input tensor
         # which must equal hidden_dim -- number of features per node
         self.policy_graph = nn.Linear(hidden_dim, 1)
         self.policy_done = nn.Linear(hidden_dim, 1)
         self.value = nn.Linear(hidden_dim, 1)
-        self.layers = nn.ModuleList([
-            GCN(in_dim, hidden_dim, F.relu),
-            GCN(hidden_dim, hidden_dim, F.relu),
-            GCN(hidden_dim, hidden_dim, F.relu)])
-
+        self.layers = nn.ModuleList([])
+        self.layers.append(GCN(in_dim, hidden_dim, F.relu))
+        for i in range(num_layers - 1):
+            self.layers.append(GCN(hidden_dim, hidden_dim, F.relu))
         self.actions = []
         self.rewards = []
 
@@ -49,10 +48,13 @@ class ActorCriticNet(nn.Module):
 class DiscreteActorCriticAgent:
     def __init__(self, env):
         self.env = env
-        self.model = ActorCriticNet(1, 264, self.env.num_actions)
-        self.gamma = 0.98
+        self.model = ActorCriticNet(self.env.config.in_dim, self.env.config.hidden_dim, self.env.config.num_layers)
+        self.learning_mode = False
+
+    def set_learning_params(self):
+        self.gamma = self.env.config.gamma
         # very small learning rate appears to stabilize training; TODO (Anant): experiment with LR scheduler
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.000003)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.env.config.lr)
         self.batch_size = 32
 
     def select_action(self, greedy=False):
@@ -113,6 +115,9 @@ class DiscreteActorCriticAgent:
                                                                  str(runtime)]))
 
     def update_model(self, episode_id=None):
+        if not self.learning_mode:
+            self.set_learning_params()
+            self.learning_mode = True
         R = 0
         rewards = []
         for r in self.model.rewards[::-1]:

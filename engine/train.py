@@ -45,21 +45,18 @@ else:
     wandb.init(project="dphase_experiments", entity="dphase", dir=config.log_dir, mode="disabled")
 
 
-training_distribution = graphs.frag_graph.GraphDataset(config, load_components=True, store_components=True, save_indexes=True, validation_mode=False)
+training_distribution = graphs.frag_graph.GraphDataset(config, validation_mode=False)
 training_dataset = training_distribution.load_graph_dataset_indices()
 
 if config.panel_validation_frags and config.panel_validation_vcfs:
-    validation_distribution = graphs.frag_graph.GraphDataset(config, load_components=True, store_components=True, save_indexes=True, validation_mode=True)
+    validation_distribution = graphs.frag_graph.GraphDataset(config, validation_mode=True)
     validation_dataset = validation_distribution.load_graph_dataset_indices()
     # e.g. to only validate on cases with articulation points
     # validation_dataset = validation_dataset[validation_dataset["articulation_points"] != 0]
 
 
 # Setup the agent and the training environment
-env_train = envs.PhasingEnv(config.panel_train,
-                            min_graph_size=config.min_graph_size,
-                            max_graph_size=config.max_graph_size,
-                            skip_trivial_graphs=config.skip_trivial_graphs, graph_distribution=training_dataset, compress=config.compress)
+env_train = envs.PhasingEnv(config, graph_distribution=training_dataset)
 agent = agents.DiscreteActorCriticAgent(env_train)
 if config.pretrained_model is not None:
     agent.model.load_state_dict(torch.load(config.pretrained_model))

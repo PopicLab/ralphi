@@ -1,9 +1,19 @@
+# datasets
 panel: "path/to/fragments" # Fragment files for testing
-model: null  # path to pretrained model"
+model: "path/to/pretrained/model" # Model to use for testing
 input_vcf: "/path/to/vcf" # Input VCF to phase
+# testing parameters
 render: False # Enables the rendering of the environment
 num_cores: 4 # Number of threads to use for Pytorch
-record_solutions: True
 skip_singleton_graphs: True
 skip_trivial_graphs: False
 compress: True
+normalization: False
+debug: True
+# caching parameters
+load_components: False
+store_components: False
+# model parameters
+in_dim: 1
+hidden_dim: 264
+num_layers: 3

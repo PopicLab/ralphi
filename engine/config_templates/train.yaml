@@ -1,11 +1,12 @@
-panel_train: "path/to/fragments" # Fragment files for training
+# datasets
+panel: "path/to/fragments" # Fragment files for training
 panel_validation_frags: "path/to/fragments" # Fragment files for validation
 panel_validation_vcfs: "path/to/VCFs" # VCF files for validation
-pretrained_model: null  # path to pretrained model; null or "path/to/model"
+# training parameters
 min_graph_size: 1 # Minimum size of graphs to use for training
 max_graph_size: 1000 # Maximum size of graphs to use for training
-skip_trivial_graphs: False
-gamma: 0.99 # Reward discount factor
+skip_trivial_graphs: True
+skip_singleton_graphs: True
 seed: 12345 # Random seed
 max_episodes: null # Maximum number of episodes to run
 render: False # Enables the rendering of the environment
@@ -15,3 +16,15 @@ interval_validate: 500 # Number of episodes between model validation runs
 debug: True
 log_wandb: False
 compress: True
+normalization: False
+# caching parameters
+load_components: True
+store_components: True
+store_indexes: True
+# model parameters
+pretrained_model: null  # path to pretrained model; null or "path/to/model"
+in_dim: 1
+hidden_dim: 264
+num_layers: 3
+gamma: 0.98
+lr: 0.00003

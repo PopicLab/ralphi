@@ -184,17 +184,18 @@ class FragGraph:
                 for var in block.variants:
                     var.vcf_idx = node_mapping[var.vcf_idx]
 
-        if os.path.exists(output_vcf):
-            warnings.warn(output_vcf + ' already exists!')
+        if os.path.exists(output_vcf + ".vcf"):
+            warnings.warn(output_vcf + ".vcf" + ' already exists!')
             return
 
-        extract_vcf_for_variants(vcf_positions, input_vcf, output_vcf)
+        extract_vcf_for_variants(vcf_positions, input_vcf, output_vcf + ".vcf")
 
-        if not os.path.exists(output_vcf + ".graph"):
-            with open(output_vcf + ".graph", 'wb') as f:
+        # also store graph
+        if not os.path.exists(output_vcf):
+            with open(output_vcf, 'wb') as f:
                 pickle.dump(self, f)
         else:
-            warnings.warn(output_vcf + ".graph" + ' already exists!')
+            warnings.warn(output_vcf + ' already exists!')
 
 
     def check_and_set_trivial(self):
@@ -290,35 +291,30 @@ def load_connected_components(frag_file_fname, load_components=False, store_comp
     return connected_components
 
 class FragGraphGen:
-    def __init__(self, frag_panel_file=None, load_components=False, store_components=False,
-                 skip_singletons=True, min_graph_size=1, max_graph_size=float('inf'),
-                 skip_trivial_graphs=False, compress=False, debug=False, graph_distribution=None, preloaded_graphs=None):
-        self.frag_panel_file = frag_panel_file
-        self.load_components = load_components
-        self.store_components = store_components
-        self.skip_singletons = skip_singletons
-        self.min_graph_size = min_graph_size
-        self.max_graph_size = max_graph_size
-        self.skip_trivial_graphs = skip_trivial_graphs
-        self.compress = compress
-        self.debug = debug
+    def __init__(self, config, graph_distribution=None):
+        self.config = config
+        self.frag_panel_file = config.panel
+        self.load_components = config.load_components
+        self.store_components = config.store_components
+        self.skip_singleton_graphs = config.skip_singleton_graphs
+        self.min_graph_size = config.min_graph_size
+        self.max_graph_size = config.max_graph_size
+        self.skip_trivial_graphs = config.skip_trivial_graphs
+        self.compress = config.compress
+        self.debug = config.debug
         self.graph_distribution = graph_distribution
-        self.preloaded_graphs = preloaded_graphs
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
-        if self.preloaded_graphs is not None:
-            for graph in self.preloaded_graphs:
-                yield graph
-            yield None
-        elif self.graph_distribution is not None:
+
+        if self.graph_distribution is not None:
             index_df = self.graph_distribution
             for index, component_row in index_df.iterrows():
-                with open(component_row.component_path + ".vcf.graph", 'rb') as f:
+                with open(component_row.component_path, 'rb') as f:
                     if not (self.min_graph_size <= component_row["n_nodes"] <= self.max_graph_size):
                         continue
                     subgraph = pickle.load(f) # [component_row['index']]    since graph is cached don't need to index in anymore
-                    if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
+                    if subgraph.n_nodes < 2 and (self.skip_singleton_graphs or subgraph.fragments[0].n_variants < 2):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                     yield subgraph
@@ -339,7 +335,7 @@ class FragGraphGen:
                         random.shuffle(connected_components)
                     print("Number of connected components: ", len(connected_components))
                     for subgraph in connected_components:
-                        if subgraph.n_nodes < 2 and (self.skip_singletons or subgraph.fragments[0].n_variants < 2):
+                        if subgraph.n_nodes < 2 and (self.skip_singleton_graphs or subgraph.fragments[0].n_variants < 2):
                             continue
                         if not (self.min_graph_size <= subgraph.n_nodes <= self.max_graph_size):
                             continue
@@ -352,20 +348,21 @@ class FragGraphGen:
                 graph = generate_rand_frag_graph()
                 for subgraph in graph.connected_components_subgraphs():
                     yield subgraph
+
 class GraphDataset:
-    def __init__(self, config, load_components=False, store_components=False, save_indexes=False,
-                 skip_trivial_graphs=True, validation_mode=False):
+    def __init__(self, config, validation_mode=False):
         self.combined_graph_indexes = []
         if not validation_mode:
-            self.fragment_files_panel = config.panel_train
+            self.fragment_files_panel = config.panel
+            self.vcf_panel = None
         else:
             self.fragment_files_panel = config.panel_validation_frags
-        self.vcf_panel = config.panel_validation_vcfs
+            self.vcf_panel = config.panel_validation_vcfs
         self.compress = config.compress
-        self.skip_trivial_graphs = skip_trivial_graphs
-        self.load_components = load_components
-        self.store_components = store_components
-        self.save_indexes = save_indexes
+        self.skip_trivial_graphs = config.skip_trivial_graphs
+        self.load_components = config.load_components
+        self.store_components = config.store_components
+        self.store_indexes = config.store_indexes
         self.column_names = None
         self.dataset_indexing()
 
@@ -422,7 +419,7 @@ class GraphDataset:
                 if vcf_file_fname is not None:
                     if not os.path.exists(component_path + ".vcf"):
                         component.construct_vcf_for_frag_graph(vcf_file_fname.strip(),
-                                                                        component_path + ".vcf")
+                                                                        component_path)
                         print("saved vcf to: ", component_path + ".vcf")
                 else:
                     if not os.path.exists(component_path):
@@ -437,7 +434,7 @@ class GraphDataset:
                 component_index_combined.append(component_index)
                 self.combined_graph_indexes.append(component_index)
 
-            if not os.path.exists(frag_file_fname.strip() + ".index_per_graph") and self.save_indexes:
+            if not os.path.exists(frag_file_fname.strip() + ".index_per_graph") and self.store_indexes:
                 indexing_df = pd.DataFrame(component_index_combined,
                                            columns=self.column_names)
                 indexing_df.to_pickle(frag_file_fname.strip() + ".index_per_graph")
