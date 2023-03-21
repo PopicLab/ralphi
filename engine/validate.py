@@ -93,8 +93,6 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
                 cur_index.extend([sw, mis, flat, phased, reward_val, cut_val, ch])
                 validation_component_stats.append(cur_index)
 
-    print("columns:", list(validation_dataset.columns))
-    print("validation component stats: ", validation_component_stats)
     validation_indexing_df = pd.DataFrame(validation_component_stats,
                                    columns=list(validation_dataset.columns) + ["switch", "mismatch", "flat", "phased", "reward_val", "cut_val", "chr"])
     validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))

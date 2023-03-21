@@ -28,7 +28,6 @@ def split_by_chr(vcf_fname, filters):
         if keep:
             writers[record.CHROM].write_record(record)
 
-
 def filter_vcf(vcf_fname, filters):
     vcf_reader = vcf.Reader(open(vcf_fname, 'r'), prepend_chr=True, strict_whitespace=True)
     assert (len(vcf_reader.samples) == 1), "Only single-sample files are expected"
@@ -39,20 +38,23 @@ def filter_vcf(vcf_fname, filters):
         if keep:
             writer.write_record(record)
 
+def construct_row_to_record_dict(input_vcf):
+    print("constructing vcf record dictionary")
+    vcf_reader = vcf.Reader(open(input_vcf, 'r'), strict_whitespace=True)
+    assert (len(vcf_reader.samples) == 1), "Only single-sample files are expected"
+    row_to_record_dict = {}
+    for vcf_idx, record in enumerate(vcf_reader):
+        row_to_record_dict[vcf_idx] = record
+    return row_to_record_dict
 
-def extract_vcf_for_variants(vcf_positions, input_vcf, output_vcf):
+def extract_vcf_for_variants(vcf_positions, input_vcf, output_vcf, vcf_dict):
     print("constructing vcf for specific graph --", " input vcf: ", input_vcf, " output vcf: ", output_vcf)
     vcf_reader = vcf.Reader(open(input_vcf, 'r'), strict_whitespace=True)
     assert (len(vcf_reader.samples) == 1), "Only single-sample files are expected"
 
     writer = Writer(open(output_vcf, 'w'), vcf_reader)
-    max_vcf_idx = max(vcf_positions)
-    for vcf_idx, record in enumerate(vcf_reader):
-        if vcf_idx > max_vcf_idx:
-            break
-        if vcf_idx not in vcf_positions:
-            continue
-        writer.write_record(record)
+    for elem in vcf_positions:
+        writer.write_record(vcf_dict[elem])
     writer.close()
     print("wrote vcf file to:", output_vcf)
 
