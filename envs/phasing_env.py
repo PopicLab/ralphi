@@ -135,18 +135,6 @@ class PhasingEnv(gym.Env):
             frag.assign_haplotype(node_labels[i])
         return self.state.frag_graph.fragments
 
-    def get_graph_stats(self):
-        return self.state.frag_graph.get_graph_properties()
-
-    def get_density(self):
-        return nx.density(self.state.frag_graph.g)
-
-    def get_radius(self):
-        return nx.radius(self.state.frag_graph.g)
-
-    def get_diameter(self):
-        return nx.diameter(self.state.frag_graph.g)
-
     def get_cut_value(self, node_labels=None):
         if not node_labels:
             node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()

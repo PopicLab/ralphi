@@ -16,24 +16,9 @@ STATS_LOG_TRAIN = "STATS_TRAIN"
 STATS_LOG_VALIDATE = "STATS_VALIDATE"
 STATS_LOG_COLS_TRAIN = ['Episode',
                         'Reward',
-                        'ActorLoss',
-                        'CriticLoss',
-                        'SumLoss',
-                        'n_nodes',
-                        'n_edges',
-                        'density',
-                        'articulation_points',
-                        'node_connectivity',
-                        'edge_connectivity',
-                        'diameter',
-                        'min_degree',
-                        'max_degree',
-                        'pos_edges',
-                        'neg_edges',
-                        'sum_of_pos_edge_weights',
-                        'sum_of_neg_edge_weights',
-                        'trivial',
-                        'cut_value',
+                        'CutValue'
+                        'Losses',
+                        'GraphProperties',
                         'Runtime']
 STATS_LOG_COLS_VALIDATE = ['Descriptor', 'Episode', 'SumOfCuts', 'SumOfRewards', 'Switch Count', 'Mismatch Count', 'Flat Count', 'Phased Count', 'AN50', 'N50']
 
@@ -97,6 +82,11 @@ class TrainingConfig(Config):
         if os.path.exists(self.out_dir + "/benchmark.txt"):
             os.remove(self.out_dir + "/benchmark.txt")
 
+        # logging
+        logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
+                            handlers=[logging.FileHandler(self.log_dir + '/training.log', mode='w'),
+                                      logging.StreamHandler(sys.stdout)])
+
     def __str__(self):
         s = " ===== Config =====\n"
         s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
@@ -109,6 +99,11 @@ class TestConfig(Config):
         super().__init__(config_file)
         self.phasing_output_path = self.out_dir + "phasing_output.pickle"
         self.output_vcf = self.out_dir + "dphase_phased.vcf"
+
+        # default params
+        # for testing -- we want to evaluate on the entire dataset
+        self.min_graph_size = 1
+        self.max_graph_size = float('inf')
 
         # logging
         # noinspection PyArgumentList

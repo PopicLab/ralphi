@@ -53,7 +53,7 @@ def extract_vcf_for_variants(vcf_positions, input_vcf, output_vcf, vcf_dict):
     assert (len(vcf_reader.samples) == 1), "Only single-sample files are expected"
 
     writer = Writer(open(output_vcf, 'w'), vcf_reader)
-    for elem in vcf_positions:
+    for elem in sorted(list(vcf_positions)):
         writer.write_record(vcf_dict[elem])
     writer.close()
     print("wrote vcf file to:", output_vcf)

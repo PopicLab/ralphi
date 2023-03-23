@@ -19,10 +19,6 @@ total_start_time = time.time()
 
 config = config_utils.load_config(args.config, config_type=config_utils.CONFIG_TYPE.TEST)
 
-# for testing -- we want to evaluate on the entire dataset
-config.min_graph_size = 1
-config.max_graph_size = float('inf')
-
 torch.set_num_threads(config.num_cores)
 env = envs.PhasingEnv(config, record_solutions=True)
 agent = algs.DiscreteActorCriticAgent(env)

@@ -97,10 +97,8 @@ class DiscreteActorCriticAgent:
         return episode_reward
 
     def log_episode_stats(self, episode_id, reward, loss, runtime):
-        graph_properties = self.env.get_graph_stats()
-        graph_properties.log_stats(episode_id)
-        graph_stats = graph_properties.query_stats()
-
+        self.env.state.frag_graph.log_graph_properties(episode_id)
+        graph_stats = self.env.state.frag_graph.get_graph_properties()
         logging.getLogger(config.MAIN_LOG).info("Episode: %d. Reward: %d, ActorLoss: %d, CriticLoss: %d, TotalLoss: %d,"
                                                 " CutSize: %d, Runtime: %d" %
                                                 (episode_id, reward,
@@ -110,8 +108,9 @@ class DiscreteActorCriticAgent:
                                                  self.env.get_cut_value(),
                                                  runtime))
         logging.getLogger(config.STATS_LOG_TRAIN).info(",".join([str(episode_id), str(reward),
-                                                                 ",".join(str(loss) for loss in loss.values()),
-                                                                 ",".join(str(stat) for stat in graph_stats.values()),
+                                                                 str(self.env.get_cut_value()),
+                                                                 str(loss),
+                                                                 str(graph_stats),
                                                                  str(runtime)]))
 
     def update_model(self, episode_id=None):
