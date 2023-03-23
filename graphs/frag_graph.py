@@ -101,24 +101,24 @@ class FragGraph:
 
     def set_graph_properties(self):
         # TODO: which properties do we want to save here; probably not diameter since expensive to compute
-        pos_edges = 0
-        neg_edges = 0
-        zero_weight_edges = 0
-        sum_of_pos_edge_weights = 0
-        sum_of_neg_edge_weights = 0
+        self.graph_properties["pos_edges"] = 0
+        self.graph_properties["neg_edges"] = 0
+        self.graph_properties["zero_edges"] = 0
+        self.graph_properties["sum_of_pos_edge_weights"] = 0
+        self.graph_properties["sum_of_neg_edge_weights"] = 0
         for _, _, a in self.g.edges(data=True):
             edge_weight = a['weight']
             if edge_weight > 0:
-                pos_edges += 1
-                sum_of_pos_edge_weights += edge_weight
+                self.graph_properties["pos_edges"] += 1
+                self.graph_properties["sum_of_pos_edge_weights"] += edge_weight
             elif edge_weight < 0:
-                neg_edges += 1
-                sum_of_neg_edge_weights += edge_weight
+                self.graph_properties["neg_edges"] += 1
+                self.graph_properties["sum_of_neg_edge_weights"] += edge_weight
             else:
-                zero_weight_edges += 1
+                self.graph_properties["zero_edges"] += 1
         degrees = [val for (node, val) in self.g.degree()]
-        max_degree = max(degrees)
-        min_degree = min(degrees)
+        self.graph_properties["max_degree"] = max(degrees)
+        self.graph_properties["min_degree"] = min(degrees)
         self.graph_properties["n_nodes"] = self.g.number_of_nodes()
         self.graph_properties["n_edges"] = self.g.number_of_edges()
         self.graph_properties["density"] = nx.density(self.g)
@@ -126,12 +126,6 @@ class FragGraph:
         self.graph_properties["node_connectivity"] = nx.node_connectivity(self.g)
         self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
         self.graph_properties["diameter"] = nx.diameter(self.g)
-        self.graph_properties["min_degree"] = min_degree
-        self.graph_properties["max_degree"] = max_degree
-        self.graph_properties["pos_edges"] = pos_edges
-        self.graph_properties["neg_edges"] = neg_edges
-        self.graph_properties["sum_of_pos_edge_weights"] = sum_of_pos_edge_weights
-        self.graph_properties["sum_of_neg_edge_weights"] = sum_of_neg_edge_weights
         self.graph_properties["trivial"] = self.trivial
 
     def get_graph_properties(self):
