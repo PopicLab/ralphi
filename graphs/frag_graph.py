@@ -31,7 +31,7 @@ class FragGraph:
         self.trivial = None
         self.hap_a_frags = None
         self.hap_b_frags = None
-        self.graph_properties_lookup = {}
+        self.graph_properties = {}
         if compute_trivial:
             self.check_and_set_trivial()
         if compute_properties:
@@ -119,26 +119,26 @@ class FragGraph:
         degrees = [val for (node, val) in self.g.degree()]
         max_degree = max(degrees)
         min_degree = min(degrees)
-        self.graph_properties_lookup["n_nodes"] = self.g.number_of_nodes()
-        self.graph_properties_lookup["n_edges"] = self.g.number_of_edges()
-        self.graph_properties_lookup["density"] = nx.density(self.g)
-        self.graph_properties_lookup["articulation_points"] = len(list(nx.articulation_points(self.g)))
-        self.graph_properties_lookup["node_connectivity"] = nx.node_connectivity(self.g)
-        self.graph_properties_lookup["edge_connectivity"] = nx.edge_connectivity(self.g)
-        self.graph_properties_lookup["diameter"] = nx.diameter(self.g)
-        self.graph_properties_lookup["min_degree"] = min_degree
-        self.graph_properties_lookup["max_degree"] = max_degree
-        self.graph_properties_lookup["pos_edges"] = pos_edges
-        self.graph_properties_lookup["neg_edges"] = neg_edges
-        self.graph_properties_lookup["sum_of_pos_edge_weights"] = sum_of_pos_edge_weights
-        self.graph_properties_lookup["sum_of_neg_edge_weights"] = sum_of_neg_edge_weights
-        self.graph_properties_lookup["trivial"] = self.trivial
+        self.graph_properties["n_nodes"] = self.g.number_of_nodes()
+        self.graph_properties["n_edges"] = self.g.number_of_edges()
+        self.graph_properties["density"] = nx.density(self.g)
+        self.graph_properties["articulation_points"] = len(list(nx.articulation_points(self.g)))
+        self.graph_properties["node_connectivity"] = nx.node_connectivity(self.g)
+        self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
+        self.graph_properties["diameter"] = nx.diameter(self.g)
+        self.graph_properties["min_degree"] = min_degree
+        self.graph_properties["max_degree"] = max_degree
+        self.graph_properties["pos_edges"] = pos_edges
+        self.graph_properties["neg_edges"] = neg_edges
+        self.graph_properties["sum_of_pos_edge_weights"] = sum_of_pos_edge_weights
+        self.graph_properties["sum_of_neg_edge_weights"] = sum_of_neg_edge_weights
+        self.graph_properties["trivial"] = self.trivial
 
     def get_graph_properties(self):
-        return self.graph_properties_lookup
+        return self.graph_properties
 
     def log_graph_properties(self, episode_id):
-        for key, value in self.graph_properties_lookup.items():
+        for key, value in self.graph_properties.items():
             wandb.log({"Episode": episode_id, "Training: " + key: value})
 
     def compute_variants_set(self):
