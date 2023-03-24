@@ -35,6 +35,20 @@ class Config:
         Path(self.out_dir).mkdir(parents=True, exist_ok=True)
 
         # ...shared training and testing configs...
+    def set_defaults(self):
+        default_values = {
+            'render': False,  # Enables the rendering of the environment
+            'num_cores': 4,  # Number of threads to use for Pytorch
+            'compress': True,
+            'normalization': False,
+            'debug': True,
+            'in_dim': 1,
+            'hidden_dim': 264,
+            'num_layers': 3,
+        }
+        for k, v, in default_values.items():
+            if not hasattr(self, k):
+                self.__setattr__(k, v)
 
     def __str__(self):
         s = " ===== Config =====\n"
@@ -45,6 +59,7 @@ class Config:
 class TrainingConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
+        self.set_defaults()
         super().__init__(config_file)
         self.model_path = self.out_dir + "/dphase_model_final.pt"
         self.best_model_path = self.out_dir + "/dphase_model_best.pt"
@@ -86,16 +101,43 @@ class TrainingConfig(Config):
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
                             handlers=[logging.FileHandler(self.log_dir + '/training.log', mode='w'),
                                       logging.StreamHandler(sys.stdout)])
-
     def __str__(self):
         s = " ===== Config =====\n"
         s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
         return s
 
+    def set_defaults(self):
+        super().set_defaults()
+        default_values = {
+            'panel_validation_frags': None, # Fragment files for validation
+            'panel_validation_vcfs': None, # VCF files for validation
+            'min_graph_size': 1,  # Minimum size of graphs to use for training
+            'max_graph_size': 1000,  # Maximum size of graphs to use for training
+            'skip_trivial_graphs': True,
+            'skip_singleton_graphs': True,
+            'seed': 12345,  # Random seed
+            'max_episodes': None,  # Maximum number of episodes to run
+            'render_view': "weighted_view",  # Controls how the graph is rendered
+            'interval_validate': 500,  # Number of episodes between model validation runs
+            'log_wandb': False,
+            # caching parameters
+            'load_components': True,
+            'store_components': True,
+            'store_indexes': True,
+            # model parameters
+            'pretrained_model': None,  # path to pretrained model; null or "path/to/model"
+            'gamma': 0.98,
+            'lr': 0.00003
+        }
+        for k, v, in default_values.items():
+            if not hasattr(self, k):
+                self.__setattr__(k, v)
+
 
 class TestConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
+        self.set_defaults()
         super().__init__(config_file)
         self.phasing_output_path = self.out_dir + "phasing_output.pickle"
         self.output_vcf = self.out_dir + "dphase_phased.vcf"
@@ -116,6 +158,20 @@ class TestConfig(Config):
         s = " ===== Config =====\n"
         s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
         return s
+    def set_defaults(self):
+        super().set_defaults()
+        default_values = {
+            'min_graph_size': 1,
+            'max_graph_size': float('inf'),
+            'skip_singleton_graphs': True,
+            'skip_trivial_graphs': False,
+            # caching parameters
+            'load_components': False,
+            'store_components': False,
+        }
+        for k, v, in default_values.items():
+            if not hasattr(self, k):
+                self.__setattr__(k, v)
 
 
 def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
