@@ -5,6 +5,7 @@ from pathlib import Path
 import logging
 import sys
 import os
+import wandb
 
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
@@ -96,6 +97,13 @@ class TrainingConfig(Config):
 
         if os.path.exists(self.out_dir + "/benchmark.txt"):
             os.remove(self.out_dir + "/benchmark.txt")
+
+        # set up performance tracking
+        if self.log_wandb:
+            wandb.init(project="dphase_experiments", entity="dphase", dir=self.log_dir)
+        else:
+            # automatically results in ignoring all wandb calls
+            wandb.init(project="dphase_experiments", entity="dphase", dir=self.log_dir, mode="disabled")
 
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,

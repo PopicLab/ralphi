@@ -26,13 +26,13 @@ class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
-    def __init__(self, config, record_solutions=False, graph_distribution=None, preloaded_graphs=None):
+    def __init__(self, config, record_solutions=False, graph_dataset=None, preloaded_graphs=None):
         super(PhasingEnv, self).__init__()
         self.config = config
         if preloaded_graphs:
             self.state = State(preloaded_graphs)
         else:
-            self.graph_gen = iter(graphs.FragGraphGen(config, graph_distribution=graph_distribution))
+            self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
             self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")

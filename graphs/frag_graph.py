@@ -269,15 +269,15 @@ def load_connected_components(frag_file_fname, load_components=False, store_comp
     return connected_components
 
 class FragGraphGen:
-    def __init__(self, config, graph_distribution=None):
+    def __init__(self, config, graph_dataset=None):
         self.config = config
-        self.graph_distribution = graph_distribution
+        self.graph_dataset = graph_dataset
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
 
-        if self.graph_distribution is not None:
-            index_df = self.graph_distribution
+        if self.graph_dataset is not None:
+            index_df = self.graph_dataset
             for index, component_row in index_df.iterrows():
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
