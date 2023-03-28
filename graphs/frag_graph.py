@@ -269,8 +269,8 @@ class FragGraphGen:
     def is_invalid_subgraph(self, subgraph):
         return subgraph.n_nodes < 2 and (self.config.skip_singleton_graphs or subgraph.fragments[0].n_variants < 2)
 
-    def is_in_size_range(self, subgraph):
-        return self.config.min_graph_size <= subgraph.n_nodes <= self.config.max_graph_size
+    def is_not_in_size_range(self, subgraph):
+        return not (self.config.min_graph_size <= subgraph.n_nodes <= self.config.max_graph_size)
 
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
@@ -304,9 +304,7 @@ class FragGraphGen:
                         random.shuffle(connected_components)
                     print("Number of connected components: ", len(connected_components))
                     for subgraph in connected_components:
-                        if self.is_invalid_subgraph(subgraph):
-                            continue
-                        if not self.is_in_size_range(subgraph):
+                        if self.is_invalid_subgraph(subgraph) or self.is_not_in_size_range(subgraph):
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                         yield subgraph
@@ -329,9 +327,9 @@ class GraphDataset:
             self.fragment_files_panel = config.panel_validation_frags
             self.vcf_panel = config.panel_validation_vcfs
         self.column_names = None
-        self.dataset_indexing()
+        self.generate_indices()
 
-    def load_graph_dataset_indices(self):
+    def load_indices(self):
         if os.path.exists(self.fragment_files_panel.strip() + ".index_per_graph"):
             graph_dataset = pd.read_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
         else:
@@ -343,13 +341,13 @@ class GraphDataset:
     def filter_range(self, graph, comparator, min_bound=1, max_bound=float('inf')):
         return min_bound <= comparator(graph) <= max_bound
 
-    def select_graphs_by_range(self, comparator=nx.number_of_nodes, min=1, max=float('inf')):
+    def select_by_range(self, comparator=nx.number_of_nodes, min=1, max=float('inf')):
         return filter(lambda graph: self.filter_range(graph.g, comparator, min, max), self.combined_graph_indexes)
 
-    def select_graphs_by_property(self, comparator=nx.has_bridges):
+    def select_by_property(self, comparator=nx.has_bridges):
         return filter(lambda graph: comparator(graph.g), self.combined_graph_indexes)
 
-    def dataset_indexing(self):
+    def generate_indices(self):
         """
         generate dataframe containing path of each graph (saved as a FragGraph object),
          as well as pre-computed statistics about the graph such as connectivity, size, density etc.

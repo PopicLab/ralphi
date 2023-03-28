@@ -21,10 +21,10 @@ torch.manual_seed(config.seed)
 random.seed(config.seed)
 torch.set_num_threads(config.num_cores)
 
-training_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False).load_graph_dataset_indices()
+training_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False).load_indices()
 
 if config.panel_validation_frags and config.panel_validation_vcfs:
-    validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_graph_dataset_indices()
+    validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
     # e.g. to only validate on cases with articulation points
     # validation_dataset = validation_dataset[validation_dataset["articulation_points"] != 0]
 
