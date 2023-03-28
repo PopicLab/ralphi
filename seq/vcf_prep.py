@@ -38,7 +38,7 @@ def filter_vcf(vcf_fname, filters):
         if keep:
             writer.write_record(record)
 
-def construct_row_to_record_dict(input_vcf):
+def construct_vcf_idx_to_record_dict(input_vcf):
     print("constructing vcf record dictionary")
     vcf_reader = vcf.Reader(open(input_vcf, 'r'), strict_whitespace=True)
     assert (len(vcf_reader.samples) == 1), "Only single-sample files are expected"

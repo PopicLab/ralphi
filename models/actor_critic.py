@@ -98,7 +98,7 @@ class DiscreteActorCriticAgent:
 
     def log_episode_stats(self, episode_id, reward, loss, runtime):
         self.env.state.frag_graph.log_graph_properties(episode_id)
-        graph_stats = self.env.state.frag_graph.get_graph_properties()
+        graph_stats = self.env.state.frag_graph.graph_properties
         logging.getLogger(config.MAIN_LOG).info("Episode: %d. Reward: %d, ActorLoss: %d, CriticLoss: %d, TotalLoss: %d,"
                                                 " CutSize: %d, Runtime: %d" %
                                                 (episode_id, reward,

@@ -158,8 +158,8 @@ class PhasingEnv(gym.Env):
             vis.plot_weighted_network(self.state.g.to_networkx(), node_labels, edge_weights)
         elif mode == "bipartite":
             vis.plot_bipartite_network(self.state.g.to_networkx(), node_labels, edge_weights)
-        elif mode == "large":
-            vis.visualize_graph(self.state.g.to_networkx(), node_labels, edge_weights)
+        elif mode == "density":
+            vis.visualize_dense_graph(self.state.g.to_networkx(), node_labels, edge_weights)
         else:
             # save the plot to file
             pass

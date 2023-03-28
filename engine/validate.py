@@ -76,7 +76,7 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
             cut_val = agent.env.get_cut_value()
             sum_of_cuts += cut_val
             if config.debug:
-                graph_stats = agent.env.state.frag_graph.get_graph_properties()
+                graph_stats = agent.env.state.frag_graph.graph_properties
 
                 graph_path = os.path.split(component_row.component_path)[1] + str(graph_stats)
                 graph_stats["cut_value"] = agent.env.get_cut_value()
@@ -95,13 +95,13 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
                                    columns=list(validation_dataset.columns) + ["switch", "mismatch", "flat", "phased", "reward_val", "cut_val", "chr"])
     validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))
 
-    def log_stats_for_filter(validation_filtered_df, descriptor="Pandas"):
+    def log_stats_for_filter(validation_filtered_df, descriptor="Overall"):
         metrics_of_interest = ["reward_val", "cut_val", "switch", "mismatch", "flat", "phased"]
         for metric in metrics_of_interest:
             wandb.log({"Episode": episode_id, descriptor + " Validation " + metric + " on " + "_default_overall": validation_filtered_df[metric].sum()})
 
     # stats for entire validation set
-    log_stats_for_filter(validation_indexing_df, "Overall")
+    log_stats_for_filter(validation_indexing_df)
 
     # log specific plots to wandb for graph topologies we are interested in
     articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] > 0]

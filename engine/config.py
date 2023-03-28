@@ -150,11 +150,6 @@ class TestConfig(Config):
         self.phasing_output_path = self.out_dir + "phasing_output.pickle"
         self.output_vcf = self.out_dir + "dphase_phased.vcf"
 
-        # default params
-        # for testing -- we want to evaluate on the entire dataset
-        self.min_graph_size = 1
-        self.max_graph_size = float('inf')
-
         # logging
         # noinspection PyArgumentList
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
