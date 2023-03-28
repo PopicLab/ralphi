@@ -1,10 +1,12 @@
 import argparse
+import pandas as pd
+import graphs.frag_graph
 import models.actor_critic as agents
 import envs.phasing_env as envs
 import torch
 import random
 import engine.config as config_utils
-import logging
+import engine.validate
 
 # ------ CLI ------
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
@@ -14,36 +16,24 @@ args = parser.parse_args()
 
 # Load the config
 config = config_utils.load_config(args.config)
+
 torch.manual_seed(config.seed)
 random.seed(config.seed)
 torch.set_num_threads(config.num_cores)
 
+training_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False).load_indices()
+
+if config.panel_validation_frags and config.panel_validation_vcfs:
+    validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
+    # e.g. to only validate on cases with articulation points
+    # validation_dataset = validation_dataset[validation_dataset["articulation_points"] != 0]
+
+
 # Setup the agent and the training environment
-env_train = envs.PhasingEnv(config.panel_train,
-                            min_graph_size=config.min_graph_size,
-                            max_graph_size=config.max_graph_size,
-                            skip_trivial_graphs=config.skip_trivial_graphs)
+env_train = envs.PhasingEnv(config, graph_dataset=training_dataset)
 agent = agents.DiscreteActorCriticAgent(env_train)
 if config.pretrained_model is not None:
     agent.model.load_state_dict(torch.load(config.pretrained_model))
-
-def validate():
-    # benchmark the current model against a held out set of fragment graphs (validation panel)
-    # TODO: pre-load the validation panel
-    agent.env = envs.PhasingEnv(panel=config.panel_validate, skip_trivial_graphs=config.skip_trivial_graphs)
-    sum_of_rewards = 0
-    sum_of_cuts = 0
-    while agent.env.has_state():
-        sum_of_rewards += agent.run_episode(config, test_mode=True)
-        sum_of_cuts += agent.env.get_cut_value()
-        agent.env.reset()
-    torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
-    # log validation loop stats
-    logging.getLogger(config_utils.MAIN_LOG).info("Validation checkpoint: %d, Sum of Cuts: %d, Sum of Rewards: %d" %
-                                                  (model_checkpoint_id, sum_of_cuts, sum_of_rewards))
-    logging.getLogger(config_utils.STATS_LOG_VALIDATE).info("%s,%s,%s" % (episode_id, sum_of_cuts, sum_of_rewards))
-    return sum_of_rewards
-
 
 # Run the training
 best_validation_reward = 0
@@ -53,12 +43,14 @@ while agent.env.has_state():
     if config.max_episodes is not None and episode_id >= config.max_episodes:
         break
     episode_reward = agent.run_episode(config, episode_id=episode_id)
-    if episode_id % config.interval_validate == 0 and config.panel_validate is not None:
-        reward = validate()
-        model_checkpoint_id += 1
-        if reward > best_validation_reward:
-            best_validation_reward = reward
-            torch.save(agent.model.state_dict(), config.best_model_path)
+    if episode_id % config.interval_validate == 0:
+        torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
+        if config.panel_validation_frags and config.panel_validation_vcfs:
+            reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
+            model_checkpoint_id += 1
+            if reward > best_validation_reward:
+                best_validation_reward = reward
+                torch.save(agent.model.state_dict(), config.best_model_path)
     episode_id += 1
     agent.env = env_train
     agent.env.reset()
