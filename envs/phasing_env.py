@@ -5,14 +5,6 @@ import dgl
 import utils.plotting as vis
 import graphs.frag_graph as graphs
 import networkx as nx
-import engine.constants as constants
-from collections import defaultdict
-from networkx.algorithms import bipartite
-from itertools import product
-import random
-import copy
-import operator
-
 
 class State:
     """
@@ -34,14 +26,14 @@ class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
-    def __init__(self, panel=None, record_solutions=False, skip_singleton_graphs=True, min_graph_size=1,
-                 max_graph_size=float('inf'), skip_trivial_graphs=False, compress=False):
+    def __init__(self, config, record_solutions=False, graph_dataset=None, preloaded_graphs=None):
         super(PhasingEnv, self).__init__()
-        self.graph_gen = iter(graphs.FragGraphGen(panel, load_components=False, store_components=False,
-                                                  skip_singletons=skip_singleton_graphs,
-                                                  min_graph_size=min_graph_size, max_graph_size=max_graph_size,
-                                                  skip_trivial_graphs=skip_trivial_graphs, compress=compress))
-        self.state = self.init_state()
+        self.config = config
+        if preloaded_graphs:
+            self.state = State(preloaded_graphs)
+        else:
+            self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
+            self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
@@ -67,7 +59,10 @@ class PhasingEnv(gym.Env):
         # experimentally normalizing by number of nodes appears to stablilize actor-critic training
         # (and this normalization seems to be done in literature as well) -- but should confirm this with a side by side comparison
         # TODO (Anant): get a long running result of training with and without normalization
-        norm_factor = self.state.num_nodes  # 1
+        if self.config.normalization:
+            norm_factor = self.state.num_nodes
+        else:
+            norm_factor = 1
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
@@ -134,12 +129,11 @@ class PhasingEnv(gym.Env):
                 raise RuntimeError("Fragment wasn't assigned to any cluster")
         self.solutions.append(self.state.frag_graph.fragments)
 
-    def get_graph_stats(self):
-        return {
-            constants.GraphStats.num_nodes: self.state.frag_graph.g.number_of_nodes(),
-            constants.GraphStats.num_edges: self.state.frag_graph.g.number_of_edges(),
-            constants.GraphStats.cut_value: self.get_cut_value(),
-        }
+    def get_solutions(self):
+        node_labels = self.state.g.ndata['x'][:, 0].cpu().numpy().tolist()
+        for i, frag in enumerate(self.state.frag_graph.fragments):
+            frag.assign_haplotype(node_labels[i])
+        return self.state.frag_graph.fragments
 
     def get_cut_value(self, node_labels=None):
         if not node_labels:
@@ -164,6 +158,8 @@ class PhasingEnv(gym.Env):
             vis.plot_weighted_network(self.state.g.to_networkx(), node_labels, edge_weights)
         elif mode == "bipartite":
             vis.plot_bipartite_network(self.state.g.to_networkx(), node_labels, edge_weights)
+        elif mode == "density":
+            vis.visualize_dense_graph(self.state.g.to_networkx(), node_labels, edge_weights)
         else:
             # save the plot to file
             pass
