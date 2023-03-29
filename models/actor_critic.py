@@ -2,29 +2,27 @@ import dgl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.graph_models import GCN, GCNFirstLayer
+from models.graph_models import GAT, GINE, PNA, GCNv2
 import time
 import logging
 import engine.config as config
 import engine.constants as constants
 
 class ActorCriticNet(nn.Module):
-    def __init__(self, in_dim, hidden_dim, num_actions):
+    def __init__(self, in_dim, hidden_dim, num_actions, layer_type, **kargs):
+        layers_dict = {"gat" : GAT, "gin" : GINE, "pna" : PNA, "gcn" : GCNv2}
         super(ActorCriticNet, self).__init__()
         # linear transformation will be applied to the last dimension of the input tensor
         # which must equal hidden_dim -- number of features per node
-        self.policy_graph = nn.Linear(hidden_dim, 1)
-        self.policy_done = nn.Linear(hidden_dim, 1)
-        self.value = nn.Linear(hidden_dim, 1)
-        self.layers = nn.ModuleList([
-            GCN(in_dim, hidden_dim, F.relu),
-            GCN(hidden_dim, hidden_dim, F.relu),
-            GCN(hidden_dim, hidden_dim, F.relu)])
+        self.policy_graph = nn.Linear(hidden_dim[-1], 1)
+        self.policy_done = nn.Linear(hidden_dim[-1], 1)
+        self.value = nn.Linear(hidden_dim[-1], 1)
+        self.layers = layers_dict[layer_type](in_dim, hidden_dim, **kargs)
 
         self.actions = []
         self.rewards = []
 
-    def forward(self, genome_graph):
+    def forward(self, genome_graph, edge_feat=None, edge_weights=None, etypes=None):
         """
         Returns:
         - actor's policy: tensor of probabilities for each action
@@ -32,8 +30,7 @@ class ActorCriticNet(nn.Module):
         """
         #h = torch.cat([genome_graph.ndata['x'], genome_graph.ndata['y'].float()], dim=1)
         h = genome_graph.ndata['x']
-        for conv in self.layers:
-            h = conv(genome_graph, h)
+        h = self.layers(genome_graph, h, edge_feat=edge_feat, edge_weights=edge_weights, etypes= etypes)
         genome_graph.ndata['h'] = h
         mN = dgl.mean_nodes(genome_graph, 'h')
         v = self.value(mN)
@@ -45,9 +42,9 @@ class ActorCriticNet(nn.Module):
 
 
 class DiscreteActorCriticAgent:
-    def __init__(self, env):
+    def __init__(self, env, in_dim, hidden_dims, layer_type="gcn", **kargs):
         self.env = env
-        self.model = ActorCriticNet(1, 264, self.env.num_actions)
+        self.model = ActorCriticNet(in_dim, hidden_dims, self.env.num_actions, layer_type, **kargs)
         self.gamma = 0.98
         # very small learning rate appears to stabilize training; TODO (Anant): experiment with LR scheduler
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.000003)

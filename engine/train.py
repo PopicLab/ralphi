@@ -23,7 +23,8 @@ env_train = envs.PhasingEnv(config.panel_train,
                             min_graph_size=config.min_graph_size,
                             max_graph_size=config.max_graph_size,
                             skip_trivial_graphs=config.skip_trivial_graphs)
-agent = agents.DiscreteActorCriticAgent(env_train)
+agent = agents.DiscreteActorCriticAgent(env_train, config.in_dim, config.hidden_dim, config.layer_type,
+                                        config.embedding_vars)
 if config.pretrained_model is not None:
     agent.model.load_state_dict(torch.load(config.pretrained_model))
 
