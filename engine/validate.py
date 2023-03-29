@@ -26,10 +26,9 @@ def compute_error_rates(solutions, validation_input_vcf, agent, config):
 
 def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_checkpoint_id, episode_id, agent, config, descriptor="_default_"):
     chrom, benchmark_result, hap_blocks = compute_error_rates(solutions, input_vcf, agent, config)
-    original_chrom = chrom
     AN50 = benchmark_result.get_AN50()
     N50 = benchmark_result.get_N50_phased_portion()
-    chrom = descriptor + ", " + chrom
+    label = descriptor + ", " + chrom
 
     with open(config.out_dir + "/benchmark.txt", "a") as out_file:
         out_file.write("benchmark of model: " + str(model_checkpoint_id) + "\n")
@@ -48,13 +47,13 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
             out_file.write(str(hap_blocks) + "\n")
 
     logging.getLogger(config_utils.STATS_LOG_VALIDATE).info("%s,%s,%s,%s, %s,%s,%s,%s,%s,%s"
-                                                            % (chrom, episode_id, sum_of_cuts, sum_of_rewards,
+                                                            % (label, episode_id, sum_of_cuts, sum_of_rewards,
                                                                benchmark_result.switch_count[chrom],
                                                                benchmark_result.mismatch_count[chrom],
                                                                benchmark_result.flat_count[chrom],
                                                                benchmark_result.phased_count[chrom], AN50, N50))
     # output the phased VCF (phase blocks)
-    return original_chrom, benchmark_result.switch_count[chrom], benchmark_result.mismatch_count[chrom], benchmark_result.flat_count[chrom], benchmark_result.phased_count[chrom]
+    return chrom, benchmark_result.switch_count[chrom], benchmark_result.mismatch_count[chrom], benchmark_result.flat_count[chrom], benchmark_result.phased_count[chrom]
 
 def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config):
     # benchmark the current model against a held out set of fragment graphs (validation panel)
