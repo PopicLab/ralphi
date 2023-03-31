@@ -11,18 +11,18 @@ import wandb
 import numpy as np
 
 class ActorCriticNet(nn.Module):
-    def __init__(self, in_dim, hidden_dim, num_layers):
+    def __init__(self, config):
         super(ActorCriticNet, self).__init__()
         # linear transformation will be applied to the last dimension of the input tensor
         # which must equal hidden_dim -- number of features per node
-        self.policy_graph_hap0 = nn.Linear(hidden_dim, 1)
-        self.policy_graph_hap1 = nn.Linear(hidden_dim, 1)
-        self.policy_done = nn.Linear(hidden_dim, 1)
-        self.value = nn.Linear(hidden_dim, 1)
+        self.policy_graph_hap0 = nn.Linear(config.hidden_dim, 1)
+        self.policy_graph_hap1 = nn.Linear(config.hidden_dim, 1)
+        self.policy_done = nn.Linear(config.hidden_dim, 1)
+        self.value = nn.Linear(config.hidden_dim, 1)
         self.layers = nn.ModuleList([])
-        self.layers.append(GCN(in_dim, hidden_dim, F.relu))
-        for i in range(num_layers - 1):
-            self.layers.append(GCN(hidden_dim, hidden_dim, F.relu))
+        self.layers.append(GCN(config.in_dim, config.hidden_dim, F.relu))
+        for i in range(config.num_layers - 1):
+            self.layers.append(GCN(config.hidden_dim, config.hidden_dim, F.relu))
         self.actions = []
         self.rewards = []
 
@@ -50,7 +50,7 @@ class ActorCriticNet(nn.Module):
 class DiscreteActorCriticAgent:
     def __init__(self, env):
         self.env = env
-        self.model = ActorCriticNet(self.env.config.in_dim, self.env.config.hidden_dim, self.env.config.num_layers)
+        self.model = ActorCriticNet(self.env.config)
         self.learning_mode = False
 
     def set_learning_params(self):
@@ -101,9 +101,8 @@ class DiscreteActorCriticAgent:
         return episode_reward
 
     def log_episode_stats(self, episode_id, reward, loss, runtime):
-        graph_properties = self.env.get_graph_stats()
-        graph_properties.log_stats(episode_id)
-        graph_stats = graph_properties.query_stats()
+        self.env.state.frag_graph.log_graph_properties(episode_id)
+        graph_stats = self.env.state.frag_graph.graph_properties
 
         logging.getLogger(config.MAIN_LOG).info("Episode: %d. Reward: %d, ActorLoss: %d, CriticLoss: %d, TotalLoss: %d,"
                                                 " CutSize: %d, Runtime: %d" %
@@ -114,8 +113,9 @@ class DiscreteActorCriticAgent:
                                                  self.env.get_cut_value(),
                                                  runtime))
         logging.getLogger(config.STATS_LOG_TRAIN).info(",".join([str(episode_id), str(reward),
-                                                                 ",".join(str(loss) for loss in loss.values()),
-                                                                 ",".join(str(stat) for stat in graph_stats.values()),
+                                                                 str(self.env.get_cut_value()),
+                                                                 str(loss),
+                                                                 str(graph_stats),
                                                                  str(runtime)]))
 
     def update_model(self, episode_id=None):
