@@ -14,61 +14,8 @@ import tqdm
 import pandas as pd
 import warnings
 from seq.vcf_prep import extract_vcf_for_variants
-from seq.vcf_prep import construct_row_to_record_dict
+from seq.vcf_prep import construct_vcf_idx_to_record_dict
 import wandb
-
-class GraphProperties:
-    def __init__(self, g):
-        self.graph_properties_lookup = {}
-        self.compute_stats(g)
-    def compute_stats(self, g):
-        """
-        Args:
-            g: networkx graph
-
-        Returns:
-            dictionary containing various statistics about the graph, such as size, density, connectivity etc.
-            Can customize statistics of interest by modifying this function
-        """
-        # TODO: which properties do we want to save here; probably not diameter since expensive to compute
-        pos_edges = 0
-        neg_edges = 0
-        zero_weight_edges = 0
-        sum_of_pos_edge_weights = 0
-        sum_of_neg_edge_weights = 0
-        for _, _, a in g.edges(data=True):
-            edge_weight = a['weight']
-            if edge_weight > 0:
-                pos_edges += 1
-                sum_of_pos_edge_weights += edge_weight
-            elif edge_weight < 0:
-                neg_edges += 1
-                sum_of_neg_edge_weights += edge_weight
-            else:
-                zero_weight_edges += 1
-        degrees = [val for (node, val) in g.degree()]
-        max_degree = max(degrees)
-        min_degree = min(degrees)
-        self.graph_properties_lookup["n_nodes"] = g.number_of_nodes()
-        self.graph_properties_lookup["n_edges"] = g.number_of_edges()
-        self.graph_properties_lookup["density"] = nx.density(g)
-        self.graph_properties_lookup["articulation_points"] = len(list(nx.articulation_points(g)))
-        self.graph_properties_lookup["node_connectivity"] = nx.node_connectivity(g)
-        self.graph_properties_lookup["edge_connectivity"] = nx.edge_connectivity(g)
-        self.graph_properties_lookup["diameter"] = nx.diameter(g)
-        self.graph_properties_lookup["min_degree"] = min_degree
-        self.graph_properties_lookup["max_degree"] = max_degree
-        self.graph_properties_lookup["pos_edges"] = pos_edges
-        self.graph_properties_lookup["neg_edges"] = neg_edges
-        self.graph_properties_lookup["sum_of_pos_edge_weights"] = sum_of_pos_edge_weights
-        self.graph_properties_lookup["sum_of_neg_edge_weights"] = sum_of_neg_edge_weights
-
-    def query_stats(self):
-        return self.graph_properties_lookup
-
-    def log_stats(self, episode_id):
-        for key, value in self.graph_properties_lookup.items():
-            wandb.log({"Episode": episode_id, "Training: " + key: value})
 
 class FragGraph:
     """
@@ -84,12 +31,11 @@ class FragGraph:
         self.trivial = None
         self.hap_a_frags = None
         self.hap_b_frags = None
-        self.graph_properties = None
+        self.graph_properties = {}
         if compute_trivial:
             self.check_and_set_trivial()
         if compute_properties:
             self.set_graph_properties()
-            self.graph_properties.graph_properties_lookup["trivial"] = self.trivial
 
     def set_ground_truth_assignment(self, node_id2hap_id):
         """
@@ -149,16 +95,39 @@ class FragGraph:
         return FragGraph(frag_graph, fragments, compute_trivial=compute_trivial)
 
     def set_graph_properties(self):
-        self.graph_properties = GraphProperties(self.g)
+        # TODO: which properties do we want to save here; probably not diameter since expensive to compute
+        self.graph_properties["pos_edges"] = 0
+        self.graph_properties["neg_edges"] = 0
+        self.graph_properties["zero_edges"] = 0
+        self.graph_properties["sum_of_pos_edge_weights"] = 0
+        self.graph_properties["sum_of_neg_edge_weights"] = 0
+        for _, _, a in self.g.edges(data=True):
+            edge_weight = a['weight']
+            if edge_weight > 0:
+                self.graph_properties["pos_edges"] += 1
+                self.graph_properties["sum_of_pos_edge_weights"] += edge_weight
+            elif edge_weight < 0:
+                self.graph_properties["neg_edges"] += 1
+                self.graph_properties["sum_of_neg_edge_weights"] += edge_weight
+            else:
+                self.graph_properties["zero_edges"] += 1
+        degrees = [val for (node, val) in self.g.degree()]
+        self.graph_properties["max_degree"] = max(degrees)
+        self.graph_properties["min_degree"] = min(degrees)
+        self.graph_properties["n_nodes"] = self.g.number_of_nodes()
+        self.graph_properties["n_edges"] = self.g.number_of_edges()
+        self.graph_properties["density"] = nx.density(self.g)
+        self.graph_properties["articulation_points"] = len(list(nx.articulation_points(self.g)))
+        self.graph_properties["node_connectivity"] = nx.node_connectivity(self.g)
+        self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
+        self.graph_properties["diameter"] = nx.diameter(self.g)
+        self.graph_properties["trivial"] = self.trivial
 
-    def get_graph_properties(self):
-        return self.graph_properties
+    def log_graph_properties(self, episode_id):
+        for key, value in self.graph_properties.items():
+            wandb.log({"Episode": episode_id, "Training: " + key: value})
 
-    def compute_variants_set(self):
-        """
-        Returns:
-        set of variants (by position), number of variants
-        """
+    def get_variants_set(self):
         vcf_positions = set()
         for frag in self.fragments:
             for block in frag.blocks:
@@ -168,7 +137,7 @@ class FragGraph:
 
     def construct_vcf_for_frag_graph(self, input_vcf, output_vcf, vcf_dict):
         print("updating graph indexes to reflect seperated VCF")
-        vcf_positions, _ = self.compute_variants_set()
+        vcf_positions, _ = self.get_variants_set()
         node_mapping = {j: i for (i, j) in enumerate(sorted(vcf_positions))}
 
         for frag in self.fragments:
@@ -308,6 +277,7 @@ class FragGraph:
 
     def connected_components_subgraphs(self, skip_trivial_graphs=False, compute_properties=False):
         components = nx.connected_components(self.g)
+        print("Found connected components, now constructing subgraphs...")
         subgraphs = []
         print("Found connected components, now constructing subgraphs...")
         for component in tqdm.tqdm(components):
@@ -339,53 +309,49 @@ def load_connected_components(frag_file_fname, load_components=False, store_comp
     return connected_components
 
 class FragGraphGen:
-    def __init__(self, config, graph_distribution=None):
+    def __init__(self, config, graph_dataset=None):
         self.config = config
-        self.frag_panel_file = config.panel
-        self.load_components = config.load_components
-        self.store_components = config.store_components
-        self.skip_singleton_graphs = config.skip_singleton_graphs
-        self.min_graph_size = config.min_graph_size
-        self.max_graph_size = config.max_graph_size
-        self.skip_trivial_graphs = config.skip_trivial_graphs
-        self.compress = config.compress
-        self.debug = config.debug
-        self.graph_distribution = graph_distribution
+        self.graph_dataset = graph_dataset
+
+    def is_invalid_subgraph(self, subgraph):
+        return subgraph.n_nodes < 2 and (self.config.skip_singleton_graphs or subgraph.fragments[0].n_variants < 2)
+
+    def is_not_in_size_range(self, subgraph):
+        return not (self.config.min_graph_size <= subgraph.n_nodes <= self.config.max_graph_size)
+
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
 
-        if self.graph_distribution is not None:
-            index_df = self.graph_distribution
+        if self.graph_dataset is not None:
+            index_df = self.graph_dataset
             for index, component_row in index_df.iterrows():
                 with open(component_row.component_path, 'rb') as f:
-                    if not (self.min_graph_size <= component_row["n_nodes"] <= self.max_graph_size):
+                    if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                         continue
                     subgraph = pickle.load(f) # [component_row['index']]    since graph is cached don't need to index in anymore
-                    if subgraph.n_nodes < 2 and (self.skip_singleton_graphs or subgraph.fragments[0].n_variants < 2):
+                    if self.is_invalid_subgraph(subgraph):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                     yield subgraph
             yield None
-        elif self.frag_panel_file is not None:
-            with open(self.frag_panel_file, 'r') as panel:
+        elif self.config.frag_panel_file is not None:
+            with open(self.config.frag_panel_file, 'r') as panel:
                 for frag_file_fname in panel:
                     connected_components = load_connected_components(frag_file_fname,
-                                                                     load_components=self.load_components,
-                                                                     store_components=self.store_components,
-                                                                     compress=self.compress,
-                                                                     skip_trivial_graphs=self.skip_trivial_graphs,
+                                                                     load_components=self.config.load_components,
+                                                                     store_components=self.config.store_components,
+                                                                     compress=self.config.compress,
+                                                                     skip_trivial_graphs=self.config.skip_trivial_graphs,
                                                                      compute_properties=False)
-                    if not self.debug:
+                    if not self.config.debug:
                         # decorrelate connected components, since otherwise we may end up processing connected components in
                         # the order of the corresponding variants which could result in some unwanted correlation
                         # during training between e.g. if there are certain regions of variants with many errors
                         random.shuffle(connected_components)
                     print("Number of connected components: ", len(connected_components))
                     for subgraph in connected_components:
-                        if subgraph.n_nodes < 2 and (self.skip_singleton_graphs or subgraph.fragments[0].n_variants < 2):
-                            continue
-                        if not (self.min_graph_size <= subgraph.n_nodes <= self.max_graph_size):
+                        if self.is_invalid_subgraph(subgraph) or self.is_not_in_size_range(subgraph):
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                         yield subgraph
@@ -399,6 +365,7 @@ class FragGraphGen:
 
 class GraphDataset:
     def __init__(self, config, validation_mode=False):
+        self.config = config
         self.combined_graph_indexes = []
         if not validation_mode:
             self.fragment_files_panel = config.panel
@@ -406,69 +373,54 @@ class GraphDataset:
         else:
             self.fragment_files_panel = config.panel_validation_frags
             self.vcf_panel = config.panel_validation_vcfs
-        self.compress = config.compress
-        self.skip_trivial_graphs = config.skip_trivial_graphs
-        self.load_components = config.load_components
-        self.store_components = config.store_components
-        self.store_indexes = config.store_indexes
         self.column_names = None
-        self.dataset_indexing()
+        self.generate_indices()
 
-    def extract_and_save_pandas_index_table(self):
+    def load_indices(self):
         if os.path.exists(self.fragment_files_panel.strip() + ".index_per_graph"):
-            indexing_df = pd.read_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
+            graph_dataset = pd.read_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
         else:
-            indexing_df = pd.DataFrame(self.combined_graph_indexes, columns=self.column_names)
-            indexing_df.to_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
-        return indexing_df
-
-    def load_graph_dataset_indices(self, min=0, max=float('inf')):
-        indexing_df = self.extract_and_save_pandas_index_table()
-        print("Loading dataset with distribution... ", indexing_df.describe())
-        graph_dataset = indexing_df[(indexing_df.n_nodes > min) & (indexing_df.n_nodes < max)]
-        print("filtered dataset... ", graph_dataset.describe())
+            graph_dataset = pd.DataFrame(self.combined_graph_indexes, columns=self.column_names)
+            graph_dataset.to_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
+        print("graph dataset... ", graph_dataset.describe())
         return graph_dataset
 
     def filter_range(self, graph, comparator, min_bound=1, max_bound=float('inf')):
         return min_bound <= comparator(graph) <= max_bound
 
-    def select_graphs_by_range(self, comparator=nx.number_of_nodes, min=1, max=float('inf')):
+    def select_by_range(self, comparator=nx.number_of_nodes, min=1, max=float('inf')):
         return filter(lambda graph: self.filter_range(graph.g, comparator, min, max), self.combined_graph_indexes)
 
-    def select_graphs_by_boolean(self, comparator=nx.has_bridges):
+    def select_by_property(self, comparator=nx.has_bridges):
         return filter(lambda graph: comparator(graph.g), self.combined_graph_indexes)
 
-    def dataset_indexing(self):
+    def generate_indices(self):
         """
         generate dataframe containing path of each graph (saved as a FragGraph object),
          as well as pre-computed statistics about the graph such as connectivity, size, density etc.
         """
         if os.path.exists(self.fragment_files_panel.strip() + ".index_per_graph"):
             return
-        with open(self.fragment_files_panel, 'r') as fp:
-            panel_len = len(fp.readlines())
-        panel = open(self.fragment_files_panel, 'r')
+        panel = open(self.fragment_files_panel, 'r').readlines()
         if self.vcf_panel is not None:
-            vcf_panel = open(self.vcf_panel, 'r')
-        else:
-            vcf_panel = [None] * panel_len  # placeholder for zip operation
-        for frag_file_fname, vcf_file_fname in zip(tqdm.tqdm(panel), vcf_panel):
+            vcf_panel = open(self.vcf_panel, 'r').readlines()
+        for i in tqdm.tqdm(range(len(panel))):
             # precompute graph properties when generating distribution
-            connected_components = load_connected_components(frag_file_fname,
-                                                             load_components=self.load_components,
-                                                             store_components=self.store_components,
-                                                             compress=self.compress,
-                                                             skip_trivial_graphs=self.skip_trivial_graphs,
+            connected_components = load_connected_components(panel[i],
+                                                             load_components=self.config.load_components,
+                                                             store_components=self.config.store_components,
+                                                             compress=self.config.compress,
+                                                             skip_trivial_graphs=self.config.skip_trivial_graphs,
                                                              compute_properties=True)
 
             component_index_combined = []
-            if vcf_file_fname is not None:
-                vcf_dict = construct_row_to_record_dict(vcf_file_fname.strip())
-            for i, component in enumerate(tqdm.tqdm(connected_components)):
-                component_path = frag_file_fname.strip() + ".components" + "_" + str(i)
-                if vcf_file_fname is not None:
+            if self.vcf_panel is not None:
+                vcf_dict = construct_vcf_idx_to_record_dict(vcf_panel[i].strip())
+            for component_index, component in enumerate(tqdm.tqdm(connected_components)):
+                component_path = panel[i].strip() + ".components" + "_" + str(component_index)
+                if self.vcf_panel is not None:
                     if not os.path.exists(component_path + ".vcf"):
-                        component.construct_vcf_for_frag_graph(vcf_file_fname.strip(),
+                        component.construct_vcf_for_frag_graph(vcf_panel[i].strip(),
                                                                         component_path, vcf_dict)
                         print("saved vcf to: ", component_path + ".vcf")
                 else:
@@ -477,17 +429,17 @@ class GraphDataset:
                             pickle.dump(component, f)
                             print("saved graph to: ", component_path)
 
-                metrics = component.get_graph_properties().query_stats()
-                component_index = [component_path, i] + list(metrics.values())
+                metrics = component.graph_properties
+                component_index = [component_path, component_index] + list(metrics.values())
                 if not self.column_names:
                     self.column_names = ["component_path", "index"] + list(metrics.keys())
                 component_index_combined.append(component_index)
                 self.combined_graph_indexes.append(component_index)
 
-            if not os.path.exists(frag_file_fname.strip() + ".index_per_graph") and self.store_indexes:
+            if not os.path.exists(panel[i].strip() + ".index_per_graph") and self.config.store_indexes:
                 indexing_df = pd.DataFrame(component_index_combined,
                                            columns=self.column_names)
-                indexing_df.to_pickle(frag_file_fname.strip() + ".index_per_graph")
+                indexing_df.to_pickle(panel[i].strip() + ".index_per_graph")
 
 
 def generate_rand_frag_graph(h_length=30, n_frags=40):

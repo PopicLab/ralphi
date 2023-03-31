@@ -30,13 +30,13 @@ class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
-    def __init__(self, config, record_solutions=False, graph_distribution=None, preloaded_graphs=None):
+    def __init__(self, config, record_solutions=False, graph_dataset=None, preloaded_graphs=None):
         super(PhasingEnv, self).__init__()
         self.config = config
         if preloaded_graphs:
             self.state = State(preloaded_graphs)
         else:
-            self.graph_gen = iter(graphs.FragGraphGen(config, graph_distribution=graph_distribution))
+            self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
             self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
@@ -156,18 +156,6 @@ class PhasingEnv(gym.Env):
             frag.assign_haplotype(node_labels[i])
         return self.state.frag_graph.fragments
 
-    def get_graph_stats(self):
-        return self.state.frag_graph.get_graph_properties()
-
-    def get_density(self):
-        return nx.density(self.state.frag_graph.g)
-
-    def get_radius(self):
-        return nx.radius(self.state.frag_graph.g)
-
-    def get_diameter(self):
-        return nx.diameter(self.state.frag_graph.g)
-
     def get_cut_value(self, node_labels=None):
         if not node_labels:
             node_labels = self.state.g.ndata['cut_member_hap0'][:].cpu().squeeze().numpy().tolist()
@@ -191,8 +179,8 @@ class PhasingEnv(gym.Env):
             vis.plot_weighted_network(self.state.g.to_networkx(), node_labels, edge_weights)
         elif mode == "bipartite":
             vis.plot_bipartite_network(self.state.g.to_networkx(), node_labels, edge_weights)
-        elif mode == "large":
-            vis.visualize_graph(self.state.g.to_networkx(), node_labels, edge_weights)
+        elif mode == "density":
+            vis.visualize_dense_graph(self.state.g.to_networkx(), node_labels, edge_weights)
         else:
             # save the plot to file
             pass

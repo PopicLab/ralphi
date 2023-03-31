@@ -37,7 +37,7 @@ def plot_bipartite_network(nx_graph, node_labels=None, edge_labels=None):
     nx.draw_networkx_edge_labels(nx_graph, pos, edge_labels=edge_labels, font_color='red')
     plt.show()
 
-def visualize_graph(G, color, edge_labels):
+def visualize_dense_graph(G, color, edge_labels):
     plt.close()
     fig = plt.figure(figsize=(7,7))
     plt.xticks([])
