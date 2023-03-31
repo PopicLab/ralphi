@@ -15,7 +15,8 @@ class ActorCriticNet(nn.Module):
         super(ActorCriticNet, self).__init__()
         # linear transformation will be applied to the last dimension of the input tensor
         # which must equal hidden_dim -- number of features per node
-        self.policy_graph = nn.Linear(hidden_dim, 1)
+        self.policy_graph_hap0 = nn.Linear(hidden_dim, 1)
+        self.policy_graph_hap1 = nn.Linear(hidden_dim, 1)
         self.policy_done = nn.Linear(hidden_dim, 1)
         self.value = nn.Linear(hidden_dim, 1)
         self.layers = nn.ModuleList([])
@@ -32,15 +33,16 @@ class ActorCriticNet(nn.Module):
         - critic's value of the current state
         """
         #h = torch.cat([genome_graph.ndata['x'], genome_graph.ndata['y'].float()], dim=1)
-        h = genome_graph.ndata['x']
+        features = list(genome_graph.ndata[elem.value] for elem in constants.NodeFeatures)
+        h = torch.cat(features, dim=1)
         for conv in self.layers:
             h = conv(genome_graph, h)
         genome_graph.ndata['h'] = h
         mN = dgl.mean_nodes(genome_graph, 'h')
         v = self.value(mN)
-        pi = self.policy_graph(genome_graph.ndata['h'])
-        pi_done = self.policy_done(mN)
-        pi = torch.cat([pi, pi_done])
+        pi_hap0 = self.policy_graph_hap0(genome_graph.ndata['h'])
+        pi_hap1 = self.policy_graph_hap1(genome_graph.ndata['h'])
+        pi = torch.cat([pi_hap0, pi_hap1])
         genome_graph.ndata.pop('h')
         return pi, v
 
@@ -57,11 +59,13 @@ class DiscreteActorCriticAgent:
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.env.config.lr)
         self.batch_size = 32
 
-    def select_action(self, greedy=False):
+    def select_action(self, greedy=False, first=False):
         if self.env.state.num_nodes < 2:
             return 0
         [pi, val] = self.model(self.env.state.g)
         pi = pi.squeeze()
+        if not first:
+            pi[self.env.get_all_non_neighbour_actions()] = -float('Inf')
         pi[self.env.get_all_invalid_actions()] = -float('Inf')
         if greedy:
             greedy_choice = torch.argmax(pi)
@@ -76,12 +80,12 @@ class DiscreteActorCriticAgent:
 
     def run_episode(self, config, test_mode=False, episode_id=None):
         start_time = time.time()
-        if self.env.state.num_nodes < 2:
-            return 0
         done = False
         episode_reward = 0
+        first = True
         while not done:
-            action = self.select_action(test_mode)
+            action = self.select_action(test_mode, first=first)
+            first = False
             _, reward, done = self.env.step(action)
             episode_reward += reward
             if not test_mode:

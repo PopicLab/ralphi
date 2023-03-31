@@ -146,11 +146,6 @@ class FragGraph:
                 if weight != 0:
                     frag_graph.add_edge(i, j, weight=weight)
 
-        # setup node features/attributes
-        # for now just a binary value indicating whether the node is part of the solution
-        for node in frag_graph.nodes:
-            frag_graph.nodes[node]['x'] = [0.0]
-            frag_graph.nodes[node]['y'] = [fragments[node].n_variants]
         return FragGraph(frag_graph, fragments, compute_trivial=compute_trivial)
 
     def set_graph_properties(self):
@@ -197,6 +192,54 @@ class FragGraph:
                 pickle.dump(self, f)
         else:
             warnings.warn(output_vcf + ' already exists!')
+
+    def set_node_features(self):
+        # setup more complex node features/attributes
+        frag_graph = self.g
+        fragments = self.fragments
+        for node in frag_graph.nodes:
+            frag_graph.nodes[node]['cut_member_hap0'] = [0.0]
+            frag_graph.nodes[node]['cut_member_hap1'] = [0.0]
+            frag_graph.nodes[node]['n_variants'] = [fragments[node].n_variants]
+            frag_graph.nodes[node]['min_qscore'] =  [min(fragments[node].quality)]
+            frag_graph.nodes[node]['max_qscore'] = [max(fragments[node].quality)]
+            frag_graph.nodes[node]['avg_qscore'] = [sum(fragments[node].quality) / len(fragments[node].quality)]
+            num_pos = 0
+            num_neg = 0
+            for neighbor in frag_graph[node].items():
+                nbr_weight = neighbor[1]['weight']
+                if nbr_weight > 0:
+                    num_pos = num_pos + 1
+                elif nbr_weight < 0:
+                    num_neg = num_neg + 1
+            frag_graph.nodes[node]['pos_neighbors'] = [num_pos]
+            frag_graph.nodes[node]['neg_neighbors'] = [num_neg]
+
+    def compute_variant_bitmap(self, mask_len=200):
+        # vcf_positions contains the list of vcf positions within the connected component formed by these fragments
+        # since this is a variable length node features, we need to zero-pad it such that it retains a fixed size
+        # TODO: by default keep the experimental variant bitmap off for now
+        #  revisit feature toggles once we finalize which features to use
+        vcf_positions = set()
+        for frag in self.fragments:
+            for block in frag.blocks:
+                for var in range(block.vcf_idx_start, block.vcf_idx_end + 1):
+                    vcf_positions.add(var)
+        vcf_positions = sorted(list(vcf_positions))
+        var_mapping = {j: i for (i, j) in enumerate(vcf_positions)}
+        for frag in self.fragments:
+            frag.vcf_positions = [0.0] * mask_len
+            for block in frag.blocks:
+                for var in range(block.vcf_idx_start, block.vcf_idx_end + 1):
+                    try:
+                        frag.vcf_positions[var_mapping[var]] = 1.0
+                        continue
+                    except IndexError:
+                        # if there are more variants than the mask_len, then we chop off the overflowing variants
+                        pass
+
+        for node in self.g.nodes:
+            self.g.nodes[node]['variant_bitmap'] = [self.fragments[node].vcf_positions]
 
 
     def check_and_set_trivial(self):
@@ -266,10 +309,14 @@ class FragGraph:
     def connected_components_subgraphs(self, skip_trivial_graphs=False, compute_properties=False):
         components = nx.connected_components(self.g)
         subgraphs = []
+        print("Found connected components, now constructing subgraphs...")
         for component in tqdm.tqdm(components):
             subgraph = self.extract_subgraph(component, compute_trivial=True, compute_properties=compute_properties)
             if subgraph.trivial and skip_trivial_graphs:
                 continue
+            # precompute node features/attributes
+            subgraph.set_node_features()
+            subgraph.compute_variant_bitmap()
             subgraphs.append(subgraph)
         return subgraphs
 

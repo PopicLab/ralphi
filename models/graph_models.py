@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-msg = fn.copy_src(src='h', out='m')
-
 def edge_msg(edges):
     weighted_node_feat = edges.src['h'] * edges.data['weight'].unsqueeze(1)
     return {'m': weighted_node_feat}
@@ -24,11 +22,11 @@ def reduce(nodes):
 class NodeApplyModule(nn.Module):
     def __init__(self, in_feats, out_feats, activation):
         super(NodeApplyModule, self).__init__()
-        self.linear = nn.Linear(3*in_feats, out_feats)
+        self.linear = nn.Linear(2*in_feats, out_feats)
         self.activation = activation
 
     def forward(self, node):
-        i = torch.cat((node.data['h'], node.data['hm_mean'], node.data['hm_max']), dim=1)
+        i = torch.cat((node.data['h'], node.data['hm_mean']), dim=1)
         h = self.linear(i)
         h = self.activation(h)
         return {'h': h}
@@ -43,10 +41,8 @@ class GCN(nn.Module):
         g.ndata['h'] = feature
         # TODO Anant: experiment more with min to account for negative weight edges
         g.update_all(message_func=fn.u_mul_e('h', 'weight', 'm'), reduce_func=fn.mean('m', 'hm_mean'))
-        g.update_all(message_func=fn.u_mul_e('h', 'weight', 'm'), reduce_func=fn.max('m', 'hm_max'))
         g.apply_nodes(func=self.apply_mod)
         g.ndata.pop('hm_mean')
-        g.ndata.pop('hm_max')
         return g.ndata.pop('h')
 
 class GCNFirstLayer(nn.Module):

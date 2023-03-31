@@ -4,3 +4,25 @@ class LossTypes(str, Enum):
     actor_loss = "actor_loss"
     critic_loss = "critic_loss"
     total_loss = "total_loss"
+
+class NodeFeatures(str, Enum):
+    """
+    defines the node features to use during message passing,
+    note all of these are precomputed upon graph construction
+    due to caching. This enum enables and disables these features.
+    """
+    ### MANDATORY FEATURES ###
+    cut_member_hap0 = 'cut_member_hap0'
+    cut_member_hap1 = 'cut_member_hap1'
+
+    ### optional features ###
+    #n_variants = 'n_variants'
+    #pos_neighbors = 'pos_neighbors'
+    #neg_neighbors = 'neg_neighbors'
+
+    # temporarily disabled, due to simulated data
+    #min_qscore = 'min_qscore'
+    #max_qscore = 'max_qscore'
+    #avg_qscore = 'avg_qscore'
+    # temporarily disabled, experiment more with bitmap
+    #variant_bitmap = 'variant_bitmap'

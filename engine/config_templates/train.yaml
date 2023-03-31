@@ -23,8 +23,8 @@ store_components: True
 store_indexes: True
 # model parameters
 pretrained_model: null  # path to pretrained model; null or "path/to/model"
-in_dim: 1
+in_dim: 2 # corresponds to number of node features being used
 hidden_dim: 264
 num_layers: 3
 gamma: 0.98
-lr: 0.00003
+lr: 0.000003
