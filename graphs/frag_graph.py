@@ -357,7 +357,7 @@ class GraphDataset:
         panel = open(self.fragment_files_panel, 'r').readlines()
         if self.vcf_panel is not None:
             vcf_panel = open(self.vcf_panel, 'r').readlines()
-        for i in tqdm.tqdm(range(len(panel))):
+        for i in range(len(panel)):
             # precompute graph properties when generating distribution
             connected_components = load_connected_components(panel[i],
                                                              load_components=self.config.load_components,
@@ -369,18 +369,18 @@ class GraphDataset:
             component_index_combined = []
             if self.vcf_panel is not None:
                 vcf_dict = construct_vcf_idx_to_record_dict(vcf_panel[i].strip())
-            for component_index, component in enumerate(tqdm.tqdm(connected_components)):
+            for component_index, component in enumerate(connected_components):
                 component_path = panel[i].strip() + ".components" + "_" + str(component_index)
                 if self.vcf_panel is not None:
                     if not os.path.exists(component_path + ".vcf"):
                         component.construct_vcf_for_frag_graph(vcf_panel[i].strip(),
                                                                         component_path, vcf_dict)
-                        print("saved vcf to: ", component_path + ".vcf")
+                        #print("saved vcf to: ", component_path + ".vcf")
                 else:
                     if not os.path.exists(component_path):
                         with open(component_path, 'wb') as f:
                             pickle.dump(component, f)
-                            print("saved graph to: ", component_path)
+                            #print("saved graph to: ", component_path)
 
                 metrics = component.graph_properties
                 component_index = [component_path, component_index] + list(metrics.values())
