@@ -1,8 +1,9 @@
 import torch as th
 import torch.nn as nn
 import dgl
-from torch.nn.functional import relu
-from dgl.nn.pytorch.conv import GATv2Conv, GINEConv, PNAConv, GCN2Conv, GatedGraphConv
+import inspect
+from torch.nn.functional import elu
+from dgl.nn.pytorch.conv import GATv2Conv, GINEConv, GINConv, PNAConv, GCN2Conv, GatedGraphConv, GraphConv
 
 
 class Embedding(nn.Module):
@@ -21,7 +22,7 @@ class Embedding(nn.Module):
         The default is a GRU layer with 2 steps and 1 edge type after each GCN layer.
     """
 
-    def __init__(self, in_dim, hidden_dim, attention_layer=None):
+    def __init__(self, in_dim, hidden_dim, attention_layer=None, n_etypes=2):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.in_dim = in_dim
@@ -29,7 +30,7 @@ class Embedding(nn.Module):
         n_layers = len(self.hidden_dim)
 
         if attention_layer is None:
-            attention_layer = [["GRU", 2, 1]] * n_layers
+            attention_layer = [["GRU", 2, n_etypes]] * n_layers
 
         lengths = [len(self.hidden_dim), len(attention_layer)]
         assert len(set(lengths)) == 1, 'Expect the lengths of self.hidden_dim and attention_layer to be the same, ' \
@@ -38,7 +39,8 @@ class Embedding(nn.Module):
             self.gnn_layers.append(Embedding(0, []))
             if attention_layer[i][0] == "GRU":
                 self.gnn_layers.append(
-                    GatedGraphConv(self.hidden_dim[i], self.hidden_dim[i], attention_layer[i][1], attention_layer[i][2]))
+                    GatedGraphConv(self.hidden_dim[i], self.hidden_dim[i], attention_layer[i][1],
+                                   attention_layer[i][2]))
 
     def reset_parameters(self):
         """Reinitialize model parameters."""
@@ -66,16 +68,16 @@ class Embedding(nn.Module):
             * M2 is the output node representation size, which equals
               len(input_feat) in initialization.
         """
-        g = dgl.add_self_loop(g)
-        if edge_feat is None:
-            edge_feat = th.ones((g.number_of_edges(), 1))
 
+        weights = edge_weights if 'edge_weight' in inspect.getfullargspec(self.gnn_layers[0].forward)[0] else edge_feat
+        var = 'edge_weight' if 'edge_weight' in inspect.getfullargspec(self.gnn_layers[0].forward)[0] else 'edge_feat'
+        var = {var: weights}
         embedding = []
         for gnn in self.gnn_layers:
             if isinstance(gnn, GatedGraphConv):
                 feats = gnn(g, feats, etypes)
             else:
-                feats = gnn(g, feats, edge_feat)
+                feats = gnn(g, feats, **var)
             embedding.append(feats)
         return embedding
 
@@ -93,12 +95,13 @@ class GAT(Embedding):
         By default, dropout is not applied for all layers.
     """
 
-    def __init__(self, in_dim, hidden_dim, attention_layer=None, num_heads=None, activation=None,
+    def __init__(self, in_dim, hidden_dim, attention_layer=None, n_etypes=2, num_heads=None, activation=None,
                  feat_dropout=None, attn_dropout=None, residual=None):
+        th.autograd.set_detect_anomaly(True)
         # GAT layers will multiply output size by num_heads
         default_num_heads = 3
         n_layers = len(hidden_dim)
-        default_activation = relu
+        default_activation = elu
         if num_heads is None:
             num_heads = [default_num_heads] * n_layers
         if activation is None:
@@ -109,9 +112,8 @@ class GAT(Embedding):
             attn_dropout = [0.] * n_layers
         if residual is None:
             residual = [False] * n_layers
-
-        hidden_dim = [hidden_dim[i] * num_heads[i] for i in range(len(hidden_dim))]
-        super(GAT, self).__init__(in_dim, hidden_dim, attention_layer)
+        # hidden_dim = [hidden_dim[i] * num_heads[i] for i in range(len(hidden_dim))]
+        super(GAT, self).__init__(in_dim, hidden_dim, attention_layer, n_etypes)
         in_dim = self.in_dim
 
         lengths = [len(self.hidden_dim), len(activation), len(feat_dropout), len(attn_dropout), len(residual)]
@@ -121,7 +123,8 @@ class GAT(Embedding):
         i = 0
         for idx, gnn in enumerate(self.gnn_layers):
             if isinstance(gnn, Embedding):
-                self.gnn_layers[idx] = GATv2Conv(in_dim, int(self.hidden_dim[i] / num_heads[i]), num_heads[i],
+                self.gnn_layers[idx] = GATv2Conv(in_dim, self.hidden_dim[i]  # / num_heads[i])
+                                                 , num_heads[i],
                                                  activation=activation[i],
                                                  feat_drop=feat_dropout[i], attn_drop=attn_dropout[i],
                                                  residual=residual[i])
@@ -141,7 +144,7 @@ class GAT(Embedding):
                     attention.append(attn)
                 else:
                     feats = gnn(g, feats)
-                feats = th.flatten(feats, start_dim=1)
+                feats = feats.mean(1)
             embedding.append(feats)
         if attention:
             return embedding, attention
@@ -149,7 +152,7 @@ class GAT(Embedding):
             return embedding
 
 
-class GCN(Embedding):
+class GCNv2(Embedding):
     """
     Parameters
     ----------
@@ -161,14 +164,15 @@ class GCN(Embedding):
         Add a learnable bias to the output if True. Default is False.
     """
 
-    def __init__(self, in_dim, hidden_dim, attention_layer=None, activation=None, alpha=None, lambda_=None, bias=None):
+    def __init__(self, in_dim, hidden_dim, attention_layer=None, n_etypes=2, activation=None, alpha=None, lambda_=None,
+                 bias=None):
         assert sum([out != in_dim for out in hidden_dim]) == 0, 'For GCN all the output feats need to have ' \
-                'the same dimension as input, ' \
-                'got {}'.format([hidden_dim, in_dim])
-        super(GCN, self).__init__(in_dim, hidden_dim, attention_layer)
+                                                                'the same dimension as input, ' \
+                                                                'got {}'.format([hidden_dim, in_dim])
+        super(GCNv2, self).__init__(in_dim, hidden_dim, attention_layer, n_etypes)
 
         n_layers = len(self.hidden_dim)
-        default_activation = relu
+        default_activation = elu
         default_alpha = 0.1
         default_lambda = 1
         if activation is None:
@@ -201,9 +205,46 @@ class GCN(Embedding):
             if isinstance(gnn, GatedGraphConv):
                 feats = gnn(g, feats, etypes)
             else:
-                feats = gnn(g, feats, init_feats, edge_weights)
+                # edge weights need normalization  (positive)
+                # feats = gnn(g, feats, init_feats, edge_weights)
+                feats = gnn(g, feats, init_feats)
             embedding.append(feats)
         return embedding
+
+
+class GCN(Embedding):
+    """
+    Parameters
+    ----------
+    bias : list of bool or None, optional
+        Add a learnable bias to the output if True. Default is False.
+    """
+
+    def __init__(self, in_dim, hidden_dim, attention_layer=None, n_etypes=2, activation=None, norm=None, bias=None):
+        super(GCN, self).__init__(in_dim, hidden_dim, attention_layer, n_etypes)
+
+        n_layers = len(self.hidden_dim)
+        default_activation = elu
+        default_norm = 'both'
+        if activation is None:
+            activation = [default_activation] * n_layers
+        if norm is None:
+            norm = [default_norm] * n_layers
+        if bias is None:
+            bias = [False] * n_layers
+
+        lengths = [len(self.hidden_dim), len(activation), len(norm), len(bias)]
+        assert len(set(lengths)) == 1, 'Expect the lengths of self.hidden_dim, activation, ' \
+                                       'norm, and bias to be the same, ' \
+                                       'got {}'.format(lengths)
+
+        i = 0
+        for idx, gnn in enumerate(self.gnn_layers):
+            if isinstance(gnn, Embedding):
+                self.gnn_layers[idx] = GraphConv(in_dim, hidden_dim[i], activation=activation[i],
+                                                 norm=norm[i], bias=bias[i], weight=True)
+                in_dim = self.hidden_dim[i]
+                i += 1
 
 
 class GINE(Embedding):
@@ -218,16 +259,18 @@ class GINE(Embedding):
         If true, epsilon will be learnable.
     """
 
-    def __init__(self, in_dim, hidden_dim, attention_layer=None, apply_func=None, init_eps=0, learn_eps=False):
-        super(GINE, self).__init__(in_dim, hidden_dim, attention_layer)
+    def __init__(self, in_dim, hidden_dim, attention_layer=None, n_etypes=2, apply_func=None, init_eps=0,
+                 learn_eps=False):
+        super(GINE, self).__init__(in_dim, hidden_dim, attention_layer, n_etypes)
         n_layers = len(self.hidden_dim)
-
+        default_activation_seq = nn.ELU()
         if apply_func is None:
             apply_func = []
             for i in range(n_layers):
                 apply_func.append(
-                    nn.Sequential(nn.Linear(in_dim, self.hidden_dim[i]), nn.BatchNorm1d(self.hidden_dim[i]), nn.ReLU(),
-                                  nn.Linear(self.hidden_dim[i], self.hidden_dim[i]), nn.ReLU()))
+                    nn.Sequential(nn.Linear(in_dim, self.hidden_dim[i]), nn.BatchNorm1d(self.hidden_dim[i]),
+                                  default_activation_seq,
+                                  nn.Linear(self.hidden_dim[i], self.hidden_dim[i]), default_activation_seq))
                 in_dim = self.hidden_dim[i]
         lengths = [len(self.hidden_dim), len(apply_func)]
         assert len(set(lengths)) == 1, 'Expect the lengths of self.hidden_dim, ' \
@@ -238,6 +281,51 @@ class GINE(Embedding):
         for idx, gnn in enumerate(self.gnn_layers):
             if isinstance(gnn, Embedding):
                 self.gnn_layers[idx] = GINEConv(apply_func[i], init_eps, learn_eps)
+                i += 1
+
+
+class GIN(Embedding):
+    """
+    Parameters
+    ----------
+    apply_func : nn.Module or None
+        The neural network to approximate the features.
+    init_eps : float or None
+        Initial value of epsilon, the influence of the initial embedding.
+    learn_eps : list of bool, optional
+        If true, epsilon will be learnable.
+    """
+
+    def __init__(self, in_dim, hidden_dim, attention_layer=None, n_etypes=2, apply_func=None,
+                 aggregator_type=None, activation=None, init_eps=0, learn_eps=False):
+        super(GIN, self).__init__(in_dim, hidden_dim, attention_layer, n_etypes)
+        n_layers = len(self.hidden_dim)
+        default_aggregator = 'sum'
+        default_activation = elu
+        default_activation_seq = nn.ELU()
+        if aggregator_type is None:
+            aggregator_type = [default_aggregator] * n_layers
+        if activation is None:
+            activation = [default_activation] * n_layers
+        if apply_func is None:
+            apply_func = []
+            for i in range(n_layers):
+                apply_func.append(
+                    nn.Sequential(nn.Linear(in_dim, self.hidden_dim[i]), nn.BatchNorm1d(self.hidden_dim[i]),
+                                  default_activation_seq,
+                                  nn.Linear(self.hidden_dim[i], self.hidden_dim[i]), default_activation_seq))
+                in_dim = self.hidden_dim[i]
+        lengths = [len(self.hidden_dim), len(apply_func), len(aggregator_type), len(activation)]
+        assert len(set(lengths)) == 1, 'Expect the lengths of self.hidden_dim, ' \
+                                       ' aggregator_type, activation and ' \
+                                       'and apply_func to be the same, ' \
+                                       'got {}'.format(lengths)
+
+        i = 0
+        for idx, gnn in enumerate(self.gnn_layers):
+            if isinstance(gnn, Embedding):
+                self.gnn_layers[idx] = GINConv(apply_func=apply_func[i], aggregator_type=aggregator_type[i],
+                                               activation=activation[i], init_eps=init_eps, learn_eps=learn_eps)
                 i += 1
 
 
@@ -261,11 +349,12 @@ class PNA(Embedding):
         The default is 4 if 4 is a divisor of self.in_dim and every self.hidden_dim[i] and 1 otherwise.
     """
 
-    def __init__(self, in_dim, hidden_dim, attention_layer=None, aggregator=None, scaler=None, delta=None, dropout=None,
+    def __init__(self, in_dim, hidden_dim, attention_layer=None, n_etypes=2, aggregator=None, scaler=None, delta=None,
+                 dropout=None,
                  residual=None, tower=None,
                  edge_feat_size=1):
         default_tower = 4
-        super(PNA, self).__init__(in_dim, hidden_dim, attention_layer)
+        super(PNA, self).__init__(in_dim, hidden_dim, attention_layer, n_etypes)
         n_layers = len(self.hidden_dim)
         if aggregator is None:
             aggregator = [["sum", "mean", "max", "min", "std"]] * n_layers

@@ -1,7 +1,7 @@
 # datasets
-panel: "path/to/fragments" # Fragment files for training
-panel_validation_frags: "path/to/fragments" # Fragment files for validation
-panel_validation_vcfs: "path/to/VCFs" # VCF files for validation
+panel: "./tests/data/per_graph_tests/panel.txt" # Fragment files for training
+panel_validation_frags: "./tests/data/per_graph_tests/test.frags"  # Fragment files for validation
+panel_validation_vcfs: "./tests/data/per_graph_tests/Compressed/1kGP_high_coverage_Illumina.chr11.filtered.SNV_INDEL_SV_phased_panel.HG00113.vcf.filtered_biallelic.frags.components_980.vcf" # VCF files for validation
 # training parameters
 min_graph_size: 1 # Minimum size of graphs to use for training
 max_graph_size: 1000 # Maximum size of graphs to use for training
@@ -24,7 +24,8 @@ store_indexes: True
 # model parameters
 pretrained_model: null  # path to pretrained model; null or "path/to/model"
 in_dim: 1
-hidden_dim: 264
-num_layers: 3
+hidden_dim: [264, 264, 264]
+layer_type: "gat"
+embedding_vars: {num_heads: [3, 3, 1]}
 gamma: 0.98
 lr: 0.00003

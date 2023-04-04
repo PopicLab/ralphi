@@ -100,10 +100,10 @@ class TrainingConfig(Config):
 
         # set up performance tracking
         if self.log_wandb:
-            wandb.init(project="dphase_experiments", entity="dphase", dir=self.log_dir)
+            wandb.init(project="dphase_experiments", entity="dphase", id=entries["id"], dir=self.log_dir)
         else:
             # automatically results in ignoring all wandb calls
-            wandb.init(project="dphase_experiments", entity="dphase", dir=self.log_dir, mode="disabled")
+            wandb.init(project="dphase_experiments", entity="dphase", dir=self.log_dir, id=config_file.id, mode="disabled")
 
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,

@@ -30,8 +30,7 @@ if config.panel_validation_frags and config.panel_validation_vcfs:
 
 # Setup the agent and the training environment
 env_train = envs.PhasingEnv(config, graph_dataset=training_dataset)
-agent = agents.DiscreteActorCriticAgent(env_train, config.in_dim, config.hidden_dim, config.layer_type,
-                                        config.embedding_vars)
+agent = agents.DiscreteActorCriticAgent(env_train)
 
 if config.pretrained_model is not None:
     agent.model.load_state_dict(torch.load(config.pretrained_model))

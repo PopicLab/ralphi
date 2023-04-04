@@ -2,35 +2,37 @@ import dgl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.graph_models import GAT, GINE, PNA, GCNv2
+from models.graph_models import GAT, GINE, GIN, PNA, GCN, GCNv2
 import time
 import logging
 import engine.config as config
 import models.constants as constants
 import wandb
 
+
 class ActorCriticNet(nn.Module):
     def __init__(self, config):
-        layers_dict = {"gat" : GAT, "gin" : GINE, "pna" : PNA, "gcn" : GCNv2}
+        layers_dict = {"gat": GAT, "gine": GINE, "gin": GIN, "pna": PNA, "gcn": GCN, "gcn2": GCNv2}
         super(ActorCriticNet, self).__init__()
         # linear transformation will be applied to the last dimension of the input tensor
         # which must equal hidden_dim -- number of features per node
         self.policy_graph = nn.Linear(config.hidden_dim[-1], 1)
         self.policy_done = nn.Linear(config.hidden_dim[-1], 1)
         self.value = nn.Linear(config.hidden_dim[-1], 1)
-        self.layers = layers_dict[config.layer_type](config.in_dim, config.hidden_dim, config.embedding_vars)
+        self.layers = layers_dict[config.layer_type](config.in_dim, config.hidden_dim, **config.embedding_vars)
         self.actions = []
         self.rewards = []
 
-    def forward(self, genome_graph, edge_feat=None, edge_weights=None, etypes=None):
+    def forward(self, genome_graph):
         """
         Returns:
         - actor's policy: tensor of probabilities for each action
         - critic's value of the current state
         """
-        #h = torch.cat([genome_graph.ndata['x'], genome_graph.ndata['y'].float()], dim=1)
+        # h = torch.cat([genome_graph.ndata['x'], genome_graph.ndata['y'].float()], dim=1)
         h = genome_graph.ndata['x']
-        h = self.layers(genome_graph, h, edge_feat=edge_feat, edge_weights=edge_weights, etypes= etypes)
+        weights = genome_graph.edata['weight']
+        h = self.layers(genome_graph, h, edge_feat=weights[:, None], edge_weights=weights, etypes=torch.gt(weights,0))[-1]
         genome_graph.ndata['h'] = h
         mN = dgl.mean_nodes(genome_graph, 'h')
         v = self.value(mN)
@@ -42,7 +44,7 @@ class ActorCriticNet(nn.Module):
 
 
 class DiscreteActorCriticAgent:
-    def __init__(self, env, in_dim, hidden_dims, layer_type="gcn", **kargs):
+    def __init__(self, env):
         self.env = env
         self.model = ActorCriticNet(self.env.config)
         self.learning_mode = False
@@ -138,8 +140,7 @@ class DiscreteActorCriticAgent:
         wandb.log({"Episode": episode_id, "actor loss": torch.stack(loss_policy).sum().item()})
         wandb.log({"Episode": episode_id, "critic loss": torch.stack(loss_value).sum().item()})
         return {
-           constants.LossTypes.actor_loss: torch.stack(loss_policy).sum().item(),
-           constants.LossTypes.critic_loss: torch.stack(loss_value).sum().item(),
-           constants.LossTypes.total_loss: loss.item()
+            constants.LossTypes.actor_loss: torch.stack(loss_policy).sum().item(),
+            constants.LossTypes.critic_loss: torch.stack(loss_value).sum().item(),
+            constants.LossTypes.total_loss: loss.item()
         }
-
