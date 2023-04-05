@@ -282,7 +282,7 @@ class FragGraphGen:
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                         continue
-                    subgraph = pickle.load(f) # [component_row['index']]    since graph is cached don't need to index in anymore
+                    subgraph = pickle.load(f)[component_row['index']]  #  since graph is cached don't need to index in anymore
                     if self.is_invalid_subgraph(subgraph):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
@@ -367,10 +367,11 @@ class GraphDataset:
                                                              compute_properties=True)
 
             component_index_combined = []
-            if self.vcf_panel is not None:
-                vcf_dict = construct_vcf_idx_to_record_dict(vcf_panel[i].strip())
+            #if self.vcf_panel is not None:
+            #    vcf_dict = construct_vcf_idx_to_record_dict(vcf_panel[i].strip())
             for component_index, component in enumerate(connected_components):
-                component_path = panel[i].strip() + ".components" + "_" + str(component_index)
+                component_path = panel[i].strip() + ".components" # + "_" + str(component_index)
+                """
                 if self.vcf_panel is not None:
                     if not os.path.exists(component_path + ".vcf"):
                         component.construct_vcf_for_frag_graph(vcf_panel[i].strip(),
@@ -381,7 +382,7 @@ class GraphDataset:
                         with open(component_path, 'wb') as f:
                             pickle.dump(component, f)
                             #print("saved graph to: ", component_path)
-
+                """
                 metrics = component.graph_properties
                 component_index = [component_path, component_index] + list(metrics.values())
                 if not self.column_names:
