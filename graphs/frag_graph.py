@@ -367,16 +367,18 @@ class GraphDataset:
                                                              compute_properties=True)
 
             component_index_combined = []
-            #if self.vcf_panel is not None:
-            #    vcf_dict = construct_vcf_idx_to_record_dict(vcf_panel[i].strip())
+            if self.vcf_panel is not None:
+                vcf_dict = construct_vcf_idx_to_record_dict(vcf_panel[i].strip())
             for component_index, component in enumerate(connected_components):
                 component_path = panel[i].strip() + ".components" # + "_" + str(component_index)
-                """
                 if self.vcf_panel is not None:
+                    # in this case, we need graph/vcf files per every single graph for validation
+                    component_path = component_path + "_" + str(component_index)
                     if not os.path.exists(component_path + ".vcf"):
                         component.construct_vcf_for_frag_graph(vcf_panel[i].strip(),
                                                                         component_path, vcf_dict)
                         #print("saved vcf to: ", component_path + ".vcf")
+                """
                 else:
                     if not os.path.exists(component_path):
                         with open(component_path, 'wb') as f:
