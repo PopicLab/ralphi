@@ -170,9 +170,9 @@ class FragGraph:
             frag_graph.nodes[node]['cut_member_hap0'] = [0.0]
             frag_graph.nodes[node]['cut_member_hap1'] = [0.0]
             frag_graph.nodes[node]['n_variants'] = [fragments[node].n_variants]
-            frag_graph.nodes[node]['min_qscore'] =  [min(fragments[node].quality)]
-            frag_graph.nodes[node]['max_qscore'] = [max(fragments[node].quality)]
-            frag_graph.nodes[node]['avg_qscore'] = [sum(fragments[node].quality) / len(fragments[node].quality)]
+            #frag_graph.nodes[node]['min_qscore'] =  [min(fragments[node].quality)]
+            #frag_graph.nodes[node]['max_qscore'] = [max(fragments[node].quality)]
+            #frag_graph.nodes[node]['avg_qscore'] = [sum(fragments[node].quality) / len(fragments[node].quality)]
             num_pos = 0
             num_neg = 0
             for neighbor in frag_graph[node].items():
@@ -329,10 +329,11 @@ class FragGraphGen:
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                         continue
-                    subgraph = pickle.load(f) # [component_row['index']]    since graph is cached don't need to index in anymore
+                    subgraph = pickle.load(f)[component_row['index']] # since graph is cached don't need to index in anymore
                     if self.is_invalid_subgraph(subgraph):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
+                    subgraph.set_node_features()
                     yield subgraph
             yield None
         elif self.config.frag_panel_file is not None:
