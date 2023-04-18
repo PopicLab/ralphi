@@ -6,7 +6,7 @@ import torch
 import random
 import engine.config as config_utils
 import engine.validate
-
+import dgl
 # ------ CLI ------
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
 parser.add_argument('--config', help='Training configuration YAML')
@@ -18,6 +18,9 @@ config = config_utils.load_config(args.config)
 
 torch.manual_seed(config.seed)
 random.seed(config.seed)
+dgl.seed(config.seed)
+torch.set_num_threads(config.num_cores*2)
+
 torch.set_num_threads(config.num_cores)
 
 training_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False).load_indices()

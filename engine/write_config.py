@@ -1,13 +1,18 @@
-import os
+import os, ast
+
 
 def update_dict(default_values, id_file, layer_type, layer_struct, attention_layer, other_vars):
     param = default_values.copy()
+    param['embedding_vars'] = {}
     param['id'] = id_file
     param['hidden_dim'] = layer_struct
     param['layer_type'] = layer_type
-    param['embedding_vars']['attention_layer'] = attention_layer
-    param['embedding_vars'] = {**param['embedding_vars'], ** other_vars}
+    if attention_layer is not None:
+        param['embedding_vars']['attention_layer'] = attention_layer
+    other_vars = {key: value for key, value in other_vars.items() if value is not None}
+    param['embedding_vars'] = {**param['embedding_vars'], **other_vars}
     return param
+
 
 def write_yaml(config_path, id_file, parameters):
     if not os.path.exists(config_path + id_file):
@@ -17,14 +22,14 @@ def write_yaml(config_path, id_file, parameters):
 
 
 def generate_files(config_path, panel_path, frags_path, vcfs_path):
-    layers_number = [3, 4, 5, 10]
-    default_layers = [132, 264, [132, 264]]
+    layers_number = [1, 2, 3, 4]
+    default_layers = [264, [132, 264, 528]]
     layer_types = ["gcn", "gin", "pna"]
     attention = [None, 0]
     gat_residual = [None, True]
     gat_num_heads = [1, 2, 3, 4, 5]
     gcn_bias = [None, True]
-    gin_aggregator = ['sum', 'mean', 'max']
+    gin_aggregator = ['sum']
     pna_aggregator = [["sum", "mean", "max", "min", "std"], ["sum", "mean", "std"]]
     pna_scaler = [["identity", "amplification", "attenuation"]]
     pna_residual = [None, True]
@@ -41,7 +46,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path):
         'max_episodes': 'null',  # Maximum number of episodes to run
         'render': False,  # Enables the rendering of the environment
         'render_view': "weighted_view",  # Controls how the graph is rendered
-        'num_cores': 4,  # Number of threads to use for Pytorch
+        'num_cores': 10,  # Number of threads to use for Pytorch
         'interval_validate': 500,  # Number of episodes between model validation runs
         'debug': True,
         'log_wandb': True,
@@ -63,55 +68,60 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path):
     }
     for layer_type in layer_types:
         for num_layer in layers_number:
-            for version, layer_dim in enumerate(default_layers):
+            for layer_dim in default_layers:
                 if isinstance(layer_dim, list):
+                    if len(layer_dim) > num_layer:
+                        continue
+                    layer_id = str(default_layers[0]) + "_" + str(len(default_layers))
                     layer_struct = [layer for layer in layer_dim]
                     layer_struct += [layer_dim[-1]] * (num_layer - len(layer_dim))
                 else:
+                    layer_id = str(layer_dim)
                     layer_struct = [layer_dim] * num_layer
                 for attention_layer in attention:
                     id_attn = ''
-                    if not attention_layer is None:
+                    attention_struct = None
+                    if attention_layer is not None:
                         id_attn = 'no_attn'
-                        attention_layer = [[0]] * num_layer
+                        attention_struct = [[0]] * num_layer
                     if layer_type == 'gcn':
-                        id_bias = ''
                         for bias in gcn_bias:
-                            if not bias is None:
+                            id_bias = ''
+                            bias_list = None
+                            if bias is not None:
                                 id_bias = 'bias'
-                                bias = [bias] * num_layer
-                            id_file = "_". join([layer_type, str(num_layer), str(version), id_attn, id_bias])
+                                bias_list = [bias] * num_layer
+                            id_file = "_".join([layer_type, str(num_layer), layer_id, id_attn, id_bias])
                             parameters = update_dict(default_values, id_file
-                                                     , layer_type, layer_struct, attention_layer,
-                                                     {'bias': bias})
+                                                     , layer_type, layer_struct, attention_struct,
+                                                     {'bias': bias_list})
                             write_yaml(config_path, id_file, parameters)
                     elif layer_type == 'gin':
                         for aggreg in gin_aggregator:
-                            id_file = "_".join([layer_type, str(num_layer), str(version), aggreg])
+                            id_file = "_".join([layer_type, str(num_layer), layer_id, id_attn, aggreg])
                             aggreg = [aggreg] * num_layer
                             parameters = update_dict(default_values, id_file,
-                                                     layer_type, layer_struct, attention_layer,
+                                                     layer_type, layer_struct, attention_struct,
                                                      {'aggregator_type': aggreg})
                             write_yaml(config_path, id_file, parameters)
                     elif layer_type == 'pna':
                         for version_aggreg, aggreg in enumerate(pna_aggregator):
                             aggreg = [aggreg] * num_layer
-                            for version_scaler,scaler in enumerate(pna_scaler):
+                            for version_scaler, scaler in enumerate(pna_scaler):
                                 scaler = [scaler] * num_layer
                                 for residual in pna_residual:
                                     id_res = ''
-                                    if not residual is None:
-                                        residual = [residual] * num_layer
+                                    res_list = None
+                                    if residual is not None:
+                                        res_list = [residual] * num_layer
                                         id_res = 'res'
-                                    id_file = "_". join([layer_type, str(num_layer), str(version), str(version_aggreg), str(version_scaler), id_res])
+                                    id_file = "_".join([layer_type, str(num_layer), layer_id, id_attn, str(version_aggreg),
+                                                        str(version_scaler), id_res])
                                     parameters = update_dict(default_values, id_file,
-                                                             layer_type, layer_struct, attention_layer,
+                                                             layer_type, layer_struct, attention_struct,
                                                              {'aggregator': aggreg, 'scaler': scaler,
-                                                              'residual': residual})
+                                                              'residual': res_list})
                                     write_yaml(config_path, id_file, parameters)
-
-
-
 
 
 if __name__ == "__main__":

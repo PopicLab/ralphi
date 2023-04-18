@@ -6,6 +6,7 @@ import logging
 import sys
 import os
 import wandb
+import re
 
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
@@ -44,8 +45,7 @@ class Config:
             'normalization': False,
             'debug': True,
             'in_dim': 1,
-            'hidden_dim': 264,
-            'num_layers': 3,
+            'hidden_dim': [264, 264, 264]
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
@@ -180,7 +180,18 @@ class TestConfig(Config):
 def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     # Load a YAML configuration file
     with open(fname) as file:
-        config = yaml.load(file, Loader=yaml.FullLoader)
+        loader = yaml.FullLoader
+        loader.add_implicit_resolver(
+            u'tag:yaml.org,2002:float',
+            re.compile(u'''^(?:
+             [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
+            |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
+            |\\.[0-9_]+(?:[eE][-+][0-9]+)?
+            |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
+            |[-+]?\\.(?:inf|Inf|INF)
+            |\\.(?:nan|NaN|NAN))$''', re.X),
+            list(u'-+0123456789.'))
+        config = yaml.load(file, Loader=loader)
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
