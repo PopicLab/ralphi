@@ -282,7 +282,7 @@ class FragGraphGen:
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                         continue
-                    subgraph = pickle.load(f)[component_row['index']]  #  since graph is cached don't need to index in anymore
+                    subgraph = pickle.load(f)[component_row['index']]  # index in to list of graphs
                     if self.is_invalid_subgraph(subgraph):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
@@ -377,14 +377,6 @@ class GraphDataset:
                     if not os.path.exists(component_path + ".vcf"):
                         component.construct_vcf_for_frag_graph(vcf_panel[i].strip(),
                                                                         component_path, vcf_dict)
-                        #print("saved vcf to: ", component_path + ".vcf")
-                """
-                else:
-                    if not os.path.exists(component_path):
-                        with open(component_path, 'wb') as f:
-                            pickle.dump(component, f)
-                            #print("saved graph to: ", component_path)
-                """
                 metrics = component.graph_properties
                 component_index = [component_path, component_index] + list(metrics.values())
                 if not self.column_names:
