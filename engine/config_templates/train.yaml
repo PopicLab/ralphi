@@ -28,4 +28,4 @@ hidden_dim: [264, 264, 264]
 layer_type: "gat"
 embedding_vars: {num_heads: [3, 3, 1]}
 gamma: 0.98
-lr: 0.00003
+lr: 0.000003

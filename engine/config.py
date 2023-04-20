@@ -105,6 +105,7 @@ class TrainingConfig(Config):
             # automatically results in ignoring all wandb calls
             wandb.init(project="dphase_experiments", entity="dphase", dir=self.log_dir, id=config_file.id, mode="disabled")
 
+
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
                             handlers=[logging.FileHandler(self.log_dir + '/training.log', mode='w'),

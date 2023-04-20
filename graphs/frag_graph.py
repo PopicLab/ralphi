@@ -16,6 +16,7 @@ import warnings
 from seq.vcf_prep import extract_vcf_for_variants
 from seq.vcf_prep import construct_vcf_idx_to_record_dict
 import wandb
+import numpy as np
 
 class FragGraph:
     """
@@ -92,11 +93,6 @@ class FragGraph:
                 if weight != 0:
                     frag_graph.add_edge(i, j, weight=weight)
 
-        # setup node features/attributes
-        # for now just a binary value indicating whether the node is part of the solution
-        for node in frag_graph.nodes:
-            frag_graph.nodes[node]['x'] = [0.0]
-            frag_graph.nodes[node]['y'] = [fragments[node].n_variants]
         return FragGraph(frag_graph, fragments, compute_trivial=compute_trivial)
 
     def set_graph_properties(self):
@@ -106,14 +102,20 @@ class FragGraph:
         self.graph_properties["zero_edges"] = 0
         self.graph_properties["sum_of_pos_edge_weights"] = 0
         self.graph_properties["sum_of_neg_edge_weights"] = 0
+        self.graph_properties['max_weight_node'] = 0
+        self.graph_properties['min_weight_node'] = 0
         for _, _, a in self.g.edges(data=True):
             edge_weight = a['weight']
             if edge_weight > 0:
                 self.graph_properties["pos_edges"] += 1
                 self.graph_properties["sum_of_pos_edge_weights"] += edge_weight
+                if edge_weight > self.graph_properties['max_weight_node']:
+                    self.graph_properties['max_weight_node'] = edge_weight
             elif edge_weight < 0:
                 self.graph_properties["neg_edges"] += 1
                 self.graph_properties["sum_of_neg_edge_weights"] += edge_weight
+                if edge_weight < self.graph_properties['min_weight_node']:
+                    self.graph_properties['min_weight_node'] = edge_weight
             else:
                 self.graph_properties["zero_edges"] += 1
         degrees = [val for (node, val) in self.g.degree()]
@@ -127,7 +129,11 @@ class FragGraph:
         self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
         self.graph_properties["diameter"] = nx.diameter(self.g)
         self.graph_properties["trivial"] = self.trivial
-
+        variants = [frag.n_variants for frag in self.fragments]
+        self.graph_properties['max_num_variant'] = max(variants)
+        self.graph_properties['min_num_variant'] = min(variants)
+        self.graph_properties['avg_num_variant'] = np.mean(variants)
+        self.graph_properties['compression_factor'] = sum([frag.n_copies for frag in self.fragments]) / self.graph_properties["n_nodes"]
     def log_graph_properties(self, episode_id):
         for key, value in self.graph_properties.items():
             wandb.log({"Episode": episode_id, "Training: " + key: value})
@@ -166,6 +172,78 @@ class FragGraph:
                 pickle.dump(self, f)
         else:
             warnings.warn(output_vcf + ' already exists!')
+
+    def set_node_features(self):
+        # setup more complex node features/attributes
+        frag_graph = self.g
+        fragments = self.fragments
+        for node in frag_graph.nodes:
+            frag_graph.nodes[node]['cut_member_hap0'] = [0.0]
+            frag_graph.nodes[node]['cut_member_hap1'] = [0.0]
+            frag_graph.nodes[node]['n_variants'] = [fragments[node].n_variants]
+            '''frag_graph.nodes[node]['min_qscore'] = [min(fragments[node].quality)]
+            frag_graph.nodes[node]['max_qscore'] = [max(fragments[node].quality)]
+            frag_graph.nodes[node]['avg_qscore'] = [sum(fragments[node].quality) / len(fragments[node].quality)]'''
+            num_pos = 0
+            num_neg = 0
+            max_weight = 0
+            min_weight = 0
+            for neighbor in frag_graph[node].items():
+                nbr_weight = neighbor[1]['weight']
+                if nbr_weight > 0:
+                    num_pos = num_pos + 1
+                    if nbr_weight > max_weight:
+                        max_weight = nbr_weight
+                elif nbr_weight < 0:
+                    num_neg = num_neg + 1
+                    if nbr_weight < min_weight:
+                        min_weight = nbr_weight
+            frag_graph.nodes[node]['pos_neighbors'] = [num_pos]
+            frag_graph.nodes[node]['neg_neighbors'] = [num_neg]
+            frag_graph.nodes[node]['num_articulation'] = [self.graph_properties["articulation_points"]]
+            frag_graph.nodes[node]['diameter'] = [self.graph_properties["diameter"]]
+            frag_graph.nodes[node]['density'] = [self.graph_properties["density"]]
+            frag_graph.nodes[node]['max_degree'] = [self.graph_properties["max_degree"]]
+            frag_graph.nodes[node]['min_degree'] = [self.graph_properties["min_degree"]]
+            frag_graph.nodes[node]['n_nodes'] = [self.graph_properties["n_nodes"]]
+            frag_graph.nodes[node]['n_edges'] = [self.graph_properties["n_edges"]]
+            frag_graph.nodes[node]['node_connectivity'] = [self.graph_properties["node_connectivity"]]
+            frag_graph.nodes[node]['edge_connectivity'] = [self.graph_properties["edge_connectivity"]]
+            frag_graph.nodes[node]['max_weight'] = [self.graph_properties["max_weight"]]
+            frag_graph.nodes[node]['min_weight'] = [self.graph_properties["min_weight"]]
+            frag_graph.nodes[node]['max_weight_node'] = self.graph_properties['max_weight_node']
+            frag_graph.nodes[node]['min_weight_node'] = self.graph_properties['min_weight_node']
+            frag_graph.nodes[node]['num_fragments'] = self.fragments[node].n_copies
+            frag_graph.nodes[node]['max_num_variant'] = self.graph_properties['max_num_variant']
+            frag_graph.nodes[node]['min_num_variant'] = self.graph_properties['min_num_variant']
+            frag_graph.nodes[node]['avg_num_variant'] = self.graph_properties['avg_num_variant']
+            frag_graph.nodes[node]['compression_factor'] = self.graph_properties['compression_factor']
+
+    def compute_variant_bitmap(self, mask_len=200):
+        # vcf_positions contains the list of vcf positions within the connected component formed by these fragments
+        # since this is a variable length node features, we need to zero-pad it such that it retains a fixed size
+        # TODO: by default keep the experimental variant bitmap off for now
+        #  revisit feature toggles once we finalize which features to use
+        vcf_positions = set()
+        for frag in self.fragments:
+            for block in frag.blocks:
+                for var in range(block.vcf_idx_start, block.vcf_idx_end + 1):
+                    vcf_positions.add(var)
+        vcf_positions = sorted(list(vcf_positions))
+        var_mapping = {j: i for (i, j) in enumerate(vcf_positions)}
+        for frag in self.fragments:
+            frag.vcf_positions = [0.0] * mask_len
+            for block in frag.blocks:
+                for var in range(block.vcf_idx_start, block.vcf_idx_end + 1):
+                    try:
+                        frag.vcf_positions[var_mapping[var]] = 1.0
+                        continue
+                    except IndexError:
+                        # if there are more variants than the mask_len, then we chop off the overflowing variants
+                        pass
+
+        for node in self.g.nodes:
+            self.g.nodes[node]['variant_bitmap'] = [self.fragments[node].vcf_positions]
 
 
     def check_and_set_trivial(self):
@@ -236,10 +314,14 @@ class FragGraph:
         components = nx.connected_components(self.g)
         print("Found connected components, now constructing subgraphs...")
         subgraphs = []
+        print("Found connected components, now constructing subgraphs...")
         for component in tqdm.tqdm(components):
             subgraph = self.extract_subgraph(component, compute_trivial=True, compute_properties=compute_properties)
             if subgraph.trivial and skip_trivial_graphs:
                 continue
+            # precompute node features/attributes
+            subgraph.set_node_features()
+            subgraph.compute_variant_bitmap()
             subgraphs.append(subgraph)
         return subgraphs
 
@@ -282,10 +364,12 @@ class FragGraphGen:
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                         continue
-                    subgraph = pickle.load(f) # [component_row['index']]    since graph is cached don't need to index in anymore
+                    subgraph = pickle.load(f)[component_row['index']] # since graph is cached don't need to index in anymore
                     if self.is_invalid_subgraph(subgraph):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
+                    subgraph.set_graph_properties()
+                    subgraph.set_node_features()
                     yield subgraph
             yield None
         elif self.config.frag_panel_file is not None:

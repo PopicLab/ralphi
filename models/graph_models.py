@@ -6,6 +6,7 @@ from torch.nn.functional import elu
 from dgl.nn.pytorch.conv import GATv2Conv, GINEConv, GINConv, PNAConv, GCN2Conv, GatedGraphConv, GraphConv
 
 
+
 class Embedding(nn.Module):
     """
     Parameters
@@ -211,7 +212,6 @@ class GCNv2(Embedding):
             embedding.append(feats)
         return embedding
 
-
 class GCN(Embedding):
     """
     Parameters
@@ -222,7 +222,6 @@ class GCN(Embedding):
 
     def __init__(self, in_dim, hidden_dim, attention_layer=None, n_etypes=2, activation=None, norm=None, bias=None):
         super(GCN, self).__init__(in_dim, hidden_dim, attention_layer, n_etypes)
-
         n_layers = len(self.hidden_dim)
         default_activation = elu
         default_norm = 'both'
