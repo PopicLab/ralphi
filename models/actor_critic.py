@@ -16,7 +16,8 @@ class ActorCriticNet(nn.Module):
         super(ActorCriticNet, self).__init__()
         # linear transformation will be applied to the last dimension of the input tensor
         # which must equal hidden_dim -- number of features per node
-        self.policy_graph = nn.Linear(config.hidden_dim[-1], 1)
+        self.policy_graph_hap0 = nn.Linear(config.hidden_dim[-1], 1)
+        self.policy_graph_hap1 = nn.Linear(config.hidden_dim[-1], 1)
         self.policy_done = nn.Linear(config.hidden_dim[-1], 1)
         self.value = nn.Linear(config.hidden_dim[-1], 1)
         self.layers = layers_dict[config.layer_type](config.in_dim, config.hidden_dim, **config.embedding_vars)

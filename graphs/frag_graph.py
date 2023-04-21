@@ -102,20 +102,20 @@ class FragGraph:
         self.graph_properties["zero_edges"] = 0
         self.graph_properties["sum_of_pos_edge_weights"] = 0
         self.graph_properties["sum_of_neg_edge_weights"] = 0
-        self.graph_properties['max_weight_node'] = 0
-        self.graph_properties['min_weight_node'] = 0
+        self.graph_properties['max_weight'] = 0
+        self.graph_properties['min_weight'] = 0
         for _, _, a in self.g.edges(data=True):
             edge_weight = a['weight']
             if edge_weight > 0:
                 self.graph_properties["pos_edges"] += 1
                 self.graph_properties["sum_of_pos_edge_weights"] += edge_weight
-                if edge_weight > self.graph_properties['max_weight_node']:
-                    self.graph_properties['max_weight_node'] = edge_weight
+                if edge_weight > self.graph_properties['max_weight']:
+                    self.graph_properties['max_weight'] = edge_weight
             elif edge_weight < 0:
                 self.graph_properties["neg_edges"] += 1
                 self.graph_properties["sum_of_neg_edge_weights"] += edge_weight
-                if edge_weight < self.graph_properties['min_weight_node']:
-                    self.graph_properties['min_weight_node'] = edge_weight
+                if edge_weight < self.graph_properties['min_weight']:
+                    self.graph_properties['min_weight'] = edge_weight
             else:
                 self.graph_properties["zero_edges"] += 1
         degrees = [val for (node, val) in self.g.degree()]
@@ -211,13 +211,13 @@ class FragGraph:
             frag_graph.nodes[node]['edge_connectivity'] = [self.graph_properties["edge_connectivity"]]
             frag_graph.nodes[node]['max_weight'] = [self.graph_properties["max_weight"]]
             frag_graph.nodes[node]['min_weight'] = [self.graph_properties["min_weight"]]
-            frag_graph.nodes[node]['max_weight_node'] = self.graph_properties['max_weight_node']
-            frag_graph.nodes[node]['min_weight_node'] = self.graph_properties['min_weight_node']
-            frag_graph.nodes[node]['num_fragments'] = self.fragments[node].n_copies
-            frag_graph.nodes[node]['max_num_variant'] = self.graph_properties['max_num_variant']
-            frag_graph.nodes[node]['min_num_variant'] = self.graph_properties['min_num_variant']
-            frag_graph.nodes[node]['avg_num_variant'] = self.graph_properties['avg_num_variant']
-            frag_graph.nodes[node]['compression_factor'] = self.graph_properties['compression_factor']
+            frag_graph.nodes[node]['max_weight_node'] = [max_weight]
+            frag_graph.nodes[node]['min_weight_node'] = [min_weight]
+            frag_graph.nodes[node]['num_fragments'] = [self.fragments[node].n_copies]
+            frag_graph.nodes[node]['max_num_variant'] = [self.graph_properties['max_num_variant']]
+            frag_graph.nodes[node]['min_num_variant'] = [self.graph_properties['min_num_variant']]
+            frag_graph.nodes[node]['avg_num_variant'] = [self.graph_properties['avg_num_variant']]
+            frag_graph.nodes[node]['compression_factor'] = [self.graph_properties['compression_factor']]
 
     def compute_variant_bitmap(self, mask_len=200):
         # vcf_positions contains the list of vcf positions within the connected component formed by these fragments
@@ -320,6 +320,7 @@ class FragGraph:
             if subgraph.trivial and skip_trivial_graphs:
                 continue
             # precompute node features/attributes
+            subgraph.set_graph_properties()
             subgraph.set_node_features()
             subgraph.compute_variant_bitmap()
             subgraphs.append(subgraph)
@@ -364,7 +365,7 @@ class FragGraphGen:
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                         continue
-                    subgraph = pickle.load(f)[component_row['index']] # since graph is cached don't need to index in anymore
+                    subgraph = pickle.load(f) # since graph is cached don't need to index in anymore
                     if self.is_invalid_subgraph(subgraph):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")

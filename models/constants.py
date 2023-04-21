@@ -19,8 +19,6 @@ class NodeFeatures(str, Enum):
     n_variants = 'n_variants'
     pos_neighbors = 'pos_neighbors'
     neg_neighbors = 'neg_neighbors'
-    max_neighbors = 'max_neighbors'
-    min_neighbors = 'min_neighbors'
     n_nodes = 'n_nodes'
     num_articulation = 'num_articulation'
     diameter = 'diameter'

@@ -27,13 +27,13 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path):
     layer_types = ["gcn", "gin", "pna"]
     attention = [None, 0]
     gat_residual = [None, True]
-    gat_num_heads = [1, 2, 3, 4, 5]
+    gat_num_heads = [1, 2, 5, 10]
     gcn_bias = [None, True]
     gin_aggregator = ['sum']
     pna_aggregator = [["sum", "mean", "max", "min", "std"], ["sum", "mean", "std"]]
     pna_scaler = [["identity", "amplification", "attenuation"]]
     pna_residual = [None, True]
-
+    id_basis = "23_features"
     default_values = {
         'panel': panel_path,
         'panel_validation_frags': frags_path,
@@ -59,7 +59,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path):
         'store_indexes': True,
         # model parameters
         'pretrained_model': 'null',  # path to pretrained model; null or "path/to/model"
-        'in_dim': 1,
+        'in_dim': 23,
         'hidden_dim': None,
         'layer_type': None,
         'embedding_vars': {},
@@ -91,14 +91,14 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path):
                             if bias is not None:
                                 id_bias = 'bias'
                                 bias_list = [bias] * num_layer
-                            id_file = "_".join([layer_type, str(num_layer), layer_id, id_attn, id_bias])
+                            id_file = "_".join([id_basis, layer_type, str(num_layer), layer_id, id_attn, id_bias])
                             parameters = update_dict(default_values, id_file
                                                      , layer_type, layer_struct, attention_struct,
                                                      {'bias': bias_list})
                             write_yaml(config_path, id_file, parameters)
                     elif layer_type == 'gin':
                         for aggreg in gin_aggregator:
-                            id_file = "_".join([layer_type, str(num_layer), layer_id, id_attn, aggreg])
+                            id_file = "_".join([id_basis, layer_type, str(num_layer), layer_id, id_attn, aggreg])
                             aggreg = [aggreg] * num_layer
                             parameters = update_dict(default_values, id_file,
                                                      layer_type, layer_struct, attention_struct,
@@ -115,7 +115,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path):
                                     if residual is not None:
                                         res_list = [residual] * num_layer
                                         id_res = 'res'
-                                    id_file = "_".join([layer_type, str(num_layer), layer_id, id_attn, str(version_aggreg),
+                                    id_file = "_".join([id_basis, layer_type, str(num_layer), layer_id, id_attn, str(version_aggreg),
                                                         str(version_scaler), id_res])
                                     parameters = update_dict(default_values, id_file,
                                                              layer_type, layer_struct, attention_struct,

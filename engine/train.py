@@ -20,11 +20,10 @@ torch.manual_seed(config.seed)
 random.seed(config.seed)
 dgl.seed(config.seed)
 torch.set_num_threads(config.num_cores*2)
-
-torch.set_num_threads(config.num_cores)
+torch.set_default_tensor_type(torch.DoubleTensor)
 
 training_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False).load_indices()
-training_dataset = training_dataset.sample(frac=1)
+#training_dataset = training_dataset.sample(frac=1)
 if config.panel_validation_frags and config.panel_validation_vcfs:
     validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
     # e.g. to only validate on cases with articulation points

@@ -34,6 +34,7 @@ class PhasingEnv(gym.Env):
         super(PhasingEnv, self).__init__()
         self.config = config
         if preloaded_graphs:
+            preloaded_graphs.set_graph_properties()
             preloaded_graphs.set_node_features()
             self.state = State(preloaded_graphs)
         else:
