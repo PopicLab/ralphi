@@ -7,10 +7,13 @@ import torch
 import random
 import engine.config as config_utils
 import engine.validate
+import data_generation.dataset_design
 
 # ------ CLI ------
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
 parser.add_argument('--config', help='Training configuration YAML')
+parser.add_argument('--training_ordering', help='Config to specify training data design')
+parser.add_argument('--validation_ordering', help='Config to specify valiation data design')
 args = parser.parse_args()
 # -----------------
 
@@ -22,9 +25,11 @@ random.seed(config.seed)
 torch.set_num_threads(config.num_cores)
 
 training_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False).load_indices()
+training_dataset = data_generation.dataset_design.dataset_filtering(training_dataset, args.training_ordering)
 
 if config.panel_validation_frags and config.panel_validation_vcfs:
     validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
+    validation_dataset = data_generation.dataset_design.dataset_representative_sample(validation_dataset, args.validation_ordering)
     # e.g. to only validate on cases with articulation points
     # validation_dataset = validation_dataset[validation_dataset["articulation_points"] != 0]
 

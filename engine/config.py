@@ -10,7 +10,7 @@ import wandb
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
-CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST')
+CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_DESIGN')
 
 MAIN_LOG = "MAIN"
 STATS_LOG_TRAIN = "STATS_TRAIN"
@@ -176,6 +176,44 @@ class TestConfig(Config):
             if not hasattr(self, k):
                 self.__setattr__(k, v)
 
+class DataConfig(Config):
+    def __init__(self, config_file, **entries):
+        self.__dict__.update(entries)
+        self.set_defaults()
+        super().__init__(config_file)
+
+    def __str__(self):
+        s = " ===== Config =====\n"
+        s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
+        return s
+    def set_defaults(self):
+        #super().set_defaults()
+        default_values = {
+            'min_n_nodes': 1,
+            'max_n_nodes': float('inf'),
+            'min_n_edges': 1,
+            'max_n_edges': float('inf'),
+            'min_density': 0,
+            'max_density': 1,
+            'min_articulation_points': 0,
+            'max_articulation_points': float('inf'),
+            'min_diameter': 1,
+            'max_diameter': float('inf'),
+            'min_node_connectivity': 1,
+            'max_node_connectivity': float('inf'),
+            'min_edge_connectivity': 1,
+            'max_edge_connectivity': float('inf'),
+            'shuffle': True,
+            'seed': 1234,  # Random seed
+            'num_samples': 100000,
+            'num_samples_per_category': 200,
+            'epochs': 1,
+            'save_indexes': False
+        }
+        for k, v, in default_values.items():
+            if not hasattr(self, k):
+                self.__setattr__(k, v)
+
 
 def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     # Load a YAML configuration file
@@ -185,6 +223,8 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
         return TestConfig(fname, **config)
+    elif config_type == CONFIG_TYPE.DATA_DESIGN:
+        return DataConfig(fname, **config)
 
 
 
