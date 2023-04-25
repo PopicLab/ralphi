@@ -29,9 +29,9 @@ training_dataset = data_generation.dataset_design.dataset_filtering(training_dat
 
 if config.panel_validation_frags and config.panel_validation_vcfs:
     validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
-    validation_dataset = data_generation.dataset_design.dataset_representative_sample(validation_dataset, args.validation_ordering)
     # e.g. to only validate on cases with articulation points
     # validation_dataset = validation_dataset[validation_dataset["articulation_points"] != 0]
+    validation_dataset = data_generation.dataset_design.dataset_representative_sample(validation_dataset, args.validation_ordering)
 
 
 # Setup the agent and the training environment

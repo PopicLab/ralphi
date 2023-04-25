@@ -100,10 +100,10 @@ class TrainingConfig(Config):
 
         # set up performance tracking
         if self.log_wandb:
-            wandb.init(project="dphase_experiments", entity="dphase", dir=self.log_dir)
+            wandb.init(project="data_orderings", entity="dphase", dir=self.log_dir)
         else:
             # automatically results in ignoring all wandb calls
-            wandb.init(project="dphase_experiments", entity="dphase", dir=self.log_dir, mode="disabled")
+            wandb.init(project="data_ordering", entity="dphase", dir=self.log_dir, mode="disabled")
 
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
@@ -203,7 +203,11 @@ class DataConfig(Config):
             'max_node_connectivity': float('inf'),
             'min_edge_connectivity': 1,
             'max_edge_connectivity': float('inf'),
-            'shuffle': True,
+            'min_min_degree': 1,
+	    'max_min_degree': float('inf'),
+            'min_max_degree': 1,
+            'max_max_degree': float('inf'),
+	    'shuffle': True,
             'seed': 1234,  # Random seed
             'num_samples': 100000,
             'num_samples_per_category': 200,
