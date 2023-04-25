@@ -103,7 +103,7 @@ class TrainingConfig(Config):
             wandb.init(project="data_orderings", entity="dphase", dir=self.log_dir)
         else:
             # automatically results in ignoring all wandb calls
-            wandb.init(project="data_ordering", entity="dphase", dir=self.log_dir, mode="disabled")
+            wandb.init(project="data_orderings", entity="dphase", dir=self.log_dir, mode="disabled")
 
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
