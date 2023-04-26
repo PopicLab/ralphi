@@ -1,6 +1,7 @@
 import seq.sim as seq
 import seq.frags as frags
 import networkx as nx
+import engine.config as config_utils
 import pickle
 import random
 import os
@@ -126,6 +127,7 @@ class FragGraph:
         self.graph_properties["node_connectivity"] = nx.node_connectivity(self.g)
         self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
         self.graph_properties["diameter"] = nx.diameter(self.g)
+        self.graph_properties["num_variants"] = len(self.get_variants_set)
         self.graph_properties["trivial"] = self.trivial
 
     def log_graph_properties(self, episode_id):
@@ -317,9 +319,11 @@ class FragGraphGen:
                     yield subgraph
 
 class GraphDataset:
-    def __init__(self, config, validation_mode=False):
+    def __init__(self, config, ordering_config=None, validation_mode=False):
         self.config = config
+        self.ordering_config = ordering_config
         self.combined_graph_indexes = []
+        self.validation_mode = validation_mode
         if not validation_mode:
             self.fragment_files_panel = config.panel
             self.vcf_panel = None
@@ -329,6 +333,46 @@ class GraphDataset:
         self.column_names = None
         self.generate_indices()
 
+    def dataset_filtering(self, df):
+        for filter_condition in self.ordering_config["ranges"]:
+            df = df[(df[filter_condition] >= filter_condition["min"]) & (df[filter_condition] <= filter_condition["max"])]
+
+        if self.ordering_config.shuffle:
+            df_sampled = df.sample(n=self.ordering_config.num_samples, random_state=self.ordering_config.seed)
+
+        df_combined = []
+        for i in range(self.ordering_config.epochs):
+            df_iter = df_sampled.copy()
+            df_combined.append(df_iter)
+
+        return pd.concat(df_combined)
+
+    def dataset_representative_sample(self, df):
+
+        df_combined = []
+        def extract_examples(condition="n_nodes", lower_bound=1, upper_bound=float('inf'), n_samples=500):
+            return df[(df[condition] >= lower_bound) & (df[condition] <= upper_bound)].sample(n=n_samples,
+                                                                                              random_state=self.ordering_config.seed)
+        def get_quantiles(graph_property="n_nodes"):
+            buckets = df[graph_property].quantile(self.ordering_config.quantiles)
+            print("buckets for property: ", graph_property, " ", buckets)
+
+            for i in range(len(self.ordering_config.quantiles) - 1):
+                df_combined.append(extract_examples(graph_property,
+                                                    buckets[self.ordering_config.quantiles[i]],
+                                                    buckets[self.ordering_config.quantiles[i+1]],
+                                                    n_samples=self.ordering_config.num_samples_per_category))
+
+        for property in self.ordering_config.sampling_properties:
+            get_quantiles(property)
+
+        df_representative = pd.concat(df_combined)
+        print("representative examples for different graph topological features: ", df_representative,
+              df_representative.shape)
+        df_representative.drop_duplicates(inplace=True)
+        print("removed identical graphs that represent multiple features: ", df_representative, df_representative.shape)
+        return df_representative
+
     def load_indices(self):
         if os.path.exists(self.fragment_files_panel.strip() + ".index_per_graph"):
             graph_dataset = pd.read_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
@@ -336,16 +380,12 @@ class GraphDataset:
             graph_dataset = pd.DataFrame(self.combined_graph_indexes, columns=self.column_names)
             graph_dataset.to_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
         print("graph dataset... ", graph_dataset.describe())
+        if self.ordering_config:
+            if self.validation_mode:
+                graph_dataset = self.dataset_representative_sample(graph_dataset)
+            else:
+                graph_dataset = self.dataset_filtering(graph_dataset)
         return graph_dataset
-
-    def filter_range(self, graph, comparator, min_bound=1, max_bound=float('inf')):
-        return min_bound <= comparator(graph) <= max_bound
-
-    def select_by_range(self, comparator=nx.number_of_nodes, min=1, max=float('inf')):
-        return filter(lambda graph: self.filter_range(graph.g, comparator, min, max), self.combined_graph_indexes)
-
-    def select_by_property(self, comparator=nx.has_bridges):
-        return filter(lambda graph: comparator(graph.g), self.combined_graph_indexes)
 
     def generate_indices(self):
         """

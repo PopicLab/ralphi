@@ -187,30 +187,14 @@ class DataConfig(Config):
         s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
         return s
     def set_defaults(self):
-        #super().set_defaults()
         default_values = {
-            'min_n_nodes': 1,
-            'max_n_nodes': float('inf'),
-            'min_n_edges': 1,
-            'max_n_edges': float('inf'),
-            'min_density': 0,
-            'max_density': 1,
-            'min_articulation_points': 0,
-            'max_articulation_points': float('inf'),
-            'min_diameter': 1,
-            'max_diameter': float('inf'),
-            'min_node_connectivity': 1,
-            'max_node_connectivity': float('inf'),
-            'min_edge_connectivity': 1,
-            'max_edge_connectivity': float('inf'),
-            'min_min_degree': 1,
-	    'max_min_degree': float('inf'),
-            'min_max_degree': 1,
-            'max_max_degree': float('inf'),
-	    'shuffle': True,
+            'shuffle': True,
             'seed': 1234,  # Random seed
             'num_samples': 100000,
             'num_samples_per_category': 200,
+            'quantiles': [0.0, 0.25, 0.5, 0.75, 1.0],
+            'sampling_properties': ["n_nodes", "n_edges", "density", "articulation_points", "diameter",
+                                  "node_connectivity", "edge_connectivity", "min_degree", "max_degree"],
             'epochs': 1,
             'save_indexes': False
         }

@@ -1,0 +1,11 @@
+ranges:
+  n_nodes:
+    min: 1  # Minimum size of graphs to use for training
+    max: 1000 # Maximum size of graphs to use for training
+  density:
+    min: 0
+    max: 1
+shuffle: True
+seed: 1234
+num_samples: 10000
+epochs: 5

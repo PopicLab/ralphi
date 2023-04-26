@@ -1,0 +1,12 @@
+ranges:
+  n_nodes:
+    min: 1  # Minimum size of graphs to use for training
+    max: 1000 # Maximum size of graphs to use for training
+  density:
+    min: 0
+    max: 1
+quantiles: [0.0, 0.25, 0.5, 0.75, 1.0]
+sampling_properties: ["n_nodes", "n_edges", "density", "articulation_points", "diameter", "node_connectivity", "edge_connectivity", "min_degree", "max_degree"]
+shuffle: False
+seed: 1234
+num_samples_per_category: 200
