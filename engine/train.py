@@ -50,7 +50,7 @@ while agent.env.has_state():
     if episode_id % config.interval_validate == 0:
         torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
         if config.panel_validation_frags and config.panel_validation_vcfs:
-            reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
+            reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, agent, config, validation_config)
             model_checkpoint_id += 1
             if reward > best_validation_reward:
                 best_validation_reward = reward

@@ -334,9 +334,8 @@ class GraphDataset:
         self.generate_indices()
 
     def dataset_filtering(self, df):
-        for filter_condition in self.ordering_config["ranges"]:
-            df = df[(df[filter_condition] >= filter_condition["min"]) & (df[filter_condition] <= filter_condition["max"])]
-
+        for filter_condition in self.ordering_config.ranges:
+            df = df[(df[filter_condition] >= self.ordering_config.ranges[filter_condition]["min"]) & (df[filter_condition] <= self.ordering_config.ranges[filter_condition]["max"])]
         if self.ordering_config.shuffle:
             df_sampled = df.sample(n=self.ordering_config.num_samples, random_state=self.ordering_config.seed)
 
@@ -348,15 +347,17 @@ class GraphDataset:
         return pd.concat(df_combined)
 
     def dataset_representative_sample(self, df):
+        for filter_condition in self.ordering_config.ranges:
+            df = df[(df[filter_condition] >= self.ordering_config.ranges[filter_condition]["min"]) & (df[filter_condition] <= self.ordering_config.ranges[filter_condition]["max"])]
 
         df_combined = []
+        
         def extract_examples(condition="n_nodes", lower_bound=1, upper_bound=float('inf'), n_samples=500):
             return df[(df[condition] >= lower_bound) & (df[condition] <= upper_bound)].sample(n=n_samples,
                                                                                               random_state=self.ordering_config.seed)
         def get_quantiles(graph_property="n_nodes"):
             buckets = df[graph_property].quantile(self.ordering_config.quantiles)
             print("buckets for property: ", graph_property, " ", buckets)
-
             for i in range(len(self.ordering_config.quantiles) - 1):
                 df_combined.append(extract_examples(graph_property,
                                                     buckets[self.ordering_config.quantiles[i]],

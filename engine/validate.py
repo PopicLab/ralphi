@@ -55,7 +55,7 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
     # output the phased VCF (phase blocks)
     return chrom, benchmark_result.switch_count[chrom], benchmark_result.mismatch_count[chrom], benchmark_result.flat_count[chrom], benchmark_result.phased_count[chrom]
 
-def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config):
+def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config, validation_config):
     # benchmark the current model against a held out set of fragment graphs (validation panel)
     validation_component_stats = []
     print("running validation with model number:  ", model_checkpoint_id, ", at episode: ", episode_id)
@@ -102,7 +102,15 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
     # stats for entire validation set
     log_stats_for_filter(validation_indexing_df)
 
-    # log specific plots to wandb for graph topologies we are interested in
+    # log stats for graphs from each quantile of each graph property specified in the validation config
+    for graph_property in validation_config.sampling_properties:
+        buckets = validation_indexing_df[graph_property].quantile(validation_config.quantiles)
+        for i in range(len(validation_config.quantiles) - 1):
+            lower_bound = buckets[validation_config.quantiles[i]]
+            upper_bound = buckets[validation_config.quantiles[i+1]]
+            log_stats_for_filter(validation_indexing_df[(validation_indexing_df[graph_property] >= lower_bound) & (validation_indexing_df[graph_property] <= upper_bound)], str(lower_bound) + "<=" + graph_property + "<=" + str(upper_bound))
+
+    # log specific plots to wandb for graph topologies we are interested in    
     articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] > 0]
     log_stats_for_filter(articulation_df, "Articulation > 0:")
     articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] == 0]
