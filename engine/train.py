@@ -7,7 +7,6 @@ import torch
 import random
 import engine.config as config_utils
 import engine.validate
-import data_generation.dataset_design
 
 # ------ CLI ------
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
