@@ -127,7 +127,7 @@ class FragGraph:
         self.graph_properties["node_connectivity"] = nx.node_connectivity(self.g)
         self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
         self.graph_properties["diameter"] = nx.diameter(self.g)
-        self.graph_properties["num_variants"] = len(self.get_variants_set)
+        _, self.graph_properties["num_variants"] = self.get_variants_set()
         self.graph_properties["trivial"] = self.trivial
 
     def log_graph_properties(self, episode_id):
