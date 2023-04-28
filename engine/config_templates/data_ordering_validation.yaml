@@ -1,12 +1,81 @@
-ranges:
+global_ranges: # these filter down the entire dataset
   n_nodes:
     min: 1  # Minimum size of graphs to use for training
     max: 1000 # Maximum size of graphs to use for training
   density:
     min: 0
     max: 1
-quantiles: [0.0, 0.25, 0.5, 0.75, 1.0]
-sampling_properties: ["n_nodes", "n_edges", "density", "articulation_points", "diameter", "node_connectivity", "edge_connectivity", "min_degree", "max_degree"]
+
+ordering_ranges: # design specific feature combinations and ordering
+  a_1:
+    num_samples: 200
+    rules:
+      n_nodes:
+        quantiles: [0.0, 0.25]
+  a_2:
+    num_samples: 200
+    rules:
+      n_nodes:
+        quantiles: [ 0.25, 0.5 ]
+  a_3:
+    num_samples: 200
+    rules:
+      n_nodes:
+        quantiles: [ 0.5, 0.75 ]
+  a_4:
+    num_samples: 200
+    rules:
+      n_nodes:
+        quantiles: [ 0.75, 1.0 ]
+  density_1:
+    num_samples: 200
+    rules:
+      density:
+        quantiles: [0.0, 0.25]
+  density_2:
+    num_samples: 200
+    rules:
+      density:
+        quantiles: [0.25, 0.5]
+  density_3:
+    num_samples: 200
+    rules:
+      density:
+        quantiles: [0.5, 0.75]
+  density_4:
+    num_samples: 200
+    rules:
+      density:
+        quantiles: [0.75, 1.0]
 shuffle: False
 seed: 1234
-num_samples_per_category: 200
+num_samples_per_category_default: 200
+epochs: 1
+drop_redundant: True
+
+
+#ranges:
+#  n_nodes:
+#    min: 1  # Minimum size of graphs to use for training
+#    max: 1000 # Maximum size of graphs to use for training
+#  density:
+#    min: 0
+#    max: 1
+#shuffle: True
+#seed: 1234
+#num_samples: 10000
+#epochs: 5
+
+
+#ranges:
+#  n_nodes:
+#    min: 1  # Minimum size of graphs to use for training
+#    max: 1000 # Maximum size of graphs to use for training
+#  density:
+#    min: 0
+#    max: 1
+#quantiles: [0.0, 0.25, 0.5, 0.75, 1.0]
+#sampling_properties: ["n_nodes", "n_edges", "density", "articulation_points", "diameter", "node_connectivity", "edge_connectivity", "min_degree", "max_degree"]
+#shuffle: False
+#seed: 1234
+#num_samples_per_category: 200

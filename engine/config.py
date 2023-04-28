@@ -190,13 +190,13 @@ class DataConfig(Config):
         default_values = {
             'shuffle': True,
             'seed': 1234,  # Random seed
-            'num_samples': 100000,
-            'num_samples_per_category': 200,
-            'quantiles': [0.0, 0.25, 0.5, 0.75, 1.0],
+            'num_samples_per_category_default': 1000,
             'sampling_properties': ["n_nodes", "n_edges", "density", "articulation_points", "diameter",
                                   "node_connectivity", "edge_connectivity", "min_degree", "max_degree"],
             'epochs': 1,
-            'save_indexes': False
+            'drop_redundant': False,
+            'global_ranges': {},
+            'ordering_ranges': {},
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
