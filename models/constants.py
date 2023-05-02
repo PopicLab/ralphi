@@ -17,26 +17,34 @@ class NodeFeatures(str, Enum):
 
     ### optional features ###
     n_variants = 'n_variants'
+    """
     pos_neighbors = 'pos_neighbors'
     neg_neighbors = 'neg_neighbors'
-    n_nodes = 'n_nodes'
+    is_articulation = 'is_articulation'"""
+
+    """n_nodes = 'n_nodes'
     num_articulation = 'num_articulation'
     diameter = 'diameter'
     density = 'density'
     max_degree = 'max_degree'
     min_degree = "min_degree"
-    n_edges = "n_edges"
+    n_edges = 'n_edges'
     node_connectivity = "node_connectivity"
     edge_connectivity = "edge_connectivity"
     min_weight = 'min_weight'
-    max_weight = 'max_weight'
-    max_weight_node = 'max_weight_node'
+    max_weight = 'max_weight'"""
+
+    """max_weight_node = 'max_weight_node'
     min_weight_node = 'min_weight_node'
-    num_fragments = 'num_fragments'
-    max_num_variant = 'max_num_variant'
+    num_fragments = 'num_fragments'"""
+
+    reachability_hap0 = 'reachability_hap0'
+    reachability_hap1 = 'reachability_hap1'
+
+    """max_num_variant = 'max_num_variant'
     min_num_variant = 'min_num_variant'
-    avg_num_variant = 'avg_num_variant'
-    compression_factor = 'compression_factor'
+    avg_num_variant = 'avg_num_variant'"""
+    #compression_factor = 'compression_factor'
 
     # temporarily disabled, due to simulated data
     #min_qscore = 'min_qscore'

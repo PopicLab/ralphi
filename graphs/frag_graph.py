@@ -18,6 +18,7 @@ from seq.vcf_prep import construct_vcf_idx_to_record_dict
 import wandb
 import numpy as np
 
+
 class FragGraph:
     """
     Nodes are read fragments spanning >= 2 variants
@@ -124,19 +125,29 @@ class FragGraph:
         self.graph_properties["n_nodes"] = self.g.number_of_nodes()
         self.graph_properties["n_edges"] = self.g.number_of_edges()
         self.graph_properties["density"] = nx.density(self.g)
-        self.graph_properties["articulation_points"] = len(list(nx.articulation_points(self.g)))
+        self.graph_properties["list_articulation_points"] = list(nx.articulation_points(self.g))
+        self.graph_properties["articulation_points"] = len(self.graph_properties["list_articulation_points"])
         self.graph_properties["node_connectivity"] = nx.node_connectivity(self.g)
         self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
         self.graph_properties["diameter"] = nx.diameter(self.g)
         self.graph_properties["trivial"] = self.trivial
-        variants = [frag.n_variants for frag in self.fragments]
+        """variants = [frag.n_variants for frag in self.fragments]
         self.graph_properties['max_num_variant'] = max(variants)
         self.graph_properties['min_num_variant'] = min(variants)
-        self.graph_properties['avg_num_variant'] = np.mean(variants)
-        self.graph_properties['compression_factor'] = sum([frag.n_copies for frag in self.fragments]) / self.graph_properties["n_nodes"]
+        self.graph_properties['avg_num_variant'] = np.mean(variants)"""
+        self.graph_properties['total_num_frag'] = sum([frag.n_copies for frag in self.fragments])
+
+        edges = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
+        edges[edges > 0] = 0
+        neg_graph = nx.from_numpy_array(edges)
+        self.graph_properties['compo'] = [c for c in nx.connected_components(neg_graph)]
+        self.graph_properties['neg_connectivity'] = {node: num for num, sub_compo in
+                                                     enumerate(self.graph_properties['compo']) for node in sub_compo}
+
     def log_graph_properties(self, episode_id):
         for key, value in self.graph_properties.items():
-            wandb.log({"Episode": episode_id, "Training: " + key: value})
+            if key not in ['neg_connectivity', 'compo']:
+                wandb.log({"Episode": episode_id, "Training: " + key: value})
 
     def get_variants_set(self):
         vcf_positions = set()
@@ -200,7 +211,10 @@ class FragGraph:
                         min_weight = nbr_weight
             frag_graph.nodes[node]['pos_neighbors'] = [num_pos]
             frag_graph.nodes[node]['neg_neighbors'] = [num_neg]
-            frag_graph.nodes[node]['num_articulation'] = [self.graph_properties["articulation_points"]]
+            frag_graph.nodes[node]['is_articulation'] = [
+                1 / self.graph_properties["articulation_points"] if node in self.graph_properties[
+                    "list_articulation_points"] else 0]
+            """frag_graph.nodes[node]['num_articulation'] = [self.graph_properties["articulation_points"]]
             frag_graph.nodes[node]['diameter'] = [self.graph_properties["diameter"]]
             frag_graph.nodes[node]['density'] = [self.graph_properties["density"]]
             frag_graph.nodes[node]['max_degree'] = [self.graph_properties["max_degree"]]
@@ -210,14 +224,19 @@ class FragGraph:
             frag_graph.nodes[node]['node_connectivity'] = [self.graph_properties["node_connectivity"]]
             frag_graph.nodes[node]['edge_connectivity'] = [self.graph_properties["edge_connectivity"]]
             frag_graph.nodes[node]['max_weight'] = [self.graph_properties["max_weight"]]
-            frag_graph.nodes[node]['min_weight'] = [self.graph_properties["min_weight"]]
-            frag_graph.nodes[node]['max_weight_node'] = [max_weight]
-            frag_graph.nodes[node]['min_weight_node'] = [min_weight]
-            frag_graph.nodes[node]['num_fragments'] = [self.fragments[node].n_copies]
-            frag_graph.nodes[node]['max_num_variant'] = [self.graph_properties['max_num_variant']]
+            frag_graph.nodes[node]['min_weight'] = [self.graph_properties["min_weight"]]"""
+            frag_graph.nodes[node]['max_weight_node'] = [
+                max_weight / self.graph_properties["max_weight"] if self.graph_properties["max_weight"] != 0 else 0]
+            frag_graph.nodes[node]['min_weight_node'] = [
+                min_weight / self.graph_properties["min_weight"] if self.graph_properties["min_weight"] != 0 else 0]
+            frag_graph.nodes[node]['num_fragments'] = [
+                self.fragments[node].n_copies / self.graph_properties['total_num_frag']]
+            """frag_graph.nodes[node]['max_num_variant'] = [self.graph_properties['max_num_variant']]
             frag_graph.nodes[node]['min_num_variant'] = [self.graph_properties['min_num_variant']]
             frag_graph.nodes[node]['avg_num_variant'] = [self.graph_properties['avg_num_variant']]
-            frag_graph.nodes[node]['compression_factor'] = [self.graph_properties['compression_factor']]
+            frag_graph.nodes[node]['compression_factor'] = [self.graph_properties['compression_factor']]"""
+            frag_graph.nodes[node]['reachability_hap0'] = [0.0]
+            frag_graph.nodes[node]['reachability_hap1'] = [0.0]
 
     def compute_variant_bitmap(self, mask_len=200):
         # vcf_positions contains the list of vcf positions within the connected component formed by these fragments
@@ -244,7 +263,6 @@ class FragGraph:
 
         for node in self.g.nodes:
             self.g.nodes[node]['variant_bitmap'] = [self.fragments[node].vcf_positions]
-
 
     def check_and_set_trivial(self):
         """
@@ -326,7 +344,9 @@ class FragGraph:
             subgraphs.append(subgraph)
         return subgraphs
 
-def load_connected_components(frag_file_fname, load_components=False, store_components=False, compress=False, skip_trivial_graphs=False, compute_properties=False):
+
+def load_connected_components(frag_file_fname, load_components=False, store_components=False, compress=False,
+                              skip_trivial_graphs=False, compute_properties=False):
     logging.info("Fragment file: %s" % frag_file_fname)
     component_file_fname = frag_file_fname.strip() + ".components"
     if load_components and os.path.exists(component_file_fname):
@@ -343,6 +363,7 @@ def load_connected_components(frag_file_fname, load_components=False, store_comp
             with open(component_file_fname, 'wb') as f:
                 pickle.dump(connected_components, f)
     return connected_components
+
 
 class FragGraphGen:
     def __init__(self, config, graph_dataset=None):
@@ -365,7 +386,9 @@ class FragGraphGen:
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                         continue
-                    subgraph = pickle.load(f) # since graph is cached don't need to index in anymore
+                    subgraph = pickle.load(f)[
+                        component_row['index']]  # since graph is cached don't need to index in anymore
+                    # subgraph = pickle.load(f)
                     if self.is_invalid_subgraph(subgraph):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
@@ -400,6 +423,7 @@ class FragGraphGen:
                 graph = generate_rand_frag_graph()
                 for subgraph in graph.connected_components_subgraphs():
                     yield subgraph
+
 
 class GraphDataset:
     def __init__(self, config, validation_mode=False):
@@ -459,7 +483,7 @@ class GraphDataset:
                 if self.vcf_panel is not None:
                     if not os.path.exists(component_path + ".vcf"):
                         component.construct_vcf_for_frag_graph(vcf_panel[i].strip(),
-                                                                        component_path, vcf_dict)
+                                                               component_path, vcf_dict)
                         print("saved vcf to: ", component_path + ".vcf")
                 else:
                     if not os.path.exists(component_path):

@@ -21,33 +21,34 @@ def write_yaml(config_path, id_file, parameters):
         file.write('\n'.join("{}: {}".format(k, v) for k, v in parameters.items()))
 
 
-def generate_files(config_path, panel_path, frags_path, vcfs_path):
-    layers_number = [1, 2, 3, 4]
-    default_layers = [264, [132, 264, 528]]
+def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
+    layers_number = [1, 3, 5, 10]
+    default_layers = [264, [132, 264, 528], [33, 66, 132, 264, 528]]
     layer_types = ["gcn", "gin", "pna"]
-    attention = [None, 0]
+    attention = [0]
     gat_residual = [None, True]
     gat_num_heads = [1, 2, 5, 10]
-    gcn_bias = [None, True]
+    gcn_bias = [None]
     gin_aggregator = ['sum']
-    pna_aggregator = [["sum", "mean", "max", "min", "std"], ["sum", "mean", "std"]]
+    pna_aggregator = [["sum", "mean", "std"]]
     pna_scaler = [["identity", "amplification", "attenuation"]]
-    pna_residual = [None, True]
-    id_basis = "23_features"
+    pna_residual = [True]
+    num_features = 5
+    id_basis = str(num_features) + "_features_no_jump"
     default_values = {
         'panel': panel_path,
         'panel_validation_frags': frags_path,
         'panel_validation_vcfs': vcfs_path,
         'min_graph_size': 1,  # Minimum size of graphs to use for training
-        'max_graph_size': 1000,  # Maximum size of graphs to use for training
+        'max_graph_size': 5000,  # Maximum size of graphs to use for training
         'skip_trivial_graphs': True,
         'skip_singleton_graphs': True,
         'seed': 12345,  # Random seed
         'max_episodes': 'null',  # Maximum number of episodes to run
         'render': False,  # Enables the rendering of the environment
         'render_view': "weighted_view",  # Controls how the graph is rendered
-        'num_cores': 10,  # Number of threads to use for Pytorch
-        'interval_validate': 500,  # Number of episodes between model validation runs
+        'num_cores': 15,  # Number of threads to use for Pytorch
+        'interval_validate': 1000,  # Number of episodes between model validation runs
         'debug': True,
         'log_wandb': True,
         'id': None,
@@ -59,7 +60,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path):
         'store_indexes': True,
         # model parameters
         'pretrained_model': 'null',  # path to pretrained model; null or "path/to/model"
-        'in_dim': 23,
+        'in_dim': num_features,
         'hidden_dim': None,
         'layer_type': None,
         'embedding_vars': {},
@@ -72,7 +73,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path):
                 if isinstance(layer_dim, list):
                     if len(layer_dim) > num_layer:
                         continue
-                    layer_id = str(default_layers[0]) + "_" + str(len(default_layers))
+                    layer_id = str(layer_dim[0]) + "_" + str(len(layer_dim))
                     layer_struct = [layer for layer in layer_dim]
                     layer_struct += [layer_dim[-1]] * (num_layer - len(layer_dim))
                 else:

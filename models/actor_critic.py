@@ -63,8 +63,8 @@ class DiscreteActorCriticAgent:
             return 0
         [pi, val] = self.model(self.env.state.g)
         pi = pi.squeeze()
-        if not first:
-            pi[self.env.get_all_non_neighbour_actions()] = -float('Inf')
+        """if not first:
+            pi[self.env.get_all_non_neighbour_actions()] = -float('Inf')"""
         pi[self.env.get_all_invalid_actions()] = -float('Inf')
         if greedy:
             greedy_choice = torch.argmax(pi)

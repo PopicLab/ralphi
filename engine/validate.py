@@ -80,12 +80,13 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
                 graph_path = os.path.split(component_row.component_path)[1] + str(graph_stats)
                 graph_stats["cut_value"] = agent.env.get_cut_value()
                 wandb.log({"Episode": episode_id,
-                           "Cut Value on: " + graph_path: graph_stats["cut_value"]})
+                           "Cut Value on: " + str(component_row.name) + graph_path: graph_stats["cut_value"]})
+                #"Cut Value on: " + graph_path: graph_stats["cut_value"]})
                 vcf_path = component_row.component_path + ".vcf"
 
                 ch, sw, mis, flat, phased = log_error_rates([agent.env.state.frag_graph.fragments], vcf_path,
-                                                            cut_val, reward_val, model_checkpoint_id, episode_id, agent, config, 'HG00113', graph_path)
-
+                                                            cut_val, reward_val, model_checkpoint_id, episode_id, agent, config, component_row.genome, graph_path)
+                # 'HG00113'
                 cur_index = component_row.values.tolist()
                 cur_index.extend([sw, mis, flat, phased, reward_val, cut_val, ch])
                 validation_component_stats.append(cur_index)

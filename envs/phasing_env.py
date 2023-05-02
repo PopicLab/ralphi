@@ -7,11 +7,13 @@ import graphs.frag_graph as graphs
 import networkx as nx
 import models.constants as constants
 
+
 class State:
     """
     State consists of the genome fragment graph
     and the nodes assigned to each haplotype (0: H0 1: H1)
     """
+
     def __init__(self, frag_graph):
         self.frag_graph = frag_graph
         edge_attrs = None
@@ -26,10 +28,12 @@ class State:
         self.H1 = []
         print("Number of nodes: ", self.frag_graph.n_nodes, ", number of edges: ", self.frag_graph.g.number_of_edges())
 
+
 class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
+
     def __init__(self, config, record_solutions=False, graph_dataset=None, preloaded_graphs=None):
         super(PhasingEnv, self).__init__()
         self.config = config
@@ -89,6 +93,7 @@ class PhasingEnv(gym.Env):
 
     def is_out_of_moves(self):
         return len(self.state.H0) + len(self.state.H1) >= self.state.num_nodes
+
     def has_state(self):
         return self.state is not None
 
@@ -105,18 +110,25 @@ class PhasingEnv(gym.Env):
             self.state.g.ndata['cut_member_hap1'][complement_action] = 1.0
             self.state.H1.append(complement_action)
             self.state.assigned[complement_action] = 1.0
-            for neighbour in self.state.frag_graph.g[complement_action]:
+            """for neighbour in self.state.frag_graph.g[complement_action]:
                 self.state.explorable[neighbour] = 1.0
-                self.state.explorable[neighbour + self.state.num_nodes] = 1.0
+                self.state.explorable[neighbour + self.state.num_nodes] = 1.0"""
+            for node in self.state.frag_graph.graph_properties['compo'][
+                self.state.frag_graph.graph_properties['neg_connectivity'][complement_action
+
+                ]]:
+                self.state.g.ndata['reachability_hap1'][node] += 1.0 / self.state.num_nodes
         else:
             complement_action = action + self.state.num_nodes
             self.state.g.ndata['cut_member_hap0'][action] = 1.0
             self.state.H0.append(action)
             self.state.assigned[complement_action] = 1.0
-            for neighbour in self.state.frag_graph.g[action]:
+            """for neighbour in self.state.frag_graph.g[action]:
                 self.state.explorable[neighbour] = 1.0
-                self.state.explorable[neighbour + self.state.num_nodes] = 1.0
-
+                self.state.explorable[neighbour + self.state.num_nodes] = 1.0"""
+            for node in self.state.frag_graph.graph_properties['compo'][
+                self.state.frag_graph.graph_properties['neg_connectivity'][action]]:
+                self.state.g.ndata['reachability_hap0'][node] += 1.0 / self.state.num_nodes
         r_t = self.compute_mfc_reward_dual_actions(action)
         is_done = False
         if self.is_out_of_moves():
