@@ -12,7 +12,7 @@ import engine.validate
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
 parser.add_argument('--config', help='Training configuration YAML')
 parser.add_argument('--training_ordering', help='Config to specify training data design')
-parser.add_argument('--validation_ordering', help='Config to specify valiation data design')
+parser.add_argument('--validation_ordering', help='Config to specify validation data design')
 args = parser.parse_args()
 # -----------------
 

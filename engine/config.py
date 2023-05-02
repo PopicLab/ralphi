@@ -191,8 +191,6 @@ class DataConfig(Config):
             'shuffle': True,
             'seed': 1234,  # Random seed
             'num_samples_per_category_default': 1000,
-            'sampling_properties': ["n_nodes", "n_edges", "density", "articulation_points", "diameter",
-                                  "node_connectivity", "edge_connectivity", "min_degree", "max_degree"],
             'epochs': 1,
             'drop_redundant': False,
             'global_ranges': {},

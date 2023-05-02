@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-#msg = fn.copy_src(src='h', out='m')
+msg = fn.copy_src(src='h', out='m')
 
 def edge_msg(edges):
     weighted_node_feat = edges.src['h'] * edges.data['weight'].unsqueeze(1)
