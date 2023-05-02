@@ -335,10 +335,12 @@ class GraphDataset:
 
     def extract_examples(self, df, condition, lower_bound, upper_bound):
         return df[(df[condition] >= lower_bound) & (df[condition] <= upper_bound)]
+    
     def global_filter(self, df):
         for filter_condition in self.ordering_config.global_ranges:
             df = self.extract_examples(df, filter_condition, self.ordering_config.global_ranges[filter_condition]["min"],  self.ordering_config.global_ranges[filter_condition]["max"])
         return df
+    
     def get_quantiles(self, df, graph_property, quantiles):
         df_combined = []
         buckets = df[graph_property].quantile(quantiles)
@@ -350,32 +352,38 @@ class GraphDataset:
         return pd.concat(df_combined)
 
     def dataset_nested_design(self, df):
-        # parses the nestd data_ordering_train.yaml, which allows arbitrary specifications
-        # of training/validation set design
+        # parses the nested data_ordering_[train,validation].yaml, which allows arbitrary specifications
+        # of training/validation set design for any combination of features as long as they are in the indexing df
 
         df = self.global_filter(df)
 
         df_combined = []
+        
         for group in self.ordering_config.ordering_ranges:
+            group_dict = self.ordering_config.ordering_ranges[group] 
             subsampled_df = df.copy()
             num_samples = self.ordering_config.num_samples_per_category_default
-            if "num_samples" in group:
-                num_samples = group.num_samples
+            if "num_samples" in group_dict:
+                num_samples = group_dict["num_samples"]
             quantiles_lookup = {}
-            for rule in group.rules:
-                if "quantiles" in rule:
-                    quantiles = rule.quantiles
+            for rule in group_dict["rules"]:
+                rule_dict = group_dict["rules"][rule]
+                if "quantiles" in rule_dict:
+                    quantiles = rule_dict["quantiles"]
                     buckets = df[rule].quantile(quantiles)
                     quantiles_lookup[rule] = buckets
-            for rule in group.rules:
-                if ("min" in rule) and ("max" in rule):
-                    subsampled_df = self.extract_examples(subsampled_df, rule, rule.min, rule.max)
-                elif "quantiles" in rule:
-                    subsampled_df = self.extract_examples(subsampled_df, rule, quantiles_lookup[rule][rule.quantiles[0]], quantiles_lookup[rule][rule.quantiles[1]])
-            df_combined.append(subsampled_df.sample(n=num_samples, random_state=self.ordering_config.seed))
+            for rule in group_dict["rules"]:
+                rule_dict = group_dict["rules"][rule]
+                if ("min" in rule_dict) and ("max" in rule_dict):
+                    subsampled_df = self.extract_examples(subsampled_df, rule, rule_dict["min"], rule_dict["max"])
+                elif "quantiles" in rule_dict:
+                    subsampled_df = self.extract_examples(subsampled_df, rule, quantiles_lookup[rule][rule_dict["quantiles"][0]], quantiles_lookup[rule][rule_dict["quantiles"][1]])
+            subsampled_df = subsampled_df.sample(n=num_samples, random_state=self.ordering_config.seed)
+            subsampled_df["group"] = group
+            df_combined.append(subsampled_df)
+            print("subsampled from group: ", group, subsampled_df, subsampled_df.describe(), subsampled_df["n_nodes"], subsampled_df["density"])
 
         df_single_epoch = pd.concat(df_combined)
-
         if self.ordering_config.shuffle:
             df_single_epoch = df_single_epoch.sample(frac=1, random_state=self.ordering_config.seed)
 
@@ -387,49 +395,7 @@ class GraphDataset:
             df_iter = df_single_epoch.copy()
             df_epochs.append(df_iter)
 
-
         return pd.concat(df_epochs)
-
-    def dataset_filtering(self, df):
-        df = self.global_filter(df)
-
-        if self.ordering_config.shuffle:
-            df_sampled = df.sample(n=self.ordering_config.num_samples, random_state=self.ordering_config.seed)
-
-        df_combined = []
-        for i in range(self.ordering_config.epochs):
-            df_iter = df_sampled.copy()
-            df_combined.append(df_iter)
-
-        return pd.concat(df_combined)
-
-    def dataset_representative_sample(self, df):
-        for filter_condition in self.ordering_config.ranges:
-            df = df[(df[filter_condition] >= self.ordering_config.ranges[filter_condition]["min"]) & (df[filter_condition] <= self.ordering_config.ranges[filter_condition]["max"])]
-
-        df_combined = []
-        
-        def extract_examples(condition="n_nodes", lower_bound=1, upper_bound=float('inf'), n_samples=500):
-            return df[(df[condition] >= lower_bound) & (df[condition] <= upper_bound)].sample(n=n_samples,
-                                                                                              random_state=self.ordering_config.seed)
-        def get_quantiles(graph_property="n_nodes"):
-            buckets = df[graph_property].quantile(self.ordering_config.quantiles)
-            print("buckets for property: ", graph_property, " ", buckets)
-            for i in range(len(self.ordering_config.quantiles) - 1):
-                df_combined.append(extract_examples(graph_property,
-                                                    buckets[self.ordering_config.quantiles[i]],
-                                                    buckets[self.ordering_config.quantiles[i+1]],
-                                                    n_samples=self.ordering_config.num_samples_per_category))
-
-        for property in self.ordering_config.sampling_properties:
-            get_quantiles(property)
-
-        df_representative = pd.concat(df_combined)
-        print("representative examples for different graph topological features: ", df_representative,
-              df_representative.shape)
-        df_representative.drop_duplicates(inplace=True)
-        print("removed identical graphs that represent multiple features: ", df_representative, df_representative.shape)
-        return df_representative
 
     def load_indices(self):
         if os.path.exists(self.fragment_files_panel.strip() + ".index_per_graph"):
@@ -437,9 +403,9 @@ class GraphDataset:
         else:
             graph_dataset = pd.DataFrame(self.combined_graph_indexes, columns=self.column_names)
             graph_dataset.to_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
-        print("graph dataset... ", graph_dataset.describe())
         if self.ordering_config:
             graph_dataset = self.dataset_nested_design(graph_dataset)
+        print("graph dataset... ", graph_dataset.describe())
         return graph_dataset
 
     def generate_indices(self):

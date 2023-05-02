@@ -55,7 +55,7 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
     # output the phased VCF (phase blocks)
     return chrom, benchmark_result.switch_count[chrom], benchmark_result.mismatch_count[chrom], benchmark_result.flat_count[chrom], benchmark_result.phased_count[chrom]
 
-def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config, validation_config):
+def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config):
     # benchmark the current model against a held out set of fragment graphs (validation panel)
     validation_component_stats = []
     print("running validation with model number:  ", model_checkpoint_id, ", at episode: ", episode_id)
@@ -100,15 +100,13 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config,
             wandb.log({"Episode": episode_id, descriptor + " Validation " + metric + " on " + "_default_overall": validation_filtered_df[metric].sum()})
 
     # stats for entire validation set
-    log_stats_for_filter(validation_indexing_df)
-
+    log_stats_for_filter(validation_indexing_df) 
+    
     # log stats for graphs from each quantile of each graph property specified in the validation config
-    for graph_property in validation_config.sampling_properties:
-        buckets = validation_indexing_df[graph_property].quantile(validation_config.quantiles)
-        for i in range(len(validation_config.quantiles) - 1):
-            lower_bound = buckets[validation_config.quantiles[i]]
-            upper_bound = buckets[validation_config.quantiles[i+1]]
-            log_stats_for_filter(validation_indexing_df[(validation_indexing_df[graph_property] >= lower_bound) & (validation_indexing_df[graph_property] <= upper_bound)], str(lower_bound) + "<=" + graph_property + "<=" + str(upper_bound))
+    keys = validation_indexing_df.group.unique()
+    for group in validation_indexing_df.group.unique():
+        print("group: ", group, "subsample: ",  validation_indexing_df[validation_indexing_df["group"] == group])
+        log_stats_for_filter(validation_indexing_df[validation_indexing_df["group"] == group], "group: " + str(group))
 
     # log specific plots to wandb for graph topologies we are interested in    
     articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] > 0]
