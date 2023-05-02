@@ -340,16 +340,6 @@ class GraphDataset:
         for filter_condition in self.ordering_config.global_ranges:
             df = self.extract_examples(df, filter_condition, self.ordering_config.global_ranges[filter_condition]["min"],  self.ordering_config.global_ranges[filter_condition]["max"])
         return df
-    
-    def get_quantiles(self, df, graph_property, quantiles):
-        df_combined = []
-        buckets = df[graph_property].quantile(quantiles)
-        print("buckets for property: ", graph_property, " ", buckets)
-        for i in range(len(quantiles) - 1):
-            df_combined.append(self.extract_examples(df, graph_property,
-                                                buckets[quantiles[i]],
-                                                buckets[quantiles[i+1]]))
-        return pd.concat(df_combined)
 
     def dataset_nested_design(self, df):
         # parses the nested data_ordering_[train,validation].yaml, which allows arbitrary specifications
@@ -381,7 +371,7 @@ class GraphDataset:
             subsampled_df = subsampled_df.sample(n=num_samples, random_state=self.ordering_config.seed)
             subsampled_df["group"] = group
             df_combined.append(subsampled_df)
-            print("subsampled from group: ", group, subsampled_df, subsampled_df.describe(), subsampled_df["n_nodes"], subsampled_df["density"])
+            print("subsampled from group: ", group, subsampled_df, subsampled_df.describe())
 
         df_single_epoch = pd.concat(df_combined)
         if self.ordering_config.shuffle:

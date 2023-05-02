@@ -105,7 +105,6 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
     # log stats for graphs from each quantile of each graph property specified in the validation config
     keys = validation_indexing_df.group.unique()
     for group in validation_indexing_df.group.unique():
-        print("group: ", group, "subsample: ",  validation_indexing_df[validation_indexing_df["group"] == group])
         log_stats_for_filter(validation_indexing_df[validation_indexing_df["group"] == group], "group: " + str(group))
 
     # log specific plots to wandb for graph topologies we are interested in    
