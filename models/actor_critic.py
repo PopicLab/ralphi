@@ -8,7 +8,7 @@ import logging
 import engine.config as config
 import models.constants as constants
 import wandb
-
+from torch.nn.utils.parametrizations import spectral_norm
 
 class ActorCriticNet(nn.Module):
     def __init__(self, config):
@@ -16,11 +16,16 @@ class ActorCriticNet(nn.Module):
         super(ActorCriticNet, self).__init__()
         # linear transformation will be applied to the last dimension of the input tensor
         # which must equal hidden_dim -- number of features per node
-        self.policy_graph_hap0 = nn.Linear(config.hidden_dim[-1], 1)
-        self.policy_graph_hap1 = nn.Linear(config.hidden_dim[-1], 1)
-        self.policy_done = nn.Linear(config.hidden_dim[-1], 1)
-        self.value = nn.Linear(config.hidden_dim[-1], 1)
+        self.policy_graph_hap0 = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
+        nn.init.orthogonal_(self.policy_graph_hap0.weight.data)
+        self.policy_graph_hap1 = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
+        nn.init.orthogonal_(self.policy_graph_hap1.weight.data)
+        self.policy_done = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
+        nn.init.orthogonal_(self.policy_done.weight.data)
+        self.value = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
+        nn.init.orthogonal_(self.value.weight.data)
         self.layers = layers_dict[config.layer_type](config.in_dim, config.hidden_dim, **config.embedding_vars)
+
 
         self.actions = []
         self.rewards = []
