@@ -16,7 +16,7 @@ class NodeFeatures(str, Enum):
     cut_member_hap1 = 'cut_member_hap1'
 
     ### optional features ###
-    n_variants = 'n_variants'
+    """n_variants = 'n_variants'"""
     """
     pos_neighbors = 'pos_neighbors'
     neg_neighbors = 'neg_neighbors'
@@ -38,8 +38,8 @@ class NodeFeatures(str, Enum):
     min_weight_node = 'min_weight_node'
     num_fragments = 'num_fragments'"""
 
-    reachability_hap0 = 'reachability_hap0'
-    reachability_hap1 = 'reachability_hap1'
+    """reachability_hap0 = 'reachability_hap0'
+    reachability_hap1 = 'reachability_hap1'"""
 
     """max_num_variant = 'max_num_variant'
     min_num_variant = 'min_num_variant'

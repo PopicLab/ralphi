@@ -34,7 +34,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     pna_scaler = [["identity", "amplification", "attenuation"]]
     pna_residual = [True]
     num_features = 5
-    id_basis = str(num_features) + "_features_no_jump"
+    id_basis = str(num_features) + "_features_normalisations"
     default_values = {
         'panel': panel_path,
         'panel_validation_frags': frags_path,
