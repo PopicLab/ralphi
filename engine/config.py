@@ -100,10 +100,10 @@ class TrainingConfig(Config):
 
         # set up performance tracking
         if self.log_wandb:
-            wandb.init(project="data_orderings", entity="dphase", dir=self.log_dir)
+            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir)
         else:
             # automatically results in ignoring all wandb calls
-            wandb.init(project="data_orderings", entity="dphase", dir=self.log_dir, mode="disabled")
+            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, mode="disabled")
 
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
@@ -117,6 +117,7 @@ class TrainingConfig(Config):
     def set_defaults(self):
         super().set_defaults()
         default_values = {
+            'project_name': "dphase_experiments",
             'panel_validation_frags': None, # Fragment files for validation
             'panel_validation_vcfs': None, # VCF files for validation
             'min_graph_size': 1,  # Minimum size of graphs to use for training
@@ -195,6 +196,7 @@ class DataConfig(Config):
             'drop_redundant': False,
             'global_ranges': {},
             'ordering_ranges': {},
+            'save_indexes_path': None
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):

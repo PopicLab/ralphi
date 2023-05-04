@@ -385,7 +385,12 @@ class GraphDataset:
             df_iter = df_single_epoch.copy()
             df_epochs.append(df_iter)
 
-        return pd.concat(df_epochs)
+        final_df = pd.concat(df_epochs)
+
+        if self.ordering_config.save_indexes_path is not None:
+            final_df.to_pickle(self.ordering_config.save_indexes_path)
+
+        return final_df
 
     def load_indices(self):
         if os.path.exists(self.fragment_files_panel.strip() + ".index_per_graph"):
