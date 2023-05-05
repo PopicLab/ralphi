@@ -20,7 +20,7 @@ class State:
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
         features = list(elem.value for elem in constants.NodeFeatures)
-        self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features)
+        self.g = dgl.norm_by_dst(dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features))
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes * 2)
         self.explorable = torch.zeros(self.num_nodes * 2)
@@ -97,6 +97,25 @@ class PhasingEnv(gym.Env):
     def has_state(self):
         return self.state is not None
 
+    def update_features(self, hap, action):
+        self.state.g.ndata['cut_member_' + hap][action] = 1.0
+        """for neighbour in self.state.frag_graph.g[action]:
+                        self.state.explorable[neighbour] = 1.0
+                        self.state.explorable[neighbour + self.state.num_nodes] = 1.0"""
+        if 'reachability_hap0' in list(self.state.g.ndata.keys()):
+            for node in self.state.frag_graph.graph_properties['compo'][
+                self.state.frag_graph.graph_properties['neg_connectivity'][action]]:
+                self.state.g.ndata['reachability_' + hap][node] += 1.0 / self.state.num_nodes
+
+        if 'shortest_pos_path_' + hap in list(self.state.g.ndata.keys()):
+            paths = self.state.frag_graph.graph_properties['pos_paths'][action]
+            for node in paths:
+                if node != action:
+                    if self.state.frag_graph.nodes['val_pos_path_' + hap] == 0 or self.state.frag_graph.nodes[
+                        'val_pos_path_' + hap] > paths[node]:
+                        self.state.frag_graph.nodes['val_pos_path_' + hap] = paths[node]
+                        self.state.frag_graph.nodes['shortest_pos_path_' + hap] = [paths[node] % 2.]
+
     def step(self, action):
         """Execute one action from given state """
         """Return: next state, reward from current state, is_done, info """
@@ -107,28 +126,14 @@ class PhasingEnv(gym.Env):
         self.state.assigned[action] = 1.0
         if action > self.state.num_nodes - 1:
             complement_action = action - self.state.num_nodes
-            self.state.g.ndata['cut_member_hap1'][complement_action] = 1.0
             self.state.H1.append(complement_action)
             self.state.assigned[complement_action] = 1.0
-            """for neighbour in self.state.frag_graph.g[complement_action]:
-                self.state.explorable[neighbour] = 1.0
-                self.state.explorable[neighbour + self.state.num_nodes] = 1.0"""
-            for node in self.state.frag_graph.graph_properties['compo'][
-                self.state.frag_graph.graph_properties['neg_connectivity'][complement_action
-
-                ]]:
-                self.state.g.ndata['reachability_hap1'][node] += 1.0 / self.state.num_nodes
+            self.update_features('hap1', complement_action)
         else:
             complement_action = action + self.state.num_nodes
-            self.state.g.ndata['cut_member_hap0'][action] = 1.0
             self.state.H0.append(action)
             self.state.assigned[complement_action] = 1.0
-            """for neighbour in self.state.frag_graph.g[action]:
-                self.state.explorable[neighbour] = 1.0
-                self.state.explorable[neighbour + self.state.num_nodes] = 1.0"""
-            for node in self.state.frag_graph.graph_properties['compo'][
-                self.state.frag_graph.graph_properties['neg_connectivity'][action]]:
-                self.state.g.ndata['reachability_hap0'][node] += 1.0 / self.state.num_nodes
+            self.update_features("hap0", action)
         r_t = self.compute_mfc_reward_dual_actions(action)
         is_done = False
         if self.is_out_of_moves():

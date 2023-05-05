@@ -8,7 +8,7 @@ import logging
 import engine.config as config
 import models.constants as constants
 import wandb
-from torch.nn.utils.parametrizations import spectral_norm
+from torch.nn.utils import spectral_norm
 
 class ActorCriticNet(nn.Module):
     def __init__(self, config):

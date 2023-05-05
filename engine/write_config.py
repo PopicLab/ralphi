@@ -22,8 +22,9 @@ def write_yaml(config_path, id_file, parameters):
 
 
 def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
+    project = "large_nodes_50_1000"
     layers_number = [1, 3, 5, 10]
-    default_layers = [264, [132, 264, 528], [33, 66, 132, 264, 528]]
+    default_layers = [264, 528, [132, 264, 528], [33, 66, 132, 264, 528], [264, 528, 132, 66, 33]]
     layer_types = ["gcn", "gin", "pna"]
     attention = [0]
     gat_residual = [None, True]
@@ -33,9 +34,11 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     pna_aggregator = [["sum", "mean", "std"]]
     pna_scaler = [["identity", "amplification", "attenuation"]]
     pna_residual = [True]
-    num_features = 5
-    id_basis = str(num_features) + "_features_normalisations"
+    num_features = 3
+    num_cores = 15
+    id_basis = str(num_features) + "_features_weight"
     default_values = {
+        'project': project,
         'panel': panel_path,
         'panel_validation_frags': frags_path,
         'panel_validation_vcfs': vcfs_path,
@@ -47,7 +50,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
         'max_episodes': 'null',  # Maximum number of episodes to run
         'render': False,  # Enables the rendering of the environment
         'render_view': "weighted_view",  # Controls how the graph is rendered
-        'num_cores': 15,  # Number of threads to use for Pytorch
+        'num_cores': num_cores,  # Number of threads to use for Pytorch
         'interval_validate': 1000,  # Number of episodes between model validation runs
         'debug': True,
         'log_wandb': True,

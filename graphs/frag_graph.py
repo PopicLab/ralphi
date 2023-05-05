@@ -144,6 +144,12 @@ class FragGraph:
         self.graph_properties['neg_connectivity'] = {node: num for num, sub_compo in
                                                      enumerate(self.graph_properties['compo']) for node in sub_compo}
 
+        pos_graph = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
+        pos_graph[pos_graph < 0] = 0
+        pos_graph = nx.from_numpy_array(pos_graph)
+        self.graph_properties['pos_paths'] = dict(nx.shortest_path_length(pos_graph))
+
+
     def log_graph_properties(self, episode_id):
         for key, value in self.graph_properties.items():
             if key not in ['neg_connectivity', 'compo']:
@@ -188,9 +194,11 @@ class FragGraph:
         # setup more complex node features/attributes
         frag_graph = self.g
         fragments = self.fragments
+        betweenness = nx.betweenness_centrality(frag_graph)
         for node in frag_graph.nodes:
             frag_graph.nodes[node]['cut_member_hap0'] = [0.0]
             frag_graph.nodes[node]['cut_member_hap1'] = [0.0]
+            frag_graph.nodes[node]['betweenness'] = [betweenness[node]]
             frag_graph.nodes[node]['n_variants'] = [fragments[node].n_variants]
             '''frag_graph.nodes[node]['min_qscore'] = [min(fragments[node].quality)]
             frag_graph.nodes[node]['max_qscore'] = [max(fragments[node].quality)]
@@ -237,6 +245,12 @@ class FragGraph:
             frag_graph.nodes[node]['compression_factor'] = [self.graph_properties['compression_factor']]"""
             frag_graph.nodes[node]['reachability_hap0'] = [0.0]
             frag_graph.nodes[node]['reachability_hap1'] = [0.0]
+
+            frag_graph.nodes[node]['shortest_pos_path_hap0'] = [0]
+            frag_graph.nodes[node]['shortest_pos_path_hap1'] = [0]
+
+            frag_graph.nodes[node]['val_pos_path_hap0'] = 0
+            frag_graph.nodes[node]['val_pos_path_hap1'] = 0
 
     def compute_variant_bitmap(self, mask_len=200):
         # vcf_positions contains the list of vcf positions within the connected component formed by these fragments

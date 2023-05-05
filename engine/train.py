@@ -23,7 +23,7 @@ torch.set_num_threads(config.num_cores*2)
 torch.set_default_tensor_type(torch.DoubleTensor)
 
 training_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False).load_indices()
-training_dataset = training_dataset[training_dataset["n_nodes"] > 50]
+training_dataset = training_dataset[(training_dataset["n_nodes"] > 50) & (training_dataset["n_nodes"] < 1000)]
 training_dataset = training_dataset.sample(frac=1, random_state=config.seed)
 if config.panel_validation_frags and config.panel_validation_vcfs:
     validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
