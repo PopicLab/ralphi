@@ -132,6 +132,8 @@ class FragGraph:
 
     def log_graph_properties(self, episode_id):
         for key, value in self.graph_properties.items():
+            if isinstance(value, set) or isinstance(value, list):
+                continue
             wandb.log({"Episode": episode_id, "Training: " + key: value})
 
     def get_variants_set(self):
@@ -284,7 +286,7 @@ class FragGraphGen:
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                         continue
-                    subgraph = pickle.load(f)[component_row['index']]  # index in to list of graphs
+                    subgraph = pickle.load(f) #[component_row['index']]  # index in to list of graphs
                     if self.is_invalid_subgraph(subgraph):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
@@ -373,7 +375,11 @@ class GraphDataset:
             df_combined.append(subsampled_df)
             print("subsampled from group: ", group, subsampled_df, subsampled_df.describe())
 
-        df_single_epoch = pd.concat(df_combined)
+        if len(df_combined) == 0:            
+            df_single_epoch = df
+            df_single_epoch["group"] = "original"
+        else:
+            df_single_epoch = pd.concat(df_combined)
         if self.ordering_config.shuffle:
             df_single_epoch = df_single_epoch.sample(frac=1, random_state=self.ordering_config.seed)
 
