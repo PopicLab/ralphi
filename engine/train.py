@@ -11,23 +11,26 @@ import engine.validate
 # ------ CLI ------
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
 parser.add_argument('--config', help='Training configuration YAML')
+parser.add_argument('--training_dataset_config', help='Config to specify training data design')
+parser.add_argument('--validation_dataset_config', help='Config to specify validation data design')
 args = parser.parse_args()
 # -----------------
 
 # Load the config
 config = config_utils.load_config(args.config)
+training_config = config_utils.load_config(args.training_dataset_config, config_type=config_utils.CONFIG_TYPE.DATA_DESIGN)
+validation_config = config_utils.load_config(args.validation_dataset_config, config_type=config_utils.CONFIG_TYPE.DATA_DESIGN)
 
 torch.manual_seed(config.seed)
 random.seed(config.seed)
 torch.set_num_threads(config.num_cores)
 
-training_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False).load_indices()
+training_dataset = graphs.frag_graph.GraphDataset(config, training_config, validation_mode=False).load_indices()
 
 if config.panel_validation_frags and config.panel_validation_vcfs:
-    validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
+    validation_dataset = graphs.frag_graph.GraphDataset(config, validation_config, validation_mode=True).load_indices()
     # e.g. to only validate on cases with articulation points
     # validation_dataset = validation_dataset[validation_dataset["articulation_points"] != 0]
-
 
 # Setup the agent and the training environment
 env_train = envs.PhasingEnv(config, graph_dataset=training_dataset)

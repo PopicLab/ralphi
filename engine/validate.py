@@ -12,7 +12,7 @@ import tqdm
 import envs.phasing_env as envs
 import os
 
-def compute_error_rates(solutions, validation_input_vcf, agent, config):
+def compute_error_rates(solutions, validation_input_vcf, agent, config, genome):
     # given any subset of phasing solutions, computes errors rates against ground truth VCF
     idx2var = var.extract_variants(solutions)
     for v in idx2var.values():
@@ -21,11 +21,11 @@ def compute_error_rates(solutions, validation_input_vcf, agent, config):
     vcf_writer.write_phased_vcf(validation_input_vcf, idx2var, config.validation_output_vcf)
     chrom = benchmark.get_ref_name(config.validation_output_vcf)
     benchmark_result = benchmark.vcf_vcf_error_rate(config.validation_output_vcf, validation_input_vcf, indels=False)
-    hap_blocks = hap_block_visualizer.pretty_print(solutions, idx2var.items(), validation_input_vcf)
+    hap_blocks = hap_block_visualizer.pretty_print(solutions, idx2var.items(), validation_input_vcf, genome)
     return chrom, benchmark_result, hap_blocks
 
-def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_checkpoint_id, episode_id, agent, config, descriptor="_default_"):
-    chrom, benchmark_result, hap_blocks = compute_error_rates(solutions, input_vcf, agent, config)
+def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_checkpoint_id, episode_id, agent, config, genome, descriptor="_default_"):
+    chrom, benchmark_result, hap_blocks = compute_error_rates(solutions, input_vcf, agent, config, genome)
     AN50 = benchmark_result.get_AN50()
     N50 = benchmark_result.get_N50_phased_portion()
     label = descriptor + ", " + chrom
@@ -80,11 +80,11 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
                 graph_path = os.path.split(component_row.component_path)[1] + str(graph_stats)
                 graph_stats["cut_value"] = agent.env.get_cut_value()
                 wandb.log({"Episode": episode_id,
-                           "Cut Value on: " + graph_path: graph_stats["cut_value"]})
+                           "Cut Value on: " + str(component_row.genome) + "_" + str(component_row.coverage) + "_" + str(component_row.error_rate) + "_" + graph_path: graph_stats["cut_value"]})
                 vcf_path = component_row.component_path + ".vcf"
 
                 ch, sw, mis, flat, phased = log_error_rates([agent.env.state.frag_graph.fragments], vcf_path,
-                                                            cut_val, reward_val, model_checkpoint_id, episode_id, agent, config, graph_path)
+                                                            cut_val, reward_val, model_checkpoint_id, episode_id, agent, config, component_row.genome, graph_path)
 
                 cur_index = component_row.values.tolist()
                 cur_index.extend([sw, mis, flat, phased, reward_val, cut_val, ch])
@@ -100,9 +100,14 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
             wandb.log({"Episode": episode_id, descriptor + " Validation " + metric + " on " + "_default_overall": validation_filtered_df[metric].sum()})
 
     # stats for entire validation set
-    log_stats_for_filter(validation_indexing_df)
+    log_stats_for_filter(validation_indexing_df) 
+    
+    # log stats for graphs from each quantile of each graph property specified in the validation config
+    keys = validation_indexing_df.group.unique()
+    for group in validation_indexing_df.group.unique():
+        log_stats_for_filter(validation_indexing_df[validation_indexing_df["group"] == group], "group: " + str(group))
 
-    # log specific plots to wandb for graph topologies we are interested in
+    # log specific plots to wandb for graph topologies we are interested in    
     articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] > 0]
     log_stats_for_filter(articulation_df, "Articulation > 0:")
     articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] == 0]
