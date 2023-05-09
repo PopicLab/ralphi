@@ -14,13 +14,15 @@ class State:
     and the nodes assigned to each haplotype (0: H0 1: H1)
     """
 
-    def __init__(self, frag_graph):
+    def __init__(self, frag_graph, degree_norm):
         self.frag_graph = frag_graph
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
         features = list(elem.value for elem in constants.NodeFeatures)
-        self.g = dgl.norm_by_dst(dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features))
+        self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features)
+        if degree_norm:
+            self.g.edata['weight'] = self.g.edata['weight'] * dgl.norm_by_dst(self.g)
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes * 2)
         self.explorable = torch.zeros(self.num_nodes * 2)
@@ -38,12 +40,12 @@ class PhasingEnv(gym.Env):
         super(PhasingEnv, self).__init__()
         self.config = config
         if preloaded_graphs:
-            preloaded_graphs.set_graph_properties()
+            preloaded_graphs.set_graph_properties(True)
             preloaded_graphs.set_node_features()
-            self.state = State(preloaded_graphs)
+            self.state = State(preloaded_graphs, self.config.degree_norm)
         else:
             self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
-            self.state = self.init_state()
+            self.state = self.init_state(self.config.degree_norm)
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
@@ -55,10 +57,10 @@ class PhasingEnv(gym.Env):
         self.record = record_solutions
         self.solutions = []
 
-    def init_state(self):
+    def init_state(self, degree_norm):
         g = next(self.graph_gen)
         if g is not None:
-            return State(g)
+            return State(g, degree_norm)
         else:
             return None
 
@@ -111,10 +113,10 @@ class PhasingEnv(gym.Env):
             paths = self.state.frag_graph.graph_properties['pos_paths'][action]
             for node in paths:
                 if node != action:
-                    if self.state.frag_graph.nodes['val_pos_path_' + hap] == 0 or self.state.frag_graph.nodes[
+                    if self.state.frag_graph.g.nodes[node]['val_pos_path_' + hap] == 0 or self.state.frag_graph.g.nodes[node][
                         'val_pos_path_' + hap] > paths[node]:
-                        self.state.frag_graph.nodes['val_pos_path_' + hap] = paths[node]
-                        self.state.frag_graph.nodes['shortest_pos_path_' + hap] = [paths[node] % 2.]
+                        self.state.frag_graph.g.nodes[node]['val_pos_path_' + hap] = paths[node]
+                        self.state.frag_graph.g.nodes[node]['shortest_pos_path_' + hap] = [paths[node] % 2.]
 
     def step(self, action):
         """Execute one action from given state """
@@ -153,7 +155,7 @@ class PhasingEnv(gym.Env):
         Reset the environment to an initial state
         Returns the initial state and the is_done token
         """
-        self.state = self.init_state()
+        self.state = self.init_state(self.config.degree_norm)
         return self.state, not self.has_state()
 
     def lookup_error_free_instance(self):

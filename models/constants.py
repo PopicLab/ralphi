@@ -37,13 +37,15 @@ class NodeFeatures(str, Enum):
     """max_weight_node = 'max_weight_node'
     min_weight_node = 'min_weight_node'
     num_fragments = 'num_fragments'
-    betweenness = 'betweenness'"""
+    """
 
-    """reachability_hap0 = 'reachability_hap0'
+    betweenness = 'betweenness'
+
+    reachability_hap0 = 'reachability_hap0'
     reachability_hap1 = 'reachability_hap1'
     shortest_pos_path_hap0 = 'shortest_pos_path_hap0' 
     shortest_pos_path_hap1 = 'shortest_pos_path_hap1' 
-    """
+
 
     """max_num_variant = 'max_num_variant'
     min_num_variant = 'min_num_variant'

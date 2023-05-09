@@ -1,3 +1,4 @@
+import time
 import seq.sim as seq
 import seq.frags as frags
 import networkx as nx
@@ -13,6 +14,8 @@ import logging
 import tqdm
 import pandas as pd
 import warnings
+
+from models import constants
 from seq.vcf_prep import extract_vcf_for_variants
 from seq.vcf_prep import construct_vcf_idx_to_record_dict
 import wandb
@@ -37,7 +40,7 @@ class FragGraph:
         if compute_trivial:
             self.check_and_set_trivial()
         if compute_properties:
-            self.set_graph_properties()
+            self.set_graph_properties(False)
 
     def set_ground_truth_assignment(self, node_id2hap_id):
         """
@@ -96,63 +99,69 @@ class FragGraph:
 
         return FragGraph(frag_graph, fragments, compute_trivial=compute_trivial)
 
-    def set_graph_properties(self):
+    def set_graph_properties(self, precomputed=True):
         # TODO: which properties do we want to save here; probably not diameter since expensive to compute
-        self.graph_properties["pos_edges"] = 0
-        self.graph_properties["neg_edges"] = 0
-        self.graph_properties["zero_edges"] = 0
-        self.graph_properties["sum_of_pos_edge_weights"] = 0
-        self.graph_properties["sum_of_neg_edge_weights"] = 0
-        self.graph_properties['max_weight'] = 0
-        self.graph_properties['min_weight'] = 0
-        for _, _, a in self.g.edges(data=True):
-            edge_weight = a['weight']
-            if edge_weight > 0:
-                self.graph_properties["pos_edges"] += 1
-                self.graph_properties["sum_of_pos_edge_weights"] += edge_weight
-                if edge_weight > self.graph_properties['max_weight']:
-                    self.graph_properties['max_weight'] = edge_weight
-            elif edge_weight < 0:
-                self.graph_properties["neg_edges"] += 1
-                self.graph_properties["sum_of_neg_edge_weights"] += edge_weight
-                if edge_weight < self.graph_properties['min_weight']:
-                    self.graph_properties['min_weight'] = edge_weight
-            else:
-                self.graph_properties["zero_edges"] += 1
-        degrees = [val for (node, val) in self.g.degree()]
-        self.graph_properties["max_degree"] = max(degrees)
-        self.graph_properties["min_degree"] = min(degrees)
-        self.graph_properties["n_nodes"] = self.g.number_of_nodes()
-        self.graph_properties["n_edges"] = self.g.number_of_edges()
-        self.graph_properties["density"] = nx.density(self.g)
-        self.graph_properties["list_articulation_points"] = list(nx.articulation_points(self.g))
-        self.graph_properties["articulation_points"] = len(self.graph_properties["list_articulation_points"])
-        self.graph_properties["node_connectivity"] = nx.node_connectivity(self.g)
-        self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
-        self.graph_properties["diameter"] = nx.diameter(self.g)
-        self.graph_properties["trivial"] = self.trivial
-        """variants = [frag.n_variants for frag in self.fragments]
-        self.graph_properties['max_num_variant'] = max(variants)
-        self.graph_properties['min_num_variant'] = min(variants)
-        self.graph_properties['avg_num_variant'] = np.mean(variants)"""
-        self.graph_properties['total_num_frag'] = sum([frag.n_copies for frag in self.fragments])
+        features = list(elem.value for elem in constants.NodeFeatures)
+        if not precomputed:
+            self.graph_properties["pos_edges"] = 0
+            self.graph_properties["neg_edges"] = 0
+            self.graph_properties["zero_edges"] = 0
+            self.graph_properties["sum_of_pos_edge_weights"] = 0
+            self.graph_properties["sum_of_neg_edge_weights"] = 0
+            self.graph_properties['max_weight'] = 0
+            self.graph_properties['min_weight'] = 0
+            for _, _, a in self.g.edges(data=True):
+                edge_weight = a['weight']
+                if edge_weight > 0:
+                    self.graph_properties["pos_edges"] += 1
+                    self.graph_properties["sum_of_pos_edge_weights"] += edge_weight
+                    if edge_weight > self.graph_properties['max_weight']:
+                        self.graph_properties['max_weight'] = edge_weight
+                elif edge_weight < 0:
+                    self.graph_properties["neg_edges"] += 1
+                    self.graph_properties["sum_of_neg_edge_weights"] += edge_weight
+                    if edge_weight < self.graph_properties['min_weight']:
+                        self.graph_properties['min_weight'] = edge_weight
+                else:
+                    self.graph_properties["zero_edges"] += 1
+            degrees = [val for (node, val) in self.g.degree()]
+            self.graph_properties["max_degree"] = max(degrees)
+            self.graph_properties["min_degree"] = min(degrees)
+            self.graph_properties["n_nodes"] = self.g.number_of_nodes()
+            self.graph_properties["n_edges"] = self.g.number_of_edges()
+            self.graph_properties["density"] = nx.density(self.g)
+            self.graph_properties["list_articulation_points"] = list(nx.articulation_points(self.g))
+            self.graph_properties["articulation_points"] = len(self.graph_properties["list_articulation_points"])
+            self.graph_properties["node_connectivity"] = nx.node_connectivity(self.g)
+            self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
+            self.graph_properties["diameter"] = nx.diameter(self.g)
+            self.graph_properties["trivial"] = self.trivial
+            """variants = [frag.n_variants for frag in self.fragments]
+            self.graph_properties['max_num_variant'] = max(variants)
+            self.graph_properties['min_num_variant'] = min(variants)
+            self.graph_properties['avg_num_variant'] = np.mean(variants)"""
+            self.graph_properties['total_num_frag'] = sum([frag.n_copies for frag in self.fragments])
 
-        edges = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
-        edges[edges > 0] = 0
-        neg_graph = nx.from_numpy_array(edges)
-        self.graph_properties['compo'] = [c for c in nx.connected_components(neg_graph)]
-        self.graph_properties['neg_connectivity'] = {node: num for num, sub_compo in
-                                                     enumerate(self.graph_properties['compo']) for node in sub_compo}
+            if "reachability_hap0" in features:
+                edges = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
+                edges[edges > 0] = 0
+                neg_graph = nx.from_numpy_array(edges)
+                self.graph_properties['compo'] = [c for c in nx.connected_components(neg_graph)]
+                self.graph_properties['neg_connectivity'] = {node: num for num, sub_compo in
+                                                             enumerate(self.graph_properties['compo']) for node in sub_compo}
 
-        pos_graph = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
-        pos_graph[pos_graph < 0] = 0
-        pos_graph = nx.from_numpy_array(pos_graph)
-        self.graph_properties['pos_paths'] = dict(nx.shortest_path_length(pos_graph))
+        if "shortest_pos_path_hap0" in features:
+            time_start = time.time()
+            pos_graph = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
+            pos_graph[pos_graph < 0] = 0
+            pos_graph = nx.from_numpy_array(pos_graph)
+            self.graph_properties['pos_paths'] = dict(nx.shortest_path_length(pos_graph))
+            print("Time:", time.time() - time_start)
 
 
     def log_graph_properties(self, episode_id):
         for key, value in self.graph_properties.items():
-            if key not in ['neg_connectivity', 'compo']:
+            if key not in ['neg_connectivity', 'compo', 'pos_paths']:
                 wandb.log({"Episode": episode_id, "Training: " + key: value})
 
     def get_variants_set(self):
@@ -352,9 +361,9 @@ class FragGraph:
             if subgraph.trivial and skip_trivial_graphs:
                 continue
             # precompute node features/attributes
-            subgraph.set_graph_properties()
+            subgraph.set_graph_properties(True)
             subgraph.set_node_features()
-            subgraph.compute_variant_bitmap()
+            #subgraph.compute_variant_bitmap()
             subgraphs.append(subgraph)
         return subgraphs
 
@@ -400,13 +409,12 @@ class FragGraphGen:
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                         continue
-                    subgraph = pickle.load(f)[
-                        component_row['index']]  # since graph is cached don't need to index in anymore
-                    # subgraph = pickle.load(f)
+                    # subgraph = pickle.load(f)[component_row['index']]
+                    subgraph = pickle.load(f)
                     if self.is_invalid_subgraph(subgraph):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
-                    subgraph.set_graph_properties()
+                    subgraph.set_graph_properties(True)
                     subgraph.set_node_features()
                     yield subgraph
             yield None
@@ -505,7 +513,8 @@ class GraphDataset:
                             pickle.dump(component, f)
                             print("saved graph to: ", component_path)
 
-                metrics = component.graph_properties
+                rem_list = ['neg_connectivity', 'compo', 'pos_paths']
+                metrics = dict([(key, val) for key, val in component.graph_properties.items() if key not in rem_list])
                 component_index = [component_path, component_index] + list(metrics.values())
                 if not self.column_names:
                     self.column_names = ["component_path", "index"] + list(metrics.keys())

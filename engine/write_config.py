@@ -22,6 +22,8 @@ def write_yaml(config_path, id_file, parameters):
 
 
 def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
+    if not os.path.exists(config_path):
+        os.mkdir(config_path)
     project = "large_nodes_50_1000"
     layers_number = [1, 3, 5, 10]
     default_layers = [264, 528, [132, 264, 528], [33, 66, 132, 264, 528], [264, 528, 132, 66, 33]]
@@ -34,9 +36,10 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     pna_aggregator = [["sum", "mean", "std"]]
     pna_scaler = [["identity", "amplification", "attenuation"]]
     pna_residual = [True]
-    num_features = 3
+    num_features = 6
     num_cores = 15
-    id_basis = str(num_features) + "_features_weight"
+    degree_norm = True
+    id_basis = str(num_features) + "_reach"
     default_values = {
         'project': project,
         'panel': panel_path,
@@ -68,7 +71,8 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
         'layer_type': None,
         'embedding_vars': {},
         'gamma': 0.98,
-        'lr': 0.00003
+        'lr': 0.00003,
+        'degree_norm': degree_norm
     }
     for layer_type in layer_types:
         for num_layer in layers_number:
