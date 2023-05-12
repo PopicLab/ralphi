@@ -1,4 +1,3 @@
-import time
 import seq.sim as seq
 import seq.frags as frags
 import networkx as nx
@@ -151,13 +150,11 @@ class FragGraph:
                                                              enumerate(self.graph_properties['compo']) for node in sub_compo}
 
         if "shortest_pos_path_hap0" in features:
-            time_start = time.time()
             pos_graph = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
             pos_graph[pos_graph < 0] = 0
             pos_graph = nx.from_numpy_array(pos_graph)
             self.graph_properties['pos_paths'] = dict(nx.shortest_path_length(pos_graph))
-            print("Time:", time.time() - time_start)
-
+        self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g)
 
     def log_graph_properties(self, episode_id):
         for key, value in self.graph_properties.items():
@@ -203,11 +200,10 @@ class FragGraph:
         # setup more complex node features/attributes
         frag_graph = self.g
         fragments = self.fragments
-        betweenness = nx.betweenness_centrality(frag_graph)
         for node in frag_graph.nodes:
             frag_graph.nodes[node]['cut_member_hap0'] = [0.0]
             frag_graph.nodes[node]['cut_member_hap1'] = [0.0]
-            frag_graph.nodes[node]['betweenness'] = [betweenness[node]]
+            frag_graph.nodes[node]['betweenness'] = [self.graph_properties["betweenness"][node]]
             frag_graph.nodes[node]['n_variants'] = [fragments[node].n_variants]
             '''frag_graph.nodes[node]['min_qscore'] = [min(fragments[node].quality)]
             frag_graph.nodes[node]['max_qscore'] = [max(fragments[node].quality)]

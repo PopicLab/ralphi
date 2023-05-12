@@ -14,15 +14,15 @@ class State:
     and the nodes assigned to each haplotype (0: H0 1: H1)
     """
 
-    def __init__(self, frag_graph, degree_norm):
+    def __init__(self, frag_graph, weight_norm):
         self.frag_graph = frag_graph
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
         features = list(elem.value for elem in constants.NodeFeatures)
         self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features)
-        if degree_norm:
-            self.g.edata['weight'] = self.g.edata['weight'] * dgl.norm_by_dst(self.g)
+        if weight_norm:
+            self.g.edata['weight'] = self.g.edata['weight'] / frag_graph.graph_properties["sum_of_pos_edge_weights"]
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes * 2)
         self.explorable = torch.zeros(self.num_nodes * 2)
@@ -42,10 +42,10 @@ class PhasingEnv(gym.Env):
         if preloaded_graphs:
             preloaded_graphs.set_graph_properties(True)
             preloaded_graphs.set_node_features()
-            self.state = State(preloaded_graphs, self.config.degree_norm)
+            self.state = State(preloaded_graphs, self.config.weight_norm)
         else:
             self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
-            self.state = self.init_state(self.config.degree_norm)
+            self.state = self.init_state(self.config.weight_norm)
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
@@ -57,10 +57,10 @@ class PhasingEnv(gym.Env):
         self.record = record_solutions
         self.solutions = []
 
-    def init_state(self, degree_norm):
+    def init_state(self, weight_norm):
         g = next(self.graph_gen)
         if g is not None:
-            return State(g, degree_norm)
+            return State(g, weight_norm)
         else:
             return None
 
@@ -108,7 +108,6 @@ class PhasingEnv(gym.Env):
             for node in self.state.frag_graph.graph_properties['compo'][
                 self.state.frag_graph.graph_properties['neg_connectivity'][action]]:
                 self.state.g.ndata['reachability_' + hap][node] += 1.0 / self.state.num_nodes
-
         if 'shortest_pos_path_' + hap in list(self.state.g.ndata.keys()):
             paths = self.state.frag_graph.graph_properties['pos_paths'][action]
             for node in paths:
@@ -155,7 +154,7 @@ class PhasingEnv(gym.Env):
         Reset the environment to an initial state
         Returns the initial state and the is_done token
         """
-        self.state = self.init_state(self.config.degree_norm)
+        self.state = self.init_state(self.config.weight_norm)
         return self.state, not self.has_state()
 
     def lookup_error_free_instance(self):

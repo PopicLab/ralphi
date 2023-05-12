@@ -23,10 +23,11 @@ torch.set_num_threads(config.num_cores*2)
 torch.set_default_tensor_type(torch.DoubleTensor)
 
 dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False).load_indices()
-training_dataset = dataset[(dataset["n_nodes"] > 50) & (dataset["n_nodes"] < 1000)]
-training_dataset = training_dataset.sample(n=min(len(dataset)-1000, 10000), random_state=config.seed)
-validation_dataset = dataset[(dataset["n_nodes"] > 50) & (~ dataset["index"].isin(list(training_dataset["index"])))]
-validation_dataset = validation_dataset.sample(n=1000, random_state=config.seed)
+validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
+"""training_dataset = dataset[(dataset["n_nodes"] > 50) & (dataset["n_nodes"] < 1000)]
+training_dataset = training_dataset.sample(n=min(len(training_dataset)-1000, 10000), random_state=config.seed)
+validation_dataset = dataset[(dataset["n_nodes"] > 50) & (~ dataset["component_path"].isin(list(training_dataset["component_path"])))]
+validation_dataset = validation_dataset.sample(n=1000, random_state=config.seed)"""
 
 """if config.panel_validation_frags and config.panel_validation_vcfs:
     validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()

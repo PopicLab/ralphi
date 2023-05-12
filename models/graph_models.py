@@ -6,7 +6,6 @@ from torch.nn.functional import elu
 from dgl.nn.pytorch.conv import GATv2Conv, GINEConv, GINConv, PNAConv, GCN2Conv, GatedGraphConv, GraphConv
 
 
-
 class Embedding(nn.Module):
     """
     Parameters
@@ -69,7 +68,6 @@ class Embedding(nn.Module):
             * M2 is the output node representation size, which equals
               len(input_feat) in initialization.
         """
-
         weights = edge_weights if 'edge_weight' in inspect.getfullargspec(self.gnn_layers[0].forward)[0] else edge_feat
         var = 'edge_weight' if 'edge_weight' in inspect.getfullargspec(self.gnn_layers[0].forward)[0] else 'edge_feat'
         var = {var: weights}

@@ -1,3 +1,5 @@
+import time
+
 import third_party.HapCUT2.utilities.calculate_haplotype_statistics as benchmark
 import utils.hap_block_visualizer as hap_block_visualizer
 import pickle
@@ -59,9 +61,13 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
     # benchmark the current model against a held out set of fragment graphs (validation panel)
     validation_component_stats = []
     print("running validation with model number:  ", model_checkpoint_id, ", at episode: ", episode_id)
+    start_validation = time.time()
     for index, component_row in tqdm.tqdm(validation_dataset.iterrows()):
         with open(component_row.component_path, 'rb') as f:
+            start_loading = time.time()
             subgraph = pickle.load(f)
+            end_loading = time.time()
+            print("loading time ", end_loading - start_loading)
             subgraph.indexed_graph_stats = component_row
             if subgraph.n_nodes < 2 and subgraph.fragments[0].n_variants < 2:
                 # only validate on non-singleton graphs with > 1 variant
@@ -74,6 +80,8 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
             sum_of_rewards += reward_val
             cut_val = agent.env.get_cut_value()
             sum_of_cuts += cut_val
+            end_episode = time.time()
+            print("episode time ", end_episode - end_loading)
             if config.debug:
                 graph_stats = agent.env.state.frag_graph.graph_properties
 
@@ -90,11 +98,11 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
                 cur_index = component_row.values.tolist()
                 cur_index.extend([sw, mis, flat, phased, reward_val, cut_val, ch])
                 validation_component_stats.append(cur_index)
-
+            end_config = time.time()
+            print("Time debug ", end_config - end_episode)
     validation_indexing_df = pd.DataFrame(validation_component_stats,
                                    columns=list(validation_dataset.columns) + ["switch", "mismatch", "flat", "phased", "reward_val", "cut_val", "chr"])
     validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))
-
     def log_stats_for_filter(validation_filtered_df, descriptor="Overall"):
         metrics_of_interest = ["reward_val", "cut_val", "switch", "mismatch", "flat", "phased"]
         for metric in metrics_of_interest:
