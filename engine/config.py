@@ -11,7 +11,7 @@ import re
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
-CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST')
+CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_DESIGN')
 
 MAIN_LOG = "MAIN"
 STATS_LOG_TRAIN = "STATS_TRAIN"
@@ -95,8 +95,8 @@ class TrainingConfig(Config):
         logger_stats_validate.info(",".join(STATS_LOG_COLS_VALIDATE))
         logger_main.info(self)
 
-        if os.path.exists(self.out_dir + "/benchmark.txt"):
-            os.remove(self.out_dir + "/benchmark.txt")
+        for f in os.listdir(self.out_dir):
+            os.remove(os.path.join(self.out_dir, f))
 
         # set up performance tracking
         if self.log_wandb:
@@ -104,7 +104,6 @@ class TrainingConfig(Config):
         else:
             # automatically results in ignoring all wandb calls
             wandb.init(project=config_file.project, entity="dphase", dir=self.log_dir, id=config_file.id, mode="disabled")
-
 
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
@@ -118,6 +117,7 @@ class TrainingConfig(Config):
     def set_defaults(self):
         super().set_defaults()
         default_values = {
+            'project_name': "dphase_experiments",
             'panel_validation_frags': None, # Fragment files for validation
             'panel_validation_vcfs': None, # VCF files for validation
             'min_graph_size': 1,  # Minimum size of graphs to use for training
@@ -177,6 +177,31 @@ class TestConfig(Config):
             if not hasattr(self, k):
                 self.__setattr__(k, v)
 
+class DataConfig(Config):
+    def __init__(self, config_file, **entries):
+        self.__dict__.update(entries)
+        self.set_defaults()
+        super().__init__(config_file)
+
+    def __str__(self):
+        s = " ===== Config =====\n"
+        s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
+        return s
+    def set_defaults(self):
+        default_values = {
+            'shuffle': True,
+            'seed': 1234,  # Random seed
+            'num_samples_per_category_default': 1000,
+            'epochs': 1,
+            'drop_redundant': False,
+            'global_ranges': {},
+            'ordering_ranges': {},
+            'save_indexes_path': None
+        }
+        for k, v, in default_values.items():
+            if not hasattr(self, k):
+                self.__setattr__(k, v)
+
 
 def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     # Load a YAML configuration file
@@ -197,6 +222,8 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
         return TestConfig(fname, **config)
+    elif config_type == CONFIG_TYPE.DATA_DESIGN:
+        return DataConfig(fname, **config)
 
 
 

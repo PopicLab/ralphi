@@ -1,6 +1,7 @@
 import seq.sim as seq
 import seq.frags as frags
 import networkx as nx
+import engine.config as config_utils
 import pickle
 import random
 import os
@@ -158,8 +159,9 @@ class FragGraph:
 
     def log_graph_properties(self, episode_id):
         for key, value in self.graph_properties.items():
-            if key not in ['neg_connectivity', 'compo', 'pos_paths']:
-                wandb.log({"Episode": episode_id, "Training: " + key: value})
+            if isinstance(value, set) or isinstance(value, list):
+                continue
+            wandb.log({"Episode": episode_id, "Training: " + key: value})
 
     def get_variants_set(self):
         vcf_positions = set()
@@ -405,8 +407,7 @@ class FragGraphGen:
                 with open(component_row.component_path, 'rb') as f:
                     if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                         continue
-                    # subgraph = pickle.load(f)[component_row['index']]
-                    subgraph = pickle.load(f)
+                    subgraph = pickle.load(f) #[component_row['index']]  # index in to list of graphs
                     if self.is_invalid_subgraph(subgraph):
                         continue
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
@@ -444,9 +445,11 @@ class FragGraphGen:
 
 
 class GraphDataset:
-    def __init__(self, config, validation_mode=False):
+    def __init__(self, config, ordering_config=None, validation_mode=False):
         self.config = config
+        self.ordering_config = ordering_config
         self.combined_graph_indexes = []
+        self.validation_mode = validation_mode
         if not validation_mode:
             self.fragment_files_panel = config.panel
             self.vcf_panel = None
@@ -456,23 +459,79 @@ class GraphDataset:
         self.column_names = None
         self.generate_indices()
 
+    def extract_examples(self, df, condition, lower_bound, upper_bound):
+        return df[(df[condition] >= lower_bound) & (df[condition] <= upper_bound)]
+    
+    def global_filter(self, df):
+        for filter_condition in self.ordering_config.global_ranges:
+            df = self.extract_examples(df, filter_condition, self.ordering_config.global_ranges[filter_condition]["min"],  self.ordering_config.global_ranges[filter_condition]["max"])
+        return df
+
+    def dataset_nested_design(self, df):
+        # parses the nested data_ordering_[train,validation].yaml, which allows arbitrary specifications
+        # of training/validation set design for any combination of features as long as they are in the indexing df
+
+        df = self.global_filter(df)
+
+        df_combined = []
+        
+        for group in self.ordering_config.ordering_ranges:
+            group_dict = self.ordering_config.ordering_ranges[group] 
+            subsampled_df = df.copy()
+            num_samples = self.ordering_config.num_samples_per_category_default
+            if "num_samples" in group_dict:
+                num_samples = group_dict["num_samples"]
+            quantiles_lookup = {}
+            for rule in group_dict["rules"]:
+                rule_dict = group_dict["rules"][rule]
+                if "quantiles" in rule_dict:
+                    quantiles = rule_dict["quantiles"]
+                    buckets = df[rule].quantile(quantiles)
+                    quantiles_lookup[rule] = buckets
+            for rule in group_dict["rules"]:
+                rule_dict = group_dict["rules"][rule]
+                if ("min" in rule_dict) and ("max" in rule_dict):
+                    subsampled_df = self.extract_examples(subsampled_df, rule, rule_dict["min"], rule_dict["max"])
+                elif "quantiles" in rule_dict:
+                    subsampled_df = self.extract_examples(subsampled_df, rule, quantiles_lookup[rule][rule_dict["quantiles"][0]], quantiles_lookup[rule][rule_dict["quantiles"][1]])
+            subsampled_df = subsampled_df.sample(n=num_samples, random_state=self.ordering_config.seed)
+            subsampled_df["group"] = group
+            df_combined.append(subsampled_df)
+            print("subsampled from group: ", group, subsampled_df, subsampled_df.describe())
+
+        if len(df_combined) == 0:            
+            df_single_epoch = df
+            df_single_epoch["group"] = "original"
+        else:
+            df_single_epoch = pd.concat(df_combined)
+        if self.ordering_config.shuffle:
+            df_single_epoch = df_single_epoch.sample(frac=1, random_state=self.ordering_config.seed)
+
+        if self.ordering_config.drop_redundant:
+            df_single_epoch.drop_duplicates(inplace=True)
+
+        df_epochs = []
+        for i in range(self.ordering_config.epochs):
+            df_iter = df_single_epoch.copy()
+            df_epochs.append(df_iter)
+
+        final_df = pd.concat(df_epochs)
+
+        if self.ordering_config.save_indexes_path is not None:
+            final_df.to_pickle(self.ordering_config.save_indexes_path)
+
+        return final_df
+
     def load_indices(self):
         if os.path.exists(self.fragment_files_panel.strip() + ".index_per_graph"):
             graph_dataset = pd.read_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
         else:
             graph_dataset = pd.DataFrame(self.combined_graph_indexes, columns=self.column_names)
             graph_dataset.to_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
+        if self.ordering_config:
+            graph_dataset = self.dataset_nested_design(graph_dataset)
         print("graph dataset... ", graph_dataset.describe())
         return graph_dataset
-
-    def filter_range(self, graph, comparator, min_bound=1, max_bound=float('inf')):
-        return min_bound <= comparator(graph) <= max_bound
-
-    def select_by_range(self, comparator=nx.number_of_nodes, min=1, max=float('inf')):
-        return filter(lambda graph: self.filter_range(graph.g, comparator, min, max), self.combined_graph_indexes)
-
-    def select_by_property(self, comparator=nx.has_bridges):
-        return filter(lambda graph: comparator(graph.g), self.combined_graph_indexes)
 
     def generate_indices(self):
         """
@@ -484,7 +543,7 @@ class GraphDataset:
         panel = open(self.fragment_files_panel, 'r').readlines()
         if self.vcf_panel is not None:
             vcf_panel = open(self.vcf_panel, 'r').readlines()
-        for i in tqdm.tqdm(range(len(panel))):
+        for i in range(len(panel)):
             # precompute graph properties when generating distribution
             connected_components = load_connected_components(panel[i],
                                                              load_components=self.config.load_components,
@@ -496,9 +555,11 @@ class GraphDataset:
             component_index_combined = []
             if self.vcf_panel is not None:
                 vcf_dict = construct_vcf_idx_to_record_dict(vcf_panel[i].strip())
-            for component_index, component in enumerate(tqdm.tqdm(connected_components)):
-                component_path = panel[i].strip() + ".components" + "_" + str(component_index)
+            for component_index, component in enumerate(connected_components):
+                component_path = panel[i].strip() + ".components" # + "_" + str(component_index)
                 if self.vcf_panel is not None:
+                    # in this case, we need graph/vcf files per every single graph for validation
+                    component_path = component_path + "_" + str(component_index)
                     if not os.path.exists(component_path + ".vcf"):
                         component.construct_vcf_for_frag_graph(vcf_panel[i].strip(),
                                                                component_path, vcf_dict)

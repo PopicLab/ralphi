@@ -1,0 +1,41 @@
+global_ranges: # these filter down the entire dataset
+  n_nodes:
+    min: 10  # Minimum size of graphs to use for training
+    max: 1000 # Maximum size of graphs to use for training
+  density:
+    min: 0
+    max: 1
+
+ordering_ranges: # design specific feature combinations and ordering
+  a:
+    num_samples: 2000
+    rules:
+      n_nodes:
+        min: 10  # Minimum size of graphs to use for training
+        max: 100 # Maximum size of graphs to use for training
+        # quantiles: [0.0, 0.25]
+      articulation_points:
+        min: 0
+        max: 2
+        # quantiles: [0.75, 1.0]
+  b:
+    # num_samples: 1000
+    rules:
+      n_nodes:
+        min: 101
+        max: 1000
+        # quantiles: [0.0, 1.0]
+      density:
+        quantiles: [0.0, 0.25]
+  c:
+    num_samples: 1000
+    rules:
+      n_nodes:
+        quantiles: [0.25, 0.5]
+
+shuffle: True # shuffle training data, don't use this if runnning curriculum learning
+seed: 1234
+num_samples_per_category_default: 200 
+drop_redundant: False # for training, may not want to remove duplicate graphs
+epochs: 5 # number of passes through the data
+
