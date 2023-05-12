@@ -33,7 +33,7 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
     N50 = benchmark_result.get_N50_phased_portion()
     label = descriptor + ", " + chrom
 
-    with open(config.out_dir + "/benchmark.txt", "a") as out_file:
+    with open(config.out_dir + "/benchmark_" + str(group) + ".txt", "a") as out_file:
         out_file.write("benchmark of model: " + str(model_checkpoint_id) + "\n")
         out_file.write("switch count: " + str(benchmark_result.switch_count[chrom]) + "\n")
         out_file.write("mismatch count: " + str(benchmark_result.mismatch_count[chrom]) + "\n")
