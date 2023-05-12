@@ -12,7 +12,7 @@ import tqdm
 import envs.phasing_env as envs
 import os
 import models.actor_critic as agents
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 
 
 def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, group):
@@ -21,9 +21,10 @@ def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, 
     for v in idx2var.values():
         v.assign_haplotype()
     idx2var = utils.post_processing.update_split_block_phase_sets(agent.env.solutions, idx2var)
-    vcf_writer.write_phased_vcf(validation_input_vcf, idx2var, config.validation_output_vcf + "_" +  str(group) + ".vcf")
-    chrom = benchmark.get_ref_name(config.validation_output_vcf)
-    benchmark_result = benchmark.vcf_vcf_error_rate(config.validation_output_vcf +  "_" +  str(group) + ".vcf", validation_input_vcf, indels=False)
+    output_vcf = config.validation_output_vcf + "_" +  str(group) + ".vcf"
+    vcf_writer.write_phased_vcf(validation_input_vcf, idx2var, output_vcf)
+    chrom = benchmark.get_ref_name(output_vcf)
+    benchmark_result = benchmark.vcf_vcf_error_rate(output_vcf, validation_input_vcf, indels=False)
     hap_blocks = hap_block_visualizer.pretty_print(solutions, idx2var.items(), validation_input_vcf, genome)
     return chrom, benchmark_result, hap_blocks
 
@@ -59,7 +60,8 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
     return chrom, benchmark_result.switch_count[chrom], benchmark_result.mismatch_count[chrom], benchmark_result.flat_count[chrom], benchmark_result.phased_count[chrom]
 
 
-def validation_task(model_checkpoint_id, episode_id, sub_df, training_agent, config, group):
+def validation_task(validation_task_params):
+    model_checkpoint_id, episode_id, sub_df, training_agent, config, group = validation_task_params 
     task_component_stats = []
     for index, component_row in tqdm.tqdm(sub_df.iterrows()):
         with open(component_row.component_path, 'rb') as f:
@@ -71,7 +73,7 @@ def validation_task(model_checkpoint_id, episode_id, sub_df, training_agent, con
 
             mini_env = envs.PhasingEnv(config, preloaded_graphs=subgraph, record_solutions=True)
             agent = agents.DiscreteActorCriticAgent(mini_env)
-            agent.model.load_state_dict(training_agent.model.state_dict())
+            agent.model.load_state_dict(training_agent.state_dict())
 
             sum_of_rewards = 0
             sum_of_cuts = 0
@@ -107,12 +109,10 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
     input_tuples = []
     for group in validation_dataset.group.unique():
         sub_df = validation_dataset[validation_dataset["group"] == group]
-        input_tuples.append((model_checkpoint_id, episode_id, sub_df, agent, config, group))
-
-    with ProcessPoolExecutor(max_workers=8) as executor:
+        input_tuples.append((model_checkpoint_id, episode_id, sub_df, agent.model, config, group))
+    with ThreadPoolExecutor(max_workers=16) as executor:
         for r in executor.map(validation_task, input_tuples):
             validation_component_stats.append(r)
-    print("finished parallel for, resulting dataframes:", validation_component_stats)
     validation_indexing_df = pd.concat(validation_component_stats)
     validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))
 

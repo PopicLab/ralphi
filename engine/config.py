@@ -95,8 +95,8 @@ class TrainingConfig(Config):
         logger_stats_validate.info(",".join(STATS_LOG_COLS_VALIDATE))
         logger_main.info(self)
 
-        if os.path.exists(self.out_dir + "/benchmark.txt"):
-            os.remove(self.out_dir + "/benchmark.txt")
+        for f in os.listdir(self.out_dir):
+            os.remove(os.path.join(self.out_dir, f))
 
         # set up performance tracking
         if self.log_wandb:
