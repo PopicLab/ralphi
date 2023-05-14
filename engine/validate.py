@@ -13,6 +13,7 @@ import envs.phasing_env as envs
 import os
 import models.actor_critic as agents
 from concurrent.futures import ThreadPoolExecutor
+import numpy as np
 
 
 def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, group):
@@ -106,11 +107,12 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
     validation_component_stats = []
     print("running validation with model number:  ", model_checkpoint_id, ", at episode: ", episode_id)
 
+    num_chunks = 16
+    validation_chunks = np.array_split(validation_dataset.sample(frac=1, random_state=config.seed), num_chunks)
     input_tuples = []
-    for group in validation_dataset.group.unique():
-        sub_df = validation_dataset[validation_dataset["group"] == group]
-        input_tuples.append((model_checkpoint_id, episode_id, sub_df, agent.model, config, group))
-    with ThreadPoolExecutor(max_workers=16) as executor:
+    for i, sub_df in enumerate(validation_chunks):
+        input_tuples.append((model_checkpoint_id, episode_id, sub_df, agent.model, config, str(i)))
+    with ThreadPoolExecutor(max_workers=num_chunks) as executor:
         for r in executor.map(validation_task, input_tuples):
             validation_component_stats.append(r)
     validation_indexing_df = pd.concat(validation_component_stats)
