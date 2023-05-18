@@ -345,8 +345,8 @@ class GraphDataset:
     def round_robin_chunkify(self, df):
         size_ordered = df.sort_values(by=['n_nodes'], ascending=True)
         chunks = []
-        for i in range(self.ordering_config.validation_parallel_chunks):
-            chunks.append(size_ordered.iloc[i:: self.ordering_config.validation_parallel_chunks, :])
+        for i in range(self.config.validation_parallel_chunks):
+            chunks.append(size_ordered.iloc[i:: self.config.validation_parallel_chunks, :])
         return chunks
 
     def dataset_nested_design(self, df):
@@ -413,9 +413,9 @@ class GraphDataset:
         else:
             graph_dataset = pd.DataFrame(self.combined_graph_indexes, columns=self.column_names)
             graph_dataset.to_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
+        print("graph dataset... ", graph_dataset.describe())
         if self.ordering_config:
             graph_dataset = self.dataset_nested_design(graph_dataset)
-        print("graph dataset... ", graph_dataset.describe())
         return graph_dataset
 
     def generate_indices(self):
