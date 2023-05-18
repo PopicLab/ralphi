@@ -107,7 +107,7 @@ def validation_task(validation_task_params):
 
                 task_component_stats.append(cur_index)
     return pd.DataFrame(task_component_stats, columns=list(sub_df.columns) + ["switch", "mismatch", "flat", "phased", "reward_val", "cut_val", "chr"])
-def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config):
+def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config, executor):
     # benchmark the current model against a held out set of fragment graphs (validation panel)
 
     validation_component_stats = []
@@ -116,9 +116,9 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
     input_tuples = []
     for i, sub_df in enumerate(validation_dataset):
         input_tuples.append((model_checkpoint_id, episode_id, sub_df, agent.model, config, str(i)))
-    with ThreadPoolExecutor(max_workers=config.validation_parallel_chunks) as executor:
-        for r in executor.map(validation_task, input_tuples):
-            validation_component_stats.append(r)
+    for r in executor.map(validation_task, input_tuples):
+        validation_component_stats.append(r)
+
     validation_indexing_df = pd.concat(validation_component_stats)
     validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))
 

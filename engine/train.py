@@ -7,6 +7,7 @@ import torch
 import random
 import engine.config as config_utils
 import engine.validate
+from concurrent.futures import ThreadPoolExecutor
 
 # ------ CLI ------
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
@@ -42,21 +43,23 @@ if config.pretrained_model is not None:
 best_validation_reward = 0
 model_checkpoint_id = 0
 episode_id = 0
-while agent.env.has_state():
-    if config.max_episodes is not None and episode_id >= config.max_episodes:
-        break
-    episode_reward = agent.run_episode(config, episode_id=episode_id)
-    if episode_id % config.interval_validate == 0:
-        torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
-        if config.panel_validation_frags and config.panel_validation_vcfs:
-            reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
-            model_checkpoint_id += 1
-            if reward > best_validation_reward:
-                best_validation_reward = reward
-                torch.save(agent.model.state_dict(), config.best_model_path)
-    episode_id += 1
-    agent.env = env_train
-    agent.env.reset()
+
+with ThreadPoolExecutor(max_workers=config.validation_parallel_chunks) as executor:
+    while agent.env.has_state():
+        if config.max_episodes is not None and episode_id >= config.max_episodes:
+            break
+        episode_reward = agent.run_episode(config, episode_id=episode_id)
+        if episode_id % config.interval_validate == 0:
+            torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
+            if config.panel_validation_frags and config.panel_validation_vcfs:
+                reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, agent, config, executor)
+                model_checkpoint_id += 1
+                if reward > best_validation_reward:
+                    best_validation_reward = reward
+                    torch.save(agent.model.state_dict(), config.best_model_path)
+        episode_id += 1
+        agent.env = env_train
+        agent.env.reset()
 
 # save the model
 torch.save(agent.model.state_dict(), config.model_path)
