@@ -39,7 +39,8 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     num_features = 3
     num_cores = 10
     weight_norm = False
-    id_basis = str(num_features) + "_between"
+    lr = 0.00003
+    id_basis = str(num_features) + "_between_lr_" + str(lr)
     if weight_norm:
         id_basis += "_norma"
     default_values = {
@@ -73,7 +74,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
         'layer_type': None,
         'embedding_vars': {},
         'gamma': 0.98,
-        'lr': 0.00003,
+        'lr': lr,
         'weight_norm': weight_norm
     }
     for layer_type in layer_types:

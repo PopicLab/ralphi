@@ -94,12 +94,12 @@ class DiscreteActorCriticAgent:
             episode_reward += reward
             if not test_mode:
                 self.model.rewards.append(reward)
-        if not test_mode:
+        '''if not test_mode:
             loss = self.update_model(episode_id)
             cut_size = self.env.get_cut_value()
             self.log_episode_stats(episode_id, episode_reward, loss, time.time() - start_time)
             wandb.log({"Episode": episode_id, "Training Episode Reward": episode_reward})
-            wandb.log({"Episode": episode_id, "Training Cut Size": cut_size})
+            wandb.log({"Episode": episode_id, "Training Cut Size": cut_size})'''
         if config.render:
             self.env.render(config.render_view)
         return episode_reward

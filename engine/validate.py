@@ -1,5 +1,3 @@
-import time
-
 import third_party.HapCUT2.utilities.calculate_haplotype_statistics as benchmark
 import utils.hap_block_visualizer as hap_block_visualizer
 import pickle
@@ -16,7 +14,6 @@ import os
 import models.actor_critic as agents
 from concurrent.futures import ThreadPoolExecutor
 
-
 def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, group):
     # given any subset of phasing solutions, computes errors rates against ground truth VCF
     idx2var = var.extract_variants(solutions)
@@ -27,11 +24,11 @@ def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, 
     vcf_writer.write_phased_vcf(validation_input_vcf, idx2var, output_vcf)
     chrom = benchmark.get_ref_name(output_vcf)
     benchmark_result = benchmark.vcf_vcf_error_rate(output_vcf, validation_input_vcf, indels=False)
-    hap_blocks = hap_block_visualizer.pretty_print(solutions, idx2var.items(), validation_input_vcf, genome)
-    return chrom, benchmark_result, hap_blocks
+    #hap_blocks = hap_block_visualizer.pretty_print(solutions, idx2var.items(), validation_input_vcf, genome)
+    return chrom, benchmark_result#, hap_blocks
 
 def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_checkpoint_id, episode_id, agent, config, genome, group, descriptor="_default_"):
-    chrom, benchmark_result, hap_blocks = compute_error_rates(solutions, input_vcf, agent, config, genome, group)
+    chrom, benchmark_result = compute_error_rates(solutions, input_vcf, agent, config, genome, group)
     AN50 = benchmark_result.get_AN50()
     N50 = benchmark_result.get_N50_phased_portion()
     label = descriptor + ", " + chrom
@@ -49,8 +46,8 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
         out_file.write("sum of cuts: " + str(sum_of_cuts) + "\n")
         out_file.write(descriptor + "\n")
         out_file.write(str(benchmark_result) + "\n")
-        if benchmark_result.switch_count[chrom] > 0 or benchmark_result.mismatch_count[chrom] > 0:
-            out_file.write(str(hap_blocks) + "\n")
+        """if benchmark_result.switch_count[chrom] > 0 or benchmark_result.mismatch_count[chrom] > 0:
+            out_file.write(str(hap_blocks) + "\n")"""
 
     logging.getLogger(config_utils.STATS_LOG_VALIDATE).info("%s,%s,%s,%s, %s,%s,%s,%s,%s,%s"
                                                             % (label, episode_id, sum_of_cuts, sum_of_rewards,
@@ -67,10 +64,7 @@ def validation_task(validation_task_params):
     task_component_stats = []
     for index, component_row in tqdm.tqdm(sub_df.iterrows()):
         with open(component_row.component_path, 'rb') as f:
-            start_loading = time.time()
             subgraph = pickle.load(f)
-            end_loading = time.time()
-            print("loading time ", end_loading - start_loading)
             subgraph.indexed_graph_stats = component_row
             if subgraph.n_nodes < 2 and subgraph.fragments[0].n_variants < 2:
                 # only validate on non-singleton graphs with > 1 variant
@@ -86,8 +80,6 @@ def validation_task(validation_task_params):
             sum_of_rewards += reward_val
             cut_val = agent.env.get_cut_value()
             sum_of_cuts += cut_val
-            end_episode = time.time()
-            print("episode time ", end_episode - end_loading)
             if config.debug:
                 graph_stats = agent.env.state.frag_graph.graph_properties
 
@@ -136,7 +128,7 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
         log_stats_for_filter(validation_indexing_df[validation_indexing_df["group"] == group], "group: " + str(group))
 
     # log specific plots to wandb for graph topologies we are interested in    
-    articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] > 0]
+    '''articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] > 0]
     log_stats_for_filter(articulation_df, "Articulation > 0:")
     articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] == 0]
     log_stats_for_filter(articulation_df, "Articulation == 0:")
@@ -146,6 +138,6 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
                                                       & (validation_indexing_df["n_nodes"] <= 100)]
     log_stats_for_filter(node_filter_df, "0 to 100 nodes:")
     node_filter_df = validation_indexing_df.loc[(101 <= validation_indexing_df["n_nodes"])]
-    log_stats_for_filter(node_filter_df, "101 plus nodes:")
+    log_stats_for_filter(node_filter_df, "101 plus nodes:")'''
 
     return validation_indexing_df["reward_val"].sum()

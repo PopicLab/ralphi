@@ -26,19 +26,12 @@ dgl.seed(config.seed)
 torch.set_num_threads(config.num_cores*2)
 torch.set_default_tensor_type(torch.DoubleTensor)
 
-"""training_dataset = dataset[(dataset["n_nodes"] > 50) & (dataset["n_nodes"] < 1000)]
-training_dataset = training_dataset.sample(n=min(len(training_dataset)-1000, 10000), random_state=config.seed)
-validation_dataset = dataset[(dataset["n_nodes"] > 50) & (~ dataset["component_path"].isin(list(training_dataset["component_path"])))]
-validation_dataset = validation_dataset.sample(n=1000, random_state=config.seed)"""
-
 training_dataset = graphs.frag_graph.GraphDataset(config, training_config, validation_mode=False).load_indices()
 
 if config.panel_validation_frags and config.panel_validation_vcfs:
     validation_dataset = graphs.frag_graph.GraphDataset(config, validation_config, validation_mode=True).load_indices()
-    """
     # e.g. to only validate on cases with articulation points
-    validation_dataset = validation_dataset[(validation_dataset["n_nodes"] > 50) & (not validation_dataset["index"].isin(training_dataset["index"].iteritems()))]
-    validation_dataset = validation_dataset.sample(n=1000, random_state=config.seed)"""
+    # validation_dataset = validation_dataset[validation_dataset["articulation_points"] != 0]
 
 # Setup the agent and the training environment
 env_train = envs.PhasingEnv(config, graph_dataset=training_dataset)

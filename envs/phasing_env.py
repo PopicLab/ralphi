@@ -15,14 +15,15 @@ class State:
     """
 
     def __init__(self, frag_graph, weight_norm):
+        if weight_norm:
+            dict_weights = {k: v / frag_graph.graph_properties["sum_of_pos_edge_weights"] for k, v in nx.get_edge_attributes(frag_graph, 'weight').items()}
+            nx.set_edge_attributes(frag_graph,dict_weights, 'weight')
         self.frag_graph = frag_graph
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
         features = list(elem.value for elem in constants.NodeFeatures)
         self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features)
-        if weight_norm:
-            self.g.edata['weight'] = self.g.edata['weight'] / frag_graph.graph_properties["sum_of_pos_edge_weights"]
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes * 2)
         self.explorable = torch.zeros(self.num_nodes * 2)
