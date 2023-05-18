@@ -126,6 +126,10 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config)
         metrics_of_interest = ["reward_val", "cut_val", "switch", "mismatch", "flat", "phased"]
         for metric in metrics_of_interest:
             wandb.log({"Episode": episode_id, descriptor + " Validation " + metric + " on " + "_default_overall": validation_filtered_df[metric].sum()})
+        wandb.log({"Episode": episode_id, descriptor + " Validation " + "Number of Examples" + " on " + "_default_overall": len(validation_filtered_df)})
+        percentage_metrics = ["switch", "mismatch", "flat"]
+        for metric in percentage_metrics:
+            wandb.log({"Episode": episode_id, descriptor + " Validation " + "% with " + metric + " errors" + " on " + "_default_overall": len(validation_filtered_df[validation_filtered_df[metric] > 0]) / len(validation_filtered_df)})
 
     # stats for entire validation set
     log_stats_for_filter(validation_indexing_df) 
