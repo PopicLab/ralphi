@@ -46,6 +46,7 @@ class Config:
             'in_dim': 1,
             'hidden_dim': 264,
             'num_layers': 3,
+            'light_logging': True
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
@@ -120,6 +121,7 @@ class TrainingConfig(Config):
             'project_name': "dphase_experiments",
             'panel_validation_frags': None, # Fragment files for validation
             'panel_validation_vcfs': None, # VCF files for validation
+            'validation_parallel_chunks': 8,
             'min_graph_size': 1,  # Minimum size of graphs to use for training
             'max_graph_size': 1000,  # Maximum size of graphs to use for training
             'skip_trivial_graphs': True,
