@@ -383,7 +383,8 @@ class GraphDataset:
 
         if len(df_combined) == 0:            
             df_single_epoch = df
-            df_single_epoch["group"] = "original"
+            if "group" not in df_single_epoch:
+                df_single_epoch["group"] = "original"
         else:
             df_single_epoch = pd.concat(df_combined)
         if self.ordering_config.shuffle:

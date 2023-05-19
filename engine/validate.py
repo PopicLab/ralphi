@@ -12,7 +12,6 @@ import tqdm
 import envs.phasing_env as envs
 import os
 import models.actor_critic as agents
-from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 
@@ -65,16 +64,12 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
     return chrom, benchmark_result.switch_count[chrom], benchmark_result.mismatch_count[chrom], benchmark_result.flat_count[chrom], benchmark_result.phased_count[chrom]
 
 
-def validation_task(validation_task_params):
-    model_checkpoint_id, episode_id, sub_df, training_agent, config, group = validation_task_params 
+def validation_task(model_checkpoint_id, episode_id, sub_df, training_agent, config, group):
     task_component_stats = []
     for index, component_row in tqdm.tqdm(sub_df.iterrows()):
         with open(component_row.component_path, 'rb') as f:
             subgraph = pickle.load(f)
             subgraph.indexed_graph_stats = component_row
-            if subgraph.n_nodes < 2 and subgraph.fragments[0].n_variants < 2:
-                # only validate on non-singleton graphs with > 1 variant
-                continue
 
             mini_env = envs.PhasingEnv(config, preloaded_graphs=subgraph, record_solutions=True)
             agent = agents.DiscreteActorCriticAgent(mini_env)
@@ -116,8 +111,8 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config,
     input_tuples = []
     for i, sub_df in enumerate(validation_dataset):
         input_tuples.append((model_checkpoint_id, episode_id, sub_df, agent.model, config, str(i)))
-    for r in executor.map(validation_task, input_tuples):
-        validation_component_stats.append(r)
+    
+    validation_component_stats += executor.starmap(validation_task, input_tuples)
 
     validation_indexing_df = pd.concat(validation_component_stats)
     validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))

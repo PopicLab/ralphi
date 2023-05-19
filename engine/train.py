@@ -7,7 +7,8 @@ import torch
 import random
 import engine.config as config_utils
 import engine.validate
-from concurrent.futures import ThreadPoolExecutor
+import wandb
+from multiprocessing import Pool
 
 # ------ CLI ------
 parser = argparse.ArgumentParser(description='Train haplotype phasing')
@@ -44,7 +45,7 @@ best_validation_reward = 0
 model_checkpoint_id = 0
 episode_id = 0
 
-with ThreadPoolExecutor(max_workers=config.validation_parallel_chunks) as executor:
+with Pool(config.validation_parallel_chunks) as executor:
     while agent.env.has_state():
         if config.max_episodes is not None and episode_id >= config.max_episodes:
             break
@@ -63,3 +64,4 @@ with ThreadPoolExecutor(max_workers=config.validation_parallel_chunks) as execut
 
 # save the model
 torch.save(agent.model.state_dict(), config.model_path)
+wandb.finish()
