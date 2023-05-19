@@ -39,7 +39,7 @@ class Config:
     def set_defaults(self):
         default_values = {
             'render': False,  # Enables the rendering of the environment
-            'num_cores': 4,  # Number of threads to use for Pytorch
+            'num_cores_torch': 4,  # Number of threads to use for Pytorch
             'compress': True,
             'normalization': False,
             'debug': True,
@@ -112,7 +112,7 @@ class TrainingConfig(Config):
                                       logging.StreamHandler(sys.stdout)])
     
         # enforce light logging if using multithreading validation
-        if self.validation_parallel_chunks > 1:
+        if self.num_cores_validation > 1:
             self.light_logging = True
                      
     def __str__(self):
@@ -126,7 +126,7 @@ class TrainingConfig(Config):
             'project_name': "dphase_experiments",
             'panel_validation_frags': None, # Fragment files for validation
             'panel_validation_vcfs': None, # VCF files for validation
-            'validation_parallel_chunks': 8,
+            'num_cores_validation': 8,
             'min_graph_size': 1,  # Minimum size of graphs to use for training
             'max_graph_size': 1000,  # Maximum size of graphs to use for training
             'skip_trivial_graphs': True,

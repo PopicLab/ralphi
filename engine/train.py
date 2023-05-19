@@ -7,7 +7,6 @@ import torch
 import random
 import engine.config as config_utils
 import engine.validate
-import wandb
 from multiprocessing import Pool
 
 # ------ CLI ------
@@ -25,7 +24,7 @@ validation_config = config_utils.load_config(args.validation_dataset_config, con
 
 torch.manual_seed(config.seed)
 random.seed(config.seed)
-torch.set_num_threads(config.num_cores)
+torch.set_num_threads(config.num_cores_torch)
 
 training_dataset = graphs.frag_graph.GraphDataset(config, training_config, validation_mode=False).load_indices()
 
@@ -45,7 +44,7 @@ best_validation_reward = 0
 model_checkpoint_id = 0
 episode_id = 0
 
-with Pool(config.validation_parallel_chunks) as executor:
+with Pool(config.num_cores_validation) as executor:
     while agent.env.has_state():
         if config.max_episodes is not None and episode_id >= config.max_episodes:
             break
@@ -64,4 +63,3 @@ with Pool(config.validation_parallel_chunks) as executor:
 
 # save the model
 torch.save(agent.model.state_dict(), config.model_path)
-wandb.finish()

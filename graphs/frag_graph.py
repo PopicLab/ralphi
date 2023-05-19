@@ -345,8 +345,8 @@ class GraphDataset:
     def round_robin_chunkify(self, df):
         size_ordered = df.sort_values(by=['n_nodes'], ascending=True)
         chunks = []
-        for i in range(self.config.validation_parallel_chunks):
-            chunks.append(size_ordered.iloc[i:: self.config.validation_parallel_chunks, :])
+        for i in range(self.config.num_cores_validation):
+            chunks.append(size_ordered.iloc[i:: self.config.num_cores_validation, :])
         return chunks
 
     def dataset_nested_design(self, df):
