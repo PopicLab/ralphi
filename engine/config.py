@@ -110,6 +110,11 @@ class TrainingConfig(Config):
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
                             handlers=[logging.FileHandler(self.log_dir + '/training.log', mode='w'),
                                       logging.StreamHandler(sys.stdout)])
+    
+        # enforce light logging if using multithreading validation
+        if self.validation_parallel_chunks > 1:
+            self.light_logging = True
+                     
     def __str__(self):
         s = " ===== Config =====\n"
         s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
