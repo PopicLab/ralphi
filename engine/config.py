@@ -101,7 +101,7 @@ class TrainingConfig(Config):
 
         # set up performance tracking
         if self.log_wandb:
-            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir)
+            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, config=self, name=self.run_name)
         else:
             # automatically results in ignoring all wandb calls
             wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, mode="disabled")
@@ -124,6 +124,7 @@ class TrainingConfig(Config):
         super().set_defaults()
         default_values = {
             'project_name': "dphase_experiments",
+            'run_name': "vanilla",
             'panel_validation_frags': None, # Fragment files for validation
             'panel_validation_vcfs': None, # VCF files for validation
             'num_cores_validation': 8,
