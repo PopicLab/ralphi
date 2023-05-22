@@ -39,13 +39,14 @@ class Config:
     def set_defaults(self):
         default_values = {
             'render': False,  # Enables the rendering of the environment
-            'num_cores': 4,  # Number of threads to use for Pytorch
+            'num_cores_torch': 4,  # Number of threads to use for Pytorch
             'compress': True,
             'normalization': False,
             'debug': True,
             'in_dim': 1,
             'hidden_dim': 264,
             'num_layers': 3,
+            'light_logging': True
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
@@ -95,12 +96,12 @@ class TrainingConfig(Config):
         logger_stats_validate.info(",".join(STATS_LOG_COLS_VALIDATE))
         logger_main.info(self)
 
-        if os.path.exists(self.out_dir + "/benchmark.txt"):
-            os.remove(self.out_dir + "/benchmark.txt")
+        for f in os.listdir(self.out_dir):
+            os.remove(os.path.join(self.out_dir, f))
 
         # set up performance tracking
         if self.log_wandb:
-            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir)
+            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, config=self, name=self.run_name)
         else:
             # automatically results in ignoring all wandb calls
             wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, mode="disabled")
@@ -109,6 +110,11 @@ class TrainingConfig(Config):
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
                             handlers=[logging.FileHandler(self.log_dir + '/training.log', mode='w'),
                                       logging.StreamHandler(sys.stdout)])
+    
+        # enforce light logging if using multithreading validation
+        if self.num_cores_validation > 1:
+            self.light_logging = True
+                     
     def __str__(self):
         s = " ===== Config =====\n"
         s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
@@ -118,8 +124,10 @@ class TrainingConfig(Config):
         super().set_defaults()
         default_values = {
             'project_name': "dphase_experiments",
+            'run_name': "vanilla",
             'panel_validation_frags': None, # Fragment files for validation
             'panel_validation_vcfs': None, # VCF files for validation
+            'num_cores_validation': 8,
             'min_graph_size': 1,  # Minimum size of graphs to use for training
             'max_graph_size': 1000,  # Maximum size of graphs to use for training
             'skip_trivial_graphs': True,
