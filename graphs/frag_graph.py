@@ -466,6 +466,12 @@ class GraphDataset:
         for filter_condition in self.ordering_config.global_ranges:
             df = self.extract_examples(df, filter_condition, self.ordering_config.global_ranges[filter_condition]["min"],  self.ordering_config.global_ranges[filter_condition]["max"])
         return df
+    def round_robin_chunkify(self, df):
+        size_ordered = df.sort_values(by=['n_nodes'], ascending=True)
+        chunks = []
+        for i in range(self.config.num_cores_validation):
+            chunks.append(size_ordered.iloc[i:: self.config.num_cores_validation, :])
+        return chunks
 
     def dataset_nested_design(self, df):
         # parses the nested data_ordering_[train,validation].yaml, which allows arbitrary specifications
@@ -501,7 +507,8 @@ class GraphDataset:
 
         if len(df_combined) == 0:            
             df_single_epoch = df
-            df_single_epoch["group"] = "original"
+            if "group" not in df_single_epoch:
+                df_single_epoch["group"] = "original"
         else:
             df_single_epoch = pd.concat(df_combined)
         if self.ordering_config.shuffle:
@@ -517,6 +524,9 @@ class GraphDataset:
 
         final_df = pd.concat(df_epochs)
 
+        if self.validation_mode:
+            final_df = self.round_robin_chunkify(final_df)
+
         if self.ordering_config.save_indexes_path is not None:
             final_df.to_pickle(self.ordering_config.save_indexes_path)
 
@@ -528,9 +538,9 @@ class GraphDataset:
         else:
             graph_dataset = pd.DataFrame(self.combined_graph_indexes, columns=self.column_names)
             graph_dataset.to_pickle(self.fragment_files_panel.strip() + ".index_per_graph")
+        print("graph dataset... ", graph_dataset.describe())
         if self.ordering_config:
             graph_dataset = self.dataset_nested_design(graph_dataset)
-        print("graph dataset... ", graph_dataset.describe())
         return graph_dataset
 
     def generate_indices(self):

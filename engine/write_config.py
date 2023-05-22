@@ -37,12 +37,12 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     pna_scaler = [["identity", "amplification", "attenuation"]]
     pna_residual = [True]
     num_features = 6
-    num_cores = 10
+    num_cores = 4
     weight_norm = False
     lr = 0.00003
-    id_basis = str(num_features) + "_reach_lr_" + str(lr)
+    run_name_basis = str(num_features) + "_reach_lr_" + str(lr)
     if weight_norm:
-        id_basis += "_norma"
+        run_name_basis += "_norma"
     default_values = {
         'project': project,
         'panel': panel_path,
@@ -56,11 +56,12 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
         'max_episodes': 'null',  # Maximum number of episodes to run
         'render': False,  # Enables the rendering of the environment
         'render_view': "weighted_view",  # Controls how the graph is rendered
-        'num_cores': num_cores,  # Number of threads to use for Pytorch
+        'num_cores_torch': num_cores,  # Number of threads to use for Pytorch
+        'num_cores_validation': 8,
         'interval_validate': 1000,  # Number of episodes between model validation runs
         'debug': True,
         'log_wandb': True,
-        'id': None,
+        'run_name': None,
         'compress': True,
         'normalization': False,
         # caching parameters
@@ -75,7 +76,8 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
         'embedding_vars': {},
         'gamma': 0.98,
         'lr': lr,
-        'weight_norm': weight_norm
+        'weight_norm': weight_norm,
+        'light_logging': True
     }
     for layer_type in layer_types:
         for num_layer in layers_number:
@@ -102,14 +104,14 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
                             if bias is not None:
                                 id_bias = 'bias'
                                 bias_list = [bias] * num_layer
-                            id_file = "_".join([id_basis, layer_type, str(num_layer), layer_id, id_attn, id_bias])
+                            id_file = "_".join([run_name_basis, layer_type, str(num_layer), layer_id, id_attn, id_bias])
                             parameters = update_dict(default_values, id_file
                                                      , layer_type, layer_struct, attention_struct,
                                                      {'bias': bias_list})
                             write_yaml(config_path, id_file, parameters)
                     elif layer_type == 'gin':
                         for aggreg in gin_aggregator:
-                            id_file = "_".join([id_basis, layer_type, str(num_layer), layer_id, id_attn, aggreg])
+                            id_file = "_".join([run_name_basis, layer_type, str(num_layer), layer_id, id_attn, aggreg])
                             aggreg = [aggreg] * num_layer
                             parameters = update_dict(default_values, id_file,
                                                      layer_type, layer_struct, attention_struct,
@@ -126,7 +128,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
                                     if residual is not None:
                                         res_list = [residual] * num_layer
                                         id_res = 'res'
-                                    id_file = "_".join([id_basis, layer_type, str(num_layer), layer_id, id_attn, str(version_aggreg),
+                                    id_file = "_".join([run_name_basis, layer_type, str(num_layer), layer_id, id_attn, str(version_aggreg),
                                                         str(version_scaler), id_res])
                                     parameters = update_dict(default_values, id_file,
                                                              layer_type, layer_struct, attention_struct,
