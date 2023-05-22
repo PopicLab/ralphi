@@ -36,11 +36,11 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     pna_aggregator = [["sum", "mean", "std"]]
     pna_scaler = [["identity", "amplification", "attenuation"]]
     pna_residual = [True]
-    num_features = 3
+    num_features = 6
     num_cores = 10
     weight_norm = False
     lr = 0.00003
-    id_basis = str(num_features) + "_between_lr_" + str(lr)
+    id_basis = str(num_features) + "_reach_lr_" + str(lr)
     if weight_norm:
         id_basis += "_norma"
     default_values = {

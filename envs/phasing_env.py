@@ -16,8 +16,8 @@ class State:
 
     def __init__(self, frag_graph, weight_norm):
         if weight_norm:
-            dict_weights = {k: v / frag_graph.graph_properties["sum_of_pos_edge_weights"] for k, v in nx.get_edge_attributes(frag_graph, 'weight').items()}
-            nx.set_edge_attributes(frag_graph,dict_weights, 'weight')
+            dict_weights = {k: v / frag_graph.graph_properties["sum_of_pos_edge_weights"] for k, v in nx.get_edge_attributes(frag_graph.g, 'weight').items()}
+            nx.set_edge_attributes(frag_graph.g,dict_weights, 'weight')
         self.frag_graph = frag_graph
         edge_attrs = None
         if frag_graph.n_nodes > 1:
