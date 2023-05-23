@@ -12,7 +12,7 @@ import tqdm
 import envs.phasing_env as envs
 import os
 import models.actor_critic as agents
-import numpy as np
+import torch
 
 
 def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, group):
@@ -64,16 +64,20 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
     return chrom, benchmark_result.switch_count[chrom], benchmark_result.mismatch_count[chrom], benchmark_result.flat_count[chrom], benchmark_result.phased_count[chrom]
 
 
-def validation_task(model_checkpoint_id, episode_id, sub_df, training_agent, config, group):
+def validation_task(model_checkpoint_id, episode_id, sub_df, model_path, config, group):
     task_component_stats = []
+    agent = None
     for index, component_row in tqdm.tqdm(sub_df.iterrows()):
         with open(component_row.component_path, 'rb') as f:
             subgraph = pickle.load(f)
             subgraph.indexed_graph_stats = component_row
 
             mini_env = envs.PhasingEnv(config, preloaded_graphs=subgraph, record_solutions=True)
-            agent = agents.DiscreteActorCriticAgent(mini_env)
-            agent.model.load_state_dict(training_agent.state_dict())
+            if agent is not None:
+                agent.env = mini_env
+            else:
+                agent = agents.DiscreteActorCriticAgent(mini_env)
+                agent.model.load_state_dict(torch.load(model_path))
 
             sum_of_rewards = 0
             sum_of_cuts = 0
@@ -110,7 +114,7 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config,
 
     input_tuples = []
     for i, sub_df in enumerate(validation_dataset):
-        input_tuples.append((model_checkpoint_id, episode_id, sub_df, agent.model, config, str(i)))
+        input_tuples.append((model_checkpoint_id, episode_id, sub_df, "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id), config, str(i)))
     
     validation_component_stats += executor.starmap(validation_task, input_tuples)
 
