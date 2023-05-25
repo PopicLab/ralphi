@@ -65,7 +65,8 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
     return chrom, benchmark_result.switch_count[chrom], benchmark_result.mismatch_count[chrom], benchmark_result.flat_count[chrom], benchmark_result.phased_count[chrom]
 
 
-def validation_task(model_checkpoint_id, episode_id, sub_df, model_path, config, group):
+def validation_task(input_tuple):
+    model_checkpoint_id, episode_id, sub_df, model_path, config, group = input_tuple
     task_component_stats = []
     agent = None
     for index, component_row in tqdm.tqdm(sub_df.iterrows()):
