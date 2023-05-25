@@ -13,6 +13,7 @@ import envs.phasing_env as envs
 import os
 import models.actor_critic as agents
 import torch
+from joblib import Parallel, delayed
 
 
 def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, group):
@@ -106,17 +107,16 @@ def validation_task(model_checkpoint_id, episode_id, sub_df, model_path, config,
 
                 task_component_stats.append(cur_index)
     return pd.DataFrame(task_component_stats, columns=list(sub_df.columns) + ["switch", "mismatch", "flat", "phased", "reward_val", "cut_val", "chr"])
-def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config, executor):
+def validate(model_checkpoint_id, episode_id, validation_dataset, config):
     # benchmark the current model against a held out set of fragment graphs (validation panel)
 
-    validation_component_stats = []
     print("running validation with model number:  ", model_checkpoint_id, ", at episode: ", episode_id)
 
     input_tuples = []
     for i, sub_df in enumerate(validation_dataset):
         input_tuples.append((model_checkpoint_id, episode_id, sub_df, "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id), config, str(i)))
     
-    validation_component_stats += executor.starmap(validation_task, input_tuples)
+    validation_component_stats = Parallel(n_jobs=config.num_cores_validation)(delayed(validation_task)(input_elem) for input_elem in input_tuples)
 
     validation_indexing_df = pd.concat(validation_component_stats)
     validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))
