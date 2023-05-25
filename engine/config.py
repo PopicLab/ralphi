@@ -104,7 +104,7 @@ class TrainingConfig(Config):
             wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, config=self, name=self.run_name)
         else:
             # automatically results in ignoring all wandb calls
-            wandb.init(project=config_file.project, entity="dphase", dir=self.log_dir, id=config_file.id, mode="disabled")
+            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, id=config_file.id, mode="disabled")
 
 
         # logging

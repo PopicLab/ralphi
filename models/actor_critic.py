@@ -17,15 +17,14 @@ class ActorCriticNet(nn.Module):
         # linear transformation will be applied to the last dimension of the input tensor
         # which must equal hidden_dim -- number of features per node
         self.policy_graph_hap0 = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
-        nn.init.orthogonal_(self.policy_graph_hap0.weight.data)
+        #nn.init.orthogonal_(self.policy_graph_hap0.weight.data)
         self.policy_graph_hap1 = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
-        nn.init.orthogonal_(self.policy_graph_hap1.weight.data)
+        #nn.init.orthogonal_(self.policy_graph_hap1.weight.data)
         self.policy_done = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
-        nn.init.orthogonal_(self.policy_done.weight.data)
+        #nn.init.orthogonal_(self.policy_done.weight.data)
         self.value = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
-        nn.init.orthogonal_(self.value.weight.data)
+        #nn.init.orthogonal_(self.value.weight.data)
         self.layers = layers_dict[config.layer_type](config.in_dim, config.hidden_dim, **config.embedding_vars)
-
 
         self.actions = []
         self.rewards = []
@@ -94,20 +93,20 @@ class DiscreteActorCriticAgent:
             episode_reward += reward
             if not test_mode:
                 self.model.rewards.append(reward)
-        '''if not test_mode:
+        if not test_mode:
             loss = self.update_model(episode_id)
             cut_size = self.env.get_cut_value()
-            self.log_episode_stats(episode_id, episode_reward, loss, time.time() - start_time)
+            #self.log_episode_stats(episode_id, episode_reward, loss, time.time() - start_time)
             wandb.log({"Episode": episode_id, "Training Episode Reward": episode_reward})
-            wandb.log({"Episode": episode_id, "Training Cut Size": cut_size})'''
+            wandb.log({"Episode": episode_id, "Training Cut Size": cut_size})
         if config.render:
             self.env.render(config.render_view)
         return episode_reward
 
     def log_episode_stats(self, episode_id, reward, loss, runtime):
         self.env.state.frag_graph.log_graph_properties(episode_id)
-        graph_stats = self.env.state.frag_graph.graph_properties
-
+        # graph_stats = self.env.state.frag_graph.graph_properties
+        graph_stats = []
         logging.getLogger(config.MAIN_LOG).info("Episode: %d. Reward: %d, ActorLoss: %d, CriticLoss: %d, TotalLoss: %d,"
                                                 " CutSize: %d, Runtime: %d" %
                                                 (episode_id, reward,

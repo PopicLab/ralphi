@@ -4,7 +4,7 @@ import os, ast
 def update_dict(default_values, id_file, layer_type, layer_struct, attention_layer, other_vars):
     param = default_values.copy()
     param['embedding_vars'] = {}
-    param['id'] = id_file
+    param['run_name'] = id_file
     param['hidden_dim'] = layer_struct
     param['layer_type'] = layer_type
     if attention_layer is not None:
@@ -37,14 +37,15 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     pna_scaler = [["identity", "amplification", "attenuation"]]
     pna_residual = [True]
     num_features = 6
-    num_cores = 4
+    num_cores_torch = 2
+    num_cores_validation = 4
     weight_norm = False
     lr = 0.00003
     run_name_basis = str(num_features) + "_reach_lr_" + str(lr)
     if weight_norm:
         run_name_basis += "_norma"
     default_values = {
-        'project': project,
+        'project_name': project,
         'panel': panel_path,
         'panel_validation_frags': frags_path,
         'panel_validation_vcfs': vcfs_path,
@@ -56,8 +57,8 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
         'max_episodes': 'null',  # Maximum number of episodes to run
         'render': False,  # Enables the rendering of the environment
         'render_view': "weighted_view",  # Controls how the graph is rendered
-        'num_cores_torch': num_cores,  # Number of threads to use for Pytorch
-        'num_cores_validation': 8,
+        'num_cores_torch': num_cores_torch,  # Number of threads to use for Pytorch
+        'num_cores_validation': num_cores_validation,
         'interval_validate': 1000,  # Number of episodes between model validation runs
         'debug': True,
         'log_wandb': True,

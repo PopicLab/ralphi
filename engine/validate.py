@@ -12,7 +12,9 @@ import tqdm
 import envs.phasing_env as envs
 import os
 import models.actor_critic as agents
-import numpy as np
+import torch
+
+
 
 def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, group):
     # given any subset of phasing solutions, computes errors rates against ground truth VCF
@@ -52,6 +54,7 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
             out_file.write(str(benchmark_result) + "\n")
             if benchmark_result.switch_count[chrom] > 0 or benchmark_result.mismatch_count[chrom] > 0:
                 out_file.write(str(hap_blocks) + "\n")
+
         logging.getLogger(config_utils.STATS_LOG_VALIDATE).info("%s,%s,%s,%s, %s,%s,%s,%s,%s,%s"
                                                                 % (label, episode_id, sum_of_cuts, sum_of_rewards,
                                                                    benchmark_result.switch_count[chrom],
@@ -62,17 +65,20 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
     return chrom, benchmark_result.switch_count[chrom], benchmark_result.mismatch_count[chrom], benchmark_result.flat_count[chrom], benchmark_result.phased_count[chrom]
 
 
-def validation_task(model_checkpoint_id, episode_id, sub_df, training_agent, config, group):
+def validation_task(model_checkpoint_id, episode_id, sub_df, model_path, config, group):
     task_component_stats = []
+    agent = None
     for index, component_row in tqdm.tqdm(sub_df.iterrows()):
         with open(component_row.component_path, 'rb') as f:
             subgraph = pickle.load(f)
             subgraph.indexed_graph_stats = component_row
 
             mini_env = envs.PhasingEnv(config, preloaded_graphs=subgraph, record_solutions=True)
-            agent = agents.DiscreteActorCriticAgent(mini_env)
-            agent.model.load_state_dict(training_agent.state_dict())
-
+            if agent is not None:
+                agent.env = mini_env
+            else:
+                agent = agents.DiscreteActorCriticAgent(mini_env)
+                agent.model.load_state_dict(torch.load(model_path))
             sum_of_rewards = 0
             sum_of_cuts = 0
             reward_val = agent.run_episode(config, test_mode=True)
@@ -100,7 +106,7 @@ def validation_task(model_checkpoint_id, episode_id, sub_df, training_agent, con
 
                 task_component_stats.append(cur_index)
     return pd.DataFrame(task_component_stats, columns=list(sub_df.columns) + ["switch", "mismatch", "flat", "phased", "reward_val", "cut_val", "chr"])
-def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config, executor):
+def validate(model_checkpoint_id, episode_id, validation_dataset, config, executor):
     # benchmark the current model against a held out set of fragment graphs (validation panel)
 
     validation_component_stats = []
@@ -108,8 +114,8 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config,
 
     input_tuples = []
     for i, sub_df in enumerate(validation_dataset):
-        input_tuples.append((model_checkpoint_id, episode_id, sub_df, agent.model, config, str(i)))
-    
+        input_tuples.append((model_checkpoint_id, episode_id, sub_df, "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id), config, str(i)))
+
     validation_component_stats += executor.starmap(validation_task, input_tuples)
 
     validation_indexing_df = pd.concat(validation_component_stats)
@@ -124,8 +130,8 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config,
             wandb.log({"Episode": episode_id, descriptor + " Validation " + "% with " + metric + " errors" + " on " + "_default_overall": len(validation_filtered_df[validation_filtered_df[metric] > 0]) / len(validation_filtered_df)})
 
     # stats for entire validation set
-    log_stats_for_filter(validation_indexing_df) 
-    
+    log_stats_for_filter(validation_indexing_df)
+
     # log stats for graphs from each quantile of each graph property specified in the validation config
     keys = validation_indexing_df.group.unique()
     for group in validation_indexing_df.group.unique():
