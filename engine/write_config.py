@@ -24,11 +24,20 @@ def write_yaml(config_path, id_file, parameters):
 def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     if not os.path.exists(config_path):
         os.mkdir(config_path)
-    project = "curriculum_learning_capturing_topologies"
-    layers_number = [1, 3, 5, 10]
-    default_layers = [264, 528, [132, 264, 528], [33, 66, 132, 264, 528], [264, 528, 132, 66, 33]]
-    layer_types = ["gcn", "gin", "pna"]
+    project = "balanced_training_and_validation"
+    layers_number = [1, 3, 2]
+    # default_layers = [264, 528, [132, 264, 528], [33, 66, 132, 264, 528]]
+    default_layers = [264, 528]
+    # layer_types = ["gcn", "gin", "pna"]
+    layer_types = ["gcn", "gin"]
     attention = [0]
+
+
+
+
+
+
+
     gat_residual = [None, True]
     gat_num_heads = [1, 2, 5, 10]
     gcn_bias = [None]
@@ -36,14 +45,17 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     pna_aggregator = [["sum", "mean", "std"]]
     pna_scaler = [["identity", "amplification", "attenuation"]]
     pna_residual = [True]
-    num_features = 6
+    num_features = 3
     num_cores_torch = 2
     num_cores_validation = 4
     weight_norm = False
+    fragment_norm = True
     lr = 0.00003
-    run_name_basis = str(num_features) + "_reach_lr_" + str(lr)
+    run_name_basis = str(num_features) + "_between_lr_" + str(lr)
     if weight_norm:
         run_name_basis += "_norma"
+    if weight_norm:
+        run_name_basis += "_frag"
     default_values = {
         'project_name': project,
         'panel': panel_path,
@@ -78,6 +90,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
         'gamma': 0.98,
         'lr': lr,
         'weight_norm': weight_norm,
+        'fragment_norm': fragment_norm,
         'light_logging': True
     }
     for layer_type in layer_types:

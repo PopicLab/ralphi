@@ -7,7 +7,7 @@ import random
 import engine.config as config_utils
 import engine.validate
 import dgl
-from multiprocessing import Pool
+
 
 if __name__ == '__main__':
     # ------ CLI ------
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     random.seed(config.seed)
     dgl.seed(config.seed)
     torch.set_default_tensor_type(torch.DoubleTensor)
-    torch.set_num_threads(1)
+    torch.set_num_threads(config.num_cores_torch)
     training_dataset = graphs.frag_graph.GraphDataset(config, training_config, validation_mode=False).load_indices()
 
     if config.panel_validation_frags and config.panel_validation_vcfs:
@@ -46,22 +46,22 @@ if __name__ == '__main__':
     best_validation_reward = 0
     model_checkpoint_id = 0
     episode_id = 0
-    with Pool(config.num_cores_validation) as executor:
-        while agent.env.has_state():
-            if config.max_episodes is not None and episode_id >= config.max_episodes:
-                break
-            episode_reward = agent.run_episode(config, episode_id=episode_id)
-            if episode_id % config.interval_validate == 0:
-                torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
-                if config.panel_validation_frags and config.panel_validation_vcfs:
-                    reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, config, executor)
-                    model_checkpoint_id += 1
-                    if reward > best_validation_reward:
-                        best_validation_reward = reward
-                        torch.save(agent.model.state_dict(), config.best_model_path)
-            episode_id += 1
-            agent.env = env_train
-            agent.env.reset()
 
-    # save the model
-    torch.save(agent.model.state_dict(), config.model_path)
+while agent.env.has_state():
+    if config.max_episodes is not None and episode_id >= config.max_episodes:
+        break
+    episode_reward = agent.run_episode(config, episode_id=episode_id)
+    if episode_id % config.interval_validate == 0:
+        torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
+        if config.panel_validation_frags and config.panel_validation_vcfs:
+            reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, config)
+            model_checkpoint_id += 1
+            if reward > best_validation_reward:
+                best_validation_reward = reward
+                torch.save(agent.model.state_dict(), config.best_model_path)
+    episode_id += 1
+    agent.env = env_train
+    agent.env.reset()
+
+# save the model
+torch.save(agent.model.state_dict(), config.model_path)

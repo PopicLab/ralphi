@@ -149,14 +149,12 @@ class FragGraph:
                 self.graph_properties['compo'] = [c for c in nx.connected_components(neg_graph)]
                 self.graph_properties['neg_connectivity'] = {node: num for num, sub_compo in
                                                              enumerate(self.graph_properties['compo']) for node in sub_compo}
-        print("before graph prop")
         if "shortest_pos_path_hap0" in features:
             pos_graph = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
             pos_graph[pos_graph < 0] = 0
             pos_graph = nx.from_numpy_array(pos_graph)
             self.graph_properties['pos_paths'] = dict(nx.shortest_path_length(pos_graph))
         self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g)
-        print("after feature")
 
     def log_graph_properties(self, episode_id):
         for key, value in self.graph_properties.items():

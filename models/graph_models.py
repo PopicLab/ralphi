@@ -111,7 +111,7 @@ class GAT(Embedding):
             attn_dropout = [0.] * n_layers
         if residual is None:
             residual = [False] * n_layers
-        # hidden_dim = [hidden_dim[i] * num_heads[i] for i in range(len(hidden_dim))]
+        hidden_dim = [hidden_dim[i] * num_heads[i] for i in range(len(hidden_dim))]
         super(GAT, self).__init__(in_dim, hidden_dim, attention_layer, n_etypes)
         in_dim = self.in_dim
 
@@ -141,9 +141,11 @@ class GAT(Embedding):
                 if attention:
                     feats, attn = gnn(g, feats, get_attention=True)
                     attention.append(attn)
+                    feats = feats.flatten(1)
                 else:
-                    feats = gnn(g, feats)
-                feats = feats.mean(1)
+                    feats = gnn(g, feats).flatten(1)
+                # feats = feats.reshape(feats.shape[0], -1)
+                # feats = feats.mean(1)
             embedding.append(feats)
         if attention:
             return embedding, attention

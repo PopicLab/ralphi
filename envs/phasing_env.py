@@ -14,10 +14,14 @@ class State:
     and the nodes assigned to each haplotype (0: H0 1: H1)
     """
 
-    def __init__(self, frag_graph, weight_norm):
+    def __init__(self, frag_graph, weight_norm, fragment_norm):
         if weight_norm:
             dict_weights = {k: v / frag_graph.graph_properties["sum_of_pos_edge_weights"] for k, v in nx.get_edge_attributes(frag_graph.g, 'weight').items()}
-            nx.set_edge_attributes(frag_graph.g,dict_weights, 'weight')
+            nx.set_edge_attributes(frag_graph.g, dict_weights, 'weight')
+        if fragment_norm:
+            dict_weights = {k: v / frag_graph.graph_properties["total_num_frag"] for k, v in
+                            nx.get_edge_attributes(frag_graph.g, 'weight').items()}
+            nx.set_edge_attributes(frag_graph.g, dict_weights, 'weight')
         self.frag_graph = frag_graph
         edge_attrs = None
         if frag_graph.n_nodes > 1:
@@ -43,10 +47,10 @@ class PhasingEnv(gym.Env):
         if preloaded_graphs:
             preloaded_graphs.set_graph_properties(True)
             preloaded_graphs.set_node_features()
-            self.state = State(preloaded_graphs, self.config.weight_norm)
+            self.state = State(preloaded_graphs, self.config.weight_norm, self.config.fragment_norm)
         else:
             self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
-            self.state = self.init_state(self.config.weight_norm)
+            self.state = self.init_state(self.config.weight_norm, self.config.fragment_norm)
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
@@ -58,10 +62,10 @@ class PhasingEnv(gym.Env):
         self.record = record_solutions
         self.solutions = []
 
-    def init_state(self, weight_norm):
+    def init_state(self, weight_norm, fragment_norm):
         g = next(self.graph_gen)
         if g is not None:
-            return State(g, weight_norm)
+            return State(g, weight_norm, fragment_norm)
         else:
             return None
 
@@ -155,7 +159,7 @@ class PhasingEnv(gym.Env):
         Reset the environment to an initial state
         Returns the initial state and the is_done token
         """
-        self.state = self.init_state(self.config.weight_norm)
+        self.state = self.init_state(self.config.weight_norm, self.config.fragment_norm)
         return self.state, not self.has_state()
 
     def lookup_error_free_instance(self):
