@@ -16,7 +16,8 @@ class State:
 
     def __init__(self, frag_graph, weight_norm, fragment_norm):
         if weight_norm:
-            dict_weights = {k: v / frag_graph.graph_properties["sum_of_pos_edge_weights"] for k, v in nx.get_edge_attributes(frag_graph.g, 'weight').items()}
+            dict_weights = {k: v / frag_graph.graph_properties["sum_of_pos_edge_weights"] for k, v in
+                            nx.get_edge_attributes(frag_graph.g, 'weight').items()}
             nx.set_edge_attributes(frag_graph.g, dict_weights, 'weight')
         if fragment_norm:
             dict_weights = {k: v / frag_graph.graph_properties["total_num_frag"] for k, v in
@@ -61,6 +62,8 @@ class PhasingEnv(gym.Env):
         self.current_total_reward = 0
         self.record = record_solutions
         self.solutions = []
+        if self.config.clip:
+            self.state.best_reward = 0
 
     def init_state(self, weight_norm, fragment_norm):
         g = next(self.graph_gen)
@@ -93,7 +96,14 @@ class PhasingEnv(gym.Env):
             for nbr in self.state.frag_graph.g.neighbors(complement_action):
                 if nbr in self.state.H1:
                     self.current_total_reward += self.state.frag_graph.g[complement_action][nbr]['weight']
-        return (self.current_total_reward - previous_reward) / norm_factor
+        if not self.config.clip:
+            return (self.current_total_reward - previous_reward) / norm_factor
+        else:
+            reward = max((self.current_total_reward - self.state.best_reward) / self.state.frag_graph.graph_properties[
+                "total_num_frag"], 0)
+            if self.current_total_reward > self.state.best_reward:
+                self.state.best_reward = self.current_total_reward
+            return reward
 
     def is_termination_action(self, action):
         return action == self.state.num_nodes
@@ -117,8 +127,9 @@ class PhasingEnv(gym.Env):
             paths = self.state.frag_graph.graph_properties['pos_paths'][action]
             for node in paths:
                 if node != action:
-                    if self.state.frag_graph.g.nodes[node]['val_pos_path_' + hap] == 0 or self.state.frag_graph.g.nodes[node][
-                        'val_pos_path_' + hap] > paths[node]:
+                    if self.state.frag_graph.g.nodes[node]['val_pos_path_' + hap] == 0 or \
+                            self.state.frag_graph.g.nodes[node][
+                                'val_pos_path_' + hap] > paths[node]:
                         self.state.frag_graph.g.nodes[node]['val_pos_path_' + hap] = paths[node]
                         self.state.frag_graph.g.nodes[node]['shortest_pos_path_' + hap] = [paths[node] % 2.]
 

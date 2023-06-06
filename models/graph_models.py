@@ -102,7 +102,8 @@ class GAT(Embedding):
         n_layers = len(hidden_dim)
         default_activation = elu
         if num_heads is None:
-            num_heads = [default_num_heads] * n_layers
+            num_heads = [default_num_heads] * (n_layers - 1)
+            num_heads += [1]
         if activation is None:
             activation = [default_activation] * n_layers
         if feat_dropout is None:
@@ -141,11 +142,9 @@ class GAT(Embedding):
                 if attention:
                     feats, attn = gnn(g, feats, get_attention=True)
                     attention.append(attn)
-                    feats = feats.flatten(1)
                 else:
-                    feats = gnn(g, feats).flatten(1)
-                # feats = feats.reshape(feats.shape[0], -1)
-                # feats = feats.mean(1)
+                    feats = gnn(g, feats)
+                feats = feats.mean(1)
             embedding.append(feats)
         if attention:
             return embedding, attention

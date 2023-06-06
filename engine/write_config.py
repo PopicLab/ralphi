@@ -29,33 +29,29 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     # default_layers = [264, 528, [132, 264, 528], [33, 66, 132, 264, 528]]
     default_layers = [264, 528]
     # layer_types = ["gcn", "gin", "pna"]
-    layer_types = ["gcn", "gin"]
+    layer_types = ["gcn", "gin", "pna", "gat"]
     attention = [0]
-
-
-
-
-
-
-
     gat_residual = [None, True]
-    gat_num_heads = [1, 2, 5, 10]
+    gat_num_heads = [1, 3, 5]
     gcn_bias = [None]
     gin_aggregator = ['sum']
     pna_aggregator = [["sum", "mean", "std"]]
     pna_scaler = [["identity", "amplification", "attenuation"]]
-    pna_residual = [True]
-    num_features = 3
+    pna_residual = [None, True]
+    num_features = 6
     num_cores_torch = 2
     num_cores_validation = 4
     weight_norm = False
-    fragment_norm = True
+    fragment_norm = False
+    clip = True
     lr = 0.00003
-    run_name_basis = str(num_features) + "_between_lr_" + str(lr)
+    run_name_basis = str(num_features) + "_reach_lr_" + str(lr)
     if weight_norm:
         run_name_basis += "_norma"
-    if weight_norm:
+    if fragment_norm:
         run_name_basis += "_frag"
+    if clip:
+        run_name_basis += "_clip"
     default_values = {
         'project_name': project,
         'panel': panel_path,
@@ -91,6 +87,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
         'lr': lr,
         'weight_norm': weight_norm,
         'fragment_norm': fragment_norm,
+        'clip': clip,
         'light_logging': True
     }
     for layer_type in layer_types:
@@ -149,6 +146,26 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
                                                              {'aggregator': aggreg, 'scaler': scaler,
                                                               'residual': res_list})
                                     write_yaml(config_path, id_file, parameters)
+                    elif layer_type == 'gat':
+                        for residual in gat_residual:
+                            id_res = ''
+                            if residual is not None:
+                                id_res = 'res'
+                                residual = [True] * num_layer
+                            for num_heads in gat_num_heads:
+                                id_heads = 'heads_' + str(num_heads)
+                                num_heads = [num_heads] * (num_layer - 1)
+                                num_heads += [1]
+                                if sum([layer_struct[i] % num_heads[i] != 0 for i in range(num_layer)]) > 0:
+                                    continue
+                                id_file = "_".join(
+                                    [run_name_basis, layer_type, str(num_layer), layer_id, id_attn, id_res, id_heads])
+                                parameters = update_dict(default_values, id_file,
+                                                         layer_type, layer_struct, attention_struct,
+                                                         {'num_heads': num_heads, 'residual': residual})
+                                write_yaml(config_path, id_file, parameters)
+
+
 
 
 if __name__ == "__main__":
