@@ -25,6 +25,7 @@ class ActorCriticNet(nn.Module):
         self.value = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
         nn.init.orthogonal_(self.value.weight.data)
         self.layers = layers_dict[config.layer_type](config.in_dim, config.hidden_dim, **config.embedding_vars)
+        self.feature_list = constants.define_features(config.features)
 
         self.actions = []
         self.rewards = []
@@ -35,7 +36,7 @@ class ActorCriticNet(nn.Module):
         - actor's policy: tensor of probabilities for each action
         - critic's value of the current state
         """
-        features = list(genome_graph.ndata[elem.value] for elem in constants.NodeFeatures)
+        features = list(genome_graph.ndata[feature] for feature in self.feature_list)
         h = torch.cat(features, dim=1)
         weights = genome_graph.edata['weight']
         h = self.layers(genome_graph, h, edge_feat=weights[:, None], edge_weights=weights, etypes=torch.gt(weights,0))[-1]

@@ -20,6 +20,13 @@ def write_yaml(config_path, id_file, parameters):
     with open(config_path + id_file + '/config.yaml', "w") as file:
         file.write('\n'.join("{}: {}".format(k, v) for k, v in parameters.items()))
 
+def count_features(features):
+    dict_count = {'dual': 2, 'reversible': 1, 'variants': 1, 'neigh': 4, 'arti': 1, 'stats': 16, 'between': 1,
+                  'reach': 4, 'quality': 3, 'bitmap': 1}
+    count = 0
+    for feature in features:
+        count += dict_count[feature]
+    return str(count)
 
 def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     if not os.path.exists(config_path):
@@ -38,14 +45,15 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     pna_aggregator = [["sum", "mean", "std"]]
     pna_scaler = [["identity", "amplification", "attenuation"]]
     pna_residual = [None, True]
-    num_features = 6
+    features = ["dual", "reach"]
+    num_features = count_features(features)
     num_cores_torch = 2
     num_cores_validation = 4
     weight_norm = False
     fragment_norm = False
     clip = True
     lr = 0.00003
-    run_name_basis = str(num_features) + "_reach_lr_" + str(lr)
+    run_name_basis = "_".join([num_features, "_".join(features), "lr", str(lr)])
     if weight_norm:
         run_name_basis += "_norma"
     if fragment_norm:
@@ -88,6 +96,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
         'weight_norm': weight_norm,
         'fragment_norm': fragment_norm,
         'clip': clip,
+        'features': features,
         'light_logging': True
     }
     for layer_type in layer_types:

@@ -14,7 +14,7 @@ class State:
     and the nodes assigned to each haplotype (0: H0 1: H1)
     """
 
-    def __init__(self, frag_graph, weight_norm, fragment_norm):
+    def __init__(self, frag_graph, weight_norm, fragment_norm, features):
         if weight_norm:
             dict_weights = {k: v / frag_graph.graph_properties["sum_of_pos_edge_weights"] for k, v in
                             nx.get_edge_attributes(frag_graph.g, 'weight').items()}
@@ -27,7 +27,6 @@ class State:
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
-        features = list(elem.value for elem in constants.NodeFeatures)
         self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features)
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes * 2)
@@ -43,15 +42,16 @@ class PhasingEnv(gym.Env):
     """
 
     def __init__(self, config, record_solutions=False, graph_dataset=None, preloaded_graphs=None):
+        self.features = constants.define_features(config.features)
         super(PhasingEnv, self).__init__()
         self.config = config
         if preloaded_graphs:
-            preloaded_graphs.set_graph_properties(True)
-            preloaded_graphs.set_node_features()
-            self.state = State(preloaded_graphs, self.config.weight_norm, self.config.fragment_norm)
+            preloaded_graphs.set_graph_properties(self.features, True)
+            preloaded_graphs.set_node_features(self.features)
+            self.state = State(preloaded_graphs, self.config.weight_norm, self.config.fragment_norm, self.features)
         else:
             self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
-            self.state = self.init_state(self.config.weight_norm, self.config.fragment_norm)
+            self.state = self.init_state(self.config.weight_norm, self.config.fragment_norm, self.features)
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
@@ -65,10 +65,10 @@ class PhasingEnv(gym.Env):
         if self.config.clip:
             self.state.best_reward = 0
 
-    def init_state(self, weight_norm, fragment_norm):
+    def init_state(self, weight_norm, fragment_norm, features):
         g = next(self.graph_gen)
         if g is not None:
-            return State(g, weight_norm, fragment_norm)
+            return State(g, weight_norm, fragment_norm, features)
         else:
             return None
 
