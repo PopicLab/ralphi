@@ -14,15 +14,7 @@ class State:
     and the nodes assigned to each haplotype (0: H0 1: H1)
     """
 
-    def __init__(self, frag_graph, weight_norm, fragment_norm, features):
-        if weight_norm:
-            dict_weights = {k: v / frag_graph.graph_properties["sum_of_pos_edge_weights"] for k, v in
-                            nx.get_edge_attributes(frag_graph.g, 'weight').items()}
-            nx.set_edge_attributes(frag_graph.g, dict_weights, 'weight')
-        if fragment_norm:
-            dict_weights = {k: v / frag_graph.graph_properties["total_num_frag"] for k, v in
-                            nx.get_edge_attributes(frag_graph.g, 'weight').items()}
-            nx.set_edge_attributes(frag_graph.g, dict_weights, 'weight')
+    def __init__(self, frag_graph, features):
         self.frag_graph = frag_graph
         edge_attrs = None
         if frag_graph.n_nodes > 1:
@@ -42,16 +34,17 @@ class PhasingEnv(gym.Env):
     """
 
     def __init__(self, config, record_solutions=False, graph_dataset=None, preloaded_graphs=None):
-        self.features = constants.define_features(config.features)
+        self.features = list(feature for feature_list in constants.NodeFeatures for feature_name in config.features
+                        for feature in feature_list[feature_name])
         super(PhasingEnv, self).__init__()
         self.config = config
         if preloaded_graphs:
             preloaded_graphs.set_graph_properties(self.features, True)
             preloaded_graphs.set_node_features(self.features)
-            self.state = State(preloaded_graphs, self.config.weight_norm, self.config.fragment_norm, self.features)
+            self.state = State(preloaded_graphs, self.features)
         else:
             self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
-            self.state = self.init_state(self.config.weight_norm, self.config.fragment_norm, self.features)
+            self.state = self.init_state(self.features)
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
@@ -65,10 +58,10 @@ class PhasingEnv(gym.Env):
         if self.config.clip:
             self.state.best_reward = 0
 
-    def init_state(self, weight_norm, fragment_norm, features):
+    def init_state(self, features):
         g = next(self.graph_gen)
         if g is not None:
-            return State(g, weight_norm, fragment_norm, features)
+            return State(g, features)
         else:
             return None
 
@@ -84,18 +77,14 @@ class PhasingEnv(gym.Env):
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
         action_in_h1 = False
+        hap_list = [self.state.H0, self.state.H1]
         complement_action = action
         if action > self.state.num_nodes - 1:
             action_in_h1 = True
             complement_action = action - self.state.num_nodes
-        if action_in_h1:
-            for nbr in self.state.frag_graph.g.neighbors(complement_action):
-                if nbr in self.state.H0:
-                    self.current_total_reward += self.state.frag_graph.g[complement_action][nbr]['weight']
-        else:
-            for nbr in self.state.frag_graph.g.neighbors(complement_action):
-                if nbr in self.state.H1:
-                    self.current_total_reward += self.state.frag_graph.g[complement_action][nbr]['weight']
+        for nbr in self.state.frag_graph.g.neighbors(complement_action):
+            if nbr in hap_list[action_in_h1]:
+                self.current_total_reward += self.state.frag_graph.g[complement_action][nbr]['weight']
         if not self.config.clip:
             return (self.current_total_reward - previous_reward) / norm_factor
         else:
@@ -170,7 +159,7 @@ class PhasingEnv(gym.Env):
         Reset the environment to an initial state
         Returns the initial state and the is_done token
         """
-        self.state = self.init_state(self.config.weight_norm, self.config.fragment_norm)
+        self.state = self.init_state(self.features)
         return self.state, not self.has_state()
 
     def lookup_error_free_instance(self):

@@ -1,4 +1,5 @@
-import os, ast
+import os
+import models.constants as constants
 
 
 def update_dict(default_values, id_file, layer_type, layer_struct, attention_layer, other_vars):
@@ -21,12 +22,9 @@ def write_yaml(config_path, id_file, parameters):
         file.write('\n'.join("{}: {}".format(k, v) for k, v in parameters.items()))
 
 def count_features(features):
-    dict_count = {'dual': 2, 'reversible': 1, 'variants': 1, 'neigh': 4, 'arti': 1, 'stats': 16, 'between': 1,
-                  'reach': 4, 'quality': 3, 'bitmap': 1}
-    count = 0
-    for feature in features:
-        count += dict_count[feature]
-    return str(count)
+    count = list(len(feature_list[feature_name]) for feature_list in constants.NodeFeatures
+                 for feature_name in features)
+    return str(sum(count))
 
 def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     if not os.path.exists(config_path):

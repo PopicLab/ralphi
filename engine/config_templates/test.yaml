@@ -1,6 +1,6 @@
 # datasets
+project_name: "project name for wandb",
 panel: "path/to/fragments" # Fragment files for testing
-model: "path/to/pretrained/model" # Model to use for testing
 input_vcf: "/path/to/vcf" # Input VCF to phase
 # testing parameters
 render: False # Enables the rendering of the environment
@@ -11,9 +11,10 @@ compress: True
 normalization: False
 debug: True
 # caching parameters
-load_components: False
-store_components: False
+load_components: True
+store_components: True
 # model parameters
-in_dim: 2 # corresponds to number of node features being used
-hidden_dim: 264
-num_layers: 3
+in_dim: 2 # Number of node features fed to the GNN
+weight_norm: False # Normalization of the edge weights by an upper bound on the maxcut
+fragment_norm: False # Normalization of the edge weights by the number of fragments
+features: ["dual"] # List of features to use, the names are detailed in the constants.py file

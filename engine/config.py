@@ -20,7 +20,6 @@ STATS_LOG_COLS_TRAIN = ['Episode',
                         'Reward',
                         'CutValue'
                         'Losses',
-                        #'GraphProperties',
                         'Runtime']
 STATS_LOG_COLS_VALIDATE = ['Descriptor', 'Episode', 'SumOfCuts', 'SumOfRewards', 'Switch Count', 'Mismatch Count', 'Flat Count', 'Phased Count', 'AN50', 'N50']
 

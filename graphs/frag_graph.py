@@ -415,10 +415,18 @@ class FragGraphGen:
     def is_not_in_size_range(self, subgraph):
         return not (self.config.min_graph_size <= subgraph.n_nodes <= self.config.max_graph_size)
 
+    def normalize_edges(self, subgraph):
+        if self.config.weight_norm:
+            dict_weights = {k: v / subgraph.graph_properties["sum_of_pos_edge_weights"] for k, v in
+                            nx.get_edge_attributes(subgraph.g, 'weight').items()}
+            nx.set_edge_attributes(subgraph.g, dict_weights, 'weight')
+        if self.config.fragment_norm:
+            dict_weights = {k: v / subgraph.graph_properties["total_num_frag"] for k, v in
+                            nx.get_edge_attributes(subgraph.g, 'weight').items()}
+            nx.set_edge_attributes(subgraph.g, dict_weights, 'weight')
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
-
         if self.graph_dataset is not None:
             index_df = self.graph_dataset
             for index, component_row in index_df.iterrows():
@@ -431,6 +439,7 @@ class FragGraphGen:
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                     subgraph.set_graph_properties(self.features, True)
                     subgraph.set_node_features(self.features)
+                    self.normalize_edges(subgraph)
                     yield subgraph
             yield None
         elif self.config.frag_panel_file is not None:
@@ -452,6 +461,7 @@ class FragGraphGen:
                         if self.is_invalid_subgraph(subgraph) or self.is_not_in_size_range(subgraph):
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
+                        self.normalize_edges(subgraph)
                         yield subgraph
                     print("Finished processing file: ", frag_file_fname)
             yield None
@@ -459,6 +469,7 @@ class FragGraphGen:
             while True:
                 graph = generate_rand_frag_graph()
                 for subgraph in graph.connected_components_subgraphs(self.features):
+                    self.normalize_edges(subgraph)
                     yield subgraph
 
 
