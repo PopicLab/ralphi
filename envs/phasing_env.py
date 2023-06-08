@@ -34,8 +34,8 @@ class PhasingEnv(gym.Env):
     """
 
     def __init__(self, config, record_solutions=False, graph_dataset=None, preloaded_graphs=None):
-        self.features = list(feature for feature_list in constants.NodeFeatures for feature_name in config.features
-                        for feature in feature_list[feature_name])
+        self.features = list(feature for feature_name in config.features
+                             for feature in constants.FEATURES_DICT[feature_name])
         super(PhasingEnv, self).__init__()
         self.config = config
         if preloaded_graphs:
@@ -105,9 +105,6 @@ class PhasingEnv(gym.Env):
 
     def update_features(self, hap, action):
         self.state.g.ndata['cut_member_' + hap][action] = 1.0
-        """for neighbour in self.state.frag_graph.g[action]:
-                        self.state.explorable[neighbour] = 1.0
-                        self.state.explorable[neighbour + self.state.num_nodes] = 1.0"""
         if 'reachability_hap0' in list(self.state.g.ndata.keys()):
             for node in self.state.frag_graph.graph_properties['compo'][
                 self.state.frag_graph.graph_properties['neg_connectivity'][action]]:
@@ -188,7 +185,11 @@ class PhasingEnv(gym.Env):
             node_labels = [node_labels]
         computed_cut = {i for i, e in enumerate(node_labels) if e != 0}
         net_x_graph = self.state.frag_graph.g
-        return nx.cut_size(net_x_graph, computed_cut, weight='weight')
+        if not self.config.fragment_norm:
+            return nx.cut_size(net_x_graph, computed_cut, weight='weight')
+        else:
+            return nx.cut_size(net_x_graph, computed_cut, weight='weight') * self.state.frag_graph.graph_properties["total_num_frag"]
+
 
     def render(self, mode='human'):
         """Display the environment"""

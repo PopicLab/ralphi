@@ -16,14 +16,15 @@ def update_dict(default_values, id_file, layer_type, layer_struct, attention_lay
 
 
 def write_yaml(config_path, id_file, parameters):
+    if not os.path.exists(config_path):
+        os.mkdir(config_path)
     if not os.path.exists(config_path + id_file):
         os.mkdir(config_path + id_file)
     with open(config_path + id_file + '/config.yaml', "w") as file:
         file.write('\n'.join("{}: {}".format(k, v) for k, v in parameters.items()))
 
 def count_features(features):
-    count = list(len(feature_list[feature_name]) for feature_list in constants.NodeFeatures
-                 for feature_name in features)
+    count = list(len(constants.FEATURES_DICT[feature_name]) for feature_name in features)
     return str(sum(count))
 
 def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
@@ -43,13 +44,13 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
     pna_aggregator = [["sum", "mean", "std"]]
     pna_scaler = [["identity", "amplification", "attenuation"]]
     pna_residual = [None, True]
-    features = ["dual", "reach"]
+    features = ["dual", "reach", "between"]
     num_features = count_features(features)
     num_cores_torch = 2
     num_cores_validation = 4
     weight_norm = False
     fragment_norm = False
-    clip = True
+    clip = False
     lr = 0.00003
     run_name_basis = "_".join([num_features, "_".join(features), "lr", str(lr)])
     if weight_norm:

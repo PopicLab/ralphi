@@ -25,7 +25,8 @@ class ActorCriticNet(nn.Module):
         self.value = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
         nn.init.orthogonal_(self.value.weight.data)
         self.layers = layers_dict[config.layer_type](config.in_dim, config.hidden_dim, **config.embedding_vars)
-        self.feature_list = constants.define_features(config.features)
+        self.feature_list = list(feature for feature_name in config.features
+                             for feature in constants.FEATURES_DICT[feature_name])
 
         self.actions = []
         self.rewards = []

@@ -208,7 +208,7 @@ class FragGraph:
                 frag_graph.nodes[node]['cut_member_hap0'] = [0.0]
                 frag_graph.nodes[node]['cut_member_hap1'] = [0.0]
 
-            if 'between' in features:
+            if 'betweenness' in features:
                 frag_graph.nodes[node]['betweenness'] = [self.graph_properties["betweenness"][node]]
 
             if 'n_variants' in features:
@@ -406,7 +406,8 @@ def load_connected_components(frag_file_fname, features, load_components=False, 
 class FragGraphGen:
     def __init__(self, config, graph_dataset=None):
         self.config = config
-        self.features = constants.define_features(config.features)
+        self.features = list(feature for feature_name in config.features
+                             for feature in constants.FEATURES_DICT[feature_name])
         self.graph_dataset = graph_dataset
 
     def is_invalid_subgraph(self, subgraph):

@@ -215,6 +215,7 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     # Load a YAML configuration file
     with open(fname) as file:
         loader = yaml.FullLoader
+        # expression enabling yaml to read floats in scientific notation
         loader.add_implicit_resolver(
             u'tag:yaml.org,2002:float',
             re.compile(u'''^(?:
