@@ -43,7 +43,7 @@ class Config:
             'compress': True,
             'normalization': False,
             'debug': True,
-            'in_dim': 1,
+            'node_features_dim': 1,
             'hidden_dim': [264, 264, 264],
             'light_logging': True
         }

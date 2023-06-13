@@ -26,7 +26,7 @@ store_components: True
 store_indexes: True
 # model parameters
 pretrained_model: null  # path to pretrained model; null or "path/to/model"
-in_dim: num_features # Number of node features fed to the GNN
+node_features_dim: num_features # Number of node features fed to the GNN
 hidden_dim: [264, 264, 264] # Dimension of the GNN layers
 layer_type: gat # Available layers are detailed in graph_models.py
 embedding_vars: {} # Possible additional hyperparameters for the layers like the number of attention heads for gat

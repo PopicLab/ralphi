@@ -25,6 +25,7 @@ class State:
         self.explorable = torch.zeros(self.num_nodes * 2)
         self.H0 = []
         self.H1 = []
+        self.best_reward = 0
         print("Number of nodes: ", self.frag_graph.n_nodes, ", number of edges: ", self.frag_graph.g.number_of_edges())
 
 
@@ -55,8 +56,6 @@ class PhasingEnv(gym.Env):
         self.current_total_reward = 0
         self.record = record_solutions
         self.solutions = []
-        if self.config.clip:
-            self.state.best_reward = 0
 
     def init_state(self, features):
         g = next(self.graph_gen)
@@ -65,7 +64,7 @@ class PhasingEnv(gym.Env):
         else:
             return None
 
-    def compute_mfc_reward_dual_actions(self, action):
+    def compute_reward(self, action):
         """The reward is the normalized change in MFC score = sum of all conflict edges from the selected node
         to the remaining graph """
 
@@ -76,15 +75,18 @@ class PhasingEnv(gym.Env):
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
-        action_in_h1 = False
+        cut_with_h1 = True
         hap_list = [self.state.H0, self.state.H1]
         complement_action = action
         if action > self.state.num_nodes - 1:
-            action_in_h1 = True
+            # Assignment node i to Haplotype 1 is encoded as the action i + num nodes
+            cut_with_h1 = False
             complement_action = action - self.state.num_nodes
         for nbr in self.state.frag_graph.g.neighbors(complement_action):
-            if nbr in hap_list[action_in_h1]:
+            if nbr in hap_list[cut_with_h1]:
                 self.current_total_reward += self.state.frag_graph.g[complement_action][nbr]['weight']
+
+        # Compute the corresponding reward, if clip, the reward ios clipped and normalized
         if not self.config.clip:
             return (self.current_total_reward - previous_reward) / norm_factor
         else:
@@ -125,7 +127,6 @@ class PhasingEnv(gym.Env):
 
         # assert action is a valid node and it has not been selected yet
         # update the current state by marking the node as selected
-
         self.state.assigned[action] = 1.0
         if action > self.state.num_nodes - 1:
             complement_action = action - self.state.num_nodes
@@ -137,7 +138,7 @@ class PhasingEnv(gym.Env):
             self.state.H0.append(action)
             self.state.assigned[complement_action] = 1.0
             self.update_features("hap0", action)
-        r_t = self.compute_mfc_reward_dual_actions(action)
+        r_t = self.compute_reward(action)
         is_done = False
         if self.is_out_of_moves():
             is_done = True

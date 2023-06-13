@@ -24,7 +24,7 @@ class ActorCriticNet(nn.Module):
         nn.init.orthogonal_(self.policy_done.weight.data)
         self.value = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
         nn.init.orthogonal_(self.value.weight.data)
-        self.layers = layers_dict[config.layer_type](config.in_dim, config.hidden_dim, **config.embedding_vars)
+        self.layers = layers_dict[config.layer_type](config.node_features_dim, config.hidden_dim, **config.embedding_vars)
         self.feature_list = list(feature for feature_name in config.features
                              for feature in constants.FEATURES_DICT[feature_name])
 

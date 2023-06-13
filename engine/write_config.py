@@ -32,9 +32,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
         os.mkdir(config_path)
     project = "balanced_training_and_validation"
     layers_number = [1, 3, 2]
-    # default_layers = [264, 528, [132, 264, 528], [33, 66, 132, 264, 528]]
     default_layers = [264, 528]
-    # layer_types = ["gcn", "gin", "pna"]
     layer_types = ["gcn", "gin", "pna", "gat"]
     attention = [0]
     gat_residual = [None, True]
@@ -86,7 +84,7 @@ def generate_files(config_path, panel_path, frags_path, vcfs_path=None):
         'store_indexes': True,
         # model parameters
         'pretrained_model': 'null',  # path to pretrained model; null or "path/to/model"
-        'in_dim': num_features,
+        'node_features_dim': num_features,
         'hidden_dim': None,
         'layer_type': None,
         'embedding_vars': {},
