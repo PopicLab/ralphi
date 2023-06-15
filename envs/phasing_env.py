@@ -186,7 +186,7 @@ class PhasingEnv(gym.Env):
             node_labels = [node_labels]
         computed_cut = {i for i, e in enumerate(node_labels) if e != 0}
         net_x_graph = self.state.frag_graph.g
-        if not self.config.fragment_norm:
+        if not self.config.fragment_norm and not self.config.clip:
             return nx.cut_size(net_x_graph, computed_cut, weight='weight')
         else:
             return nx.cut_size(net_x_graph, computed_cut, weight='weight') * self.state.frag_graph.graph_properties["total_num_frag"]
