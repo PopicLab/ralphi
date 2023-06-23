@@ -382,6 +382,16 @@ class FragGraph:
             subgraphs.append(subgraph)
         return subgraphs
 
+    def normalize_edges(self, weight_norm, fragment_norm):
+        if weight_norm:
+            dict_weights = {k: v / self.graph_properties["sum_of_pos_edge_weights"] for k, v in
+                            nx.get_edge_attributes(self.g, 'weight').items()}
+            nx.set_edge_attributes(self.g, dict_weights, 'weight')
+        if fragment_norm:
+            dict_weights = {k: v / self.graph_properties["total_num_frag"] for k, v in
+                            nx.get_edge_attributes(self.g, 'weight').items()}
+            nx.set_edge_attributes(self.g, dict_weights, 'weight')
+
 
 def load_connected_components(frag_file_fname, features, load_components=False, store_components=False, compress=False,
                               skip_trivial_graphs=False, compute_properties=False):
@@ -416,15 +426,6 @@ class FragGraphGen:
     def is_not_in_size_range(self, subgraph):
         return not (self.config.min_graph_size <= subgraph.n_nodes <= self.config.max_graph_size)
 
-    def normalize_edges(self, subgraph):
-        if self.config.weight_norm:
-            dict_weights = {k: v / subgraph.graph_properties["sum_of_pos_edge_weights"] for k, v in
-                            nx.get_edge_attributes(subgraph.g, 'weight').items()}
-            nx.set_edge_attributes(subgraph.g, dict_weights, 'weight')
-        if self.config.fragment_norm:
-            dict_weights = {k: v / subgraph.graph_properties["total_num_frag"] for k, v in
-                            nx.get_edge_attributes(subgraph.g, 'weight').items()}
-            nx.set_edge_attributes(subgraph.g, dict_weights, 'weight')
     def __iter__(self):
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')

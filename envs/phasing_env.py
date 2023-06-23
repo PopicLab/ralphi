@@ -42,10 +42,11 @@ class PhasingEnv(gym.Env):
         if preloaded_graphs:
             preloaded_graphs.set_graph_properties(self.features, True)
             preloaded_graphs.set_node_features(self.features)
+            preloaded_graphs.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
             self.state = State(preloaded_graphs, self.features)
         else:
             self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
-            self.state = self.init_state(self.features)
+            self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
@@ -57,10 +58,11 @@ class PhasingEnv(gym.Env):
         self.record = record_solutions
         self.solutions = []
 
-    def init_state(self, features):
+    def init_state(self):
         g = next(self.graph_gen)
+        g.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
         if g is not None:
-            return State(g, features)
+            return State(g, self.features)
         else:
             return None
 
@@ -157,7 +159,7 @@ class PhasingEnv(gym.Env):
         Reset the environment to an initial state
         Returns the initial state and the is_done token
         """
-        self.state = self.init_state(self.features)
+        self.state = self.init_state()
         return self.state, not self.has_state()
 
     def lookup_error_free_instance(self):
