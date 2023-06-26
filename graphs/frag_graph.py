@@ -301,6 +301,16 @@ class FragGraph:
         for node in self.g.nodes:
             self.g.nodes[node]['variant_bitmap'] = [self.fragments[node].vcf_positions]
 
+    def normalize_edges(self, weight_norm, fragment_norm):
+        if weight_norm:
+            dict_weights = {k: v / self.graph_properties["sum_of_pos_edge_weights"] for k, v in
+                            nx.get_edge_attributes(self.g, 'weight').items()}
+            nx.set_edge_attributes(self.g, dict_weights, 'weight')
+        if fragment_norm:
+            dict_weights = {k: v / self.graph_properties["total_num_frag"] for k, v in
+                            nx.get_edge_attributes(self.g, 'weight').items()}
+            nx.set_edge_attributes(self.g, dict_weights, 'weight')
+
     def check_and_set_trivial(self):
         """
         Checks if the max-cut solution can be trivially computed; if so, the solution is computed and stored.
@@ -382,17 +392,6 @@ class FragGraph:
             subgraphs.append(subgraph)
         return subgraphs
 
-    def normalize_edges(self, weight_norm, fragment_norm):
-        if weight_norm:
-            dict_weights = {k: v / self.graph_properties["sum_of_pos_edge_weights"] for k, v in
-                            nx.get_edge_attributes(self.g, 'weight').items()}
-            nx.set_edge_attributes(self.g, dict_weights, 'weight')
-        if fragment_norm:
-            dict_weights = {k: v / self.graph_properties["total_num_frag"] for k, v in
-                            nx.get_edge_attributes(self.g, 'weight').items()}
-            nx.set_edge_attributes(self.g, dict_weights, 'weight')
-
-
 def load_connected_components(frag_file_fname, features, load_components=False, store_components=False, compress=False,
                               skip_trivial_graphs=False, compute_properties=False):
     logging.info("Fragment file: %s" % frag_file_fname)
@@ -441,7 +440,6 @@ class FragGraphGen:
                     print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                     subgraph.set_graph_properties(self.features, True)
                     subgraph.set_node_features(self.features)
-                    self.normalize_edges(subgraph)
                     yield subgraph
             yield None
         elif self.config.frag_panel_file is not None:
@@ -463,7 +461,6 @@ class FragGraphGen:
                         if self.is_invalid_subgraph(subgraph) or self.is_not_in_size_range(subgraph):
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
-                        self.normalize_edges(subgraph)
                         yield subgraph
                     print("Finished processing file: ", frag_file_fname)
             yield None
@@ -471,7 +468,6 @@ class FragGraphGen:
             while True:
                 graph = generate_rand_frag_graph()
                 for subgraph in graph.connected_components_subgraphs(self.features):
-                    self.normalize_edges(subgraph)
                     yield subgraph
 
 

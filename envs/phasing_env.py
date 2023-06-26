@@ -94,8 +94,10 @@ class PhasingEnv(gym.Env):
         else:
             reward = max((self.current_total_reward - self.state.best_reward) / self.state.frag_graph.graph_properties[
                 "total_num_frag"], 0)
+            print(action, self.current_total_reward, self.state.best_reward, reward)
             if self.current_total_reward > self.state.best_reward:
                 self.state.best_reward = self.current_total_reward
+                print("new best")
             return reward
 
     def is_termination_action(self, action):
