@@ -5,39 +5,52 @@ import dgl
 import utils.plotting as vis
 import graphs.frag_graph as graphs
 import networkx as nx
+import models.constants as constants
+
 
 class State:
     """
     State consists of the genome fragment graph
     and the nodes assigned to each haplotype (0: H0 1: H1)
     """
-    def __init__(self, frag_graph):
+
+    def __init__(self, frag_graph, features):
         self.frag_graph = frag_graph
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
-        self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=['x', 'y'])
+        self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features)
         self.num_nodes = self.g.number_of_nodes()
-        self.assigned = torch.zeros(self.num_nodes + 1)
+        self.assigned = torch.zeros(self.num_nodes * 2)
+        self.explorable = torch.zeros(self.num_nodes * 2)
+        self.H0 = []
         self.H1 = []
+        self.best_reward = 0
         print("Number of nodes: ", self.frag_graph.n_nodes, ", number of edges: ", self.frag_graph.g.number_of_edges())
+
 
 class PhasingEnv(gym.Env):
     """
     Genome phasing environment
     """
+
     def __init__(self, config, record_solutions=False, graph_dataset=None, preloaded_graphs=None):
+        self.features = list(feature for feature_name in config.features
+                             for feature in constants.FEATURES_DICT[feature_name])
         super(PhasingEnv, self).__init__()
         self.config = config
         if preloaded_graphs:
-            self.state = State(preloaded_graphs)
+            preloaded_graphs.set_graph_properties(self.features, True)
+            preloaded_graphs.set_node_features(self.features)
+            preloaded_graphs.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
+            self.state = State(preloaded_graphs, self.features)
         else:
             self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
             self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
-        self.num_actions = self.state.num_nodes + 1
+        self.num_actions = self.state.num_nodes * 2
         self.action_space = spaces.Discrete(self.num_actions)
         self.observation_space = {}
         # other bookkeeping
@@ -47,18 +60,16 @@ class PhasingEnv(gym.Env):
 
     def init_state(self):
         g = next(self.graph_gen)
+        g.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
         if g is not None:
-            return State(g)
+            return State(g, self.features)
         else:
             return None
 
-    def compute_mfc_reward(self, action):
+    def compute_reward(self, action):
         """The reward is the normalized change in MFC score = sum of all conflict edges from the selected node
         to the remaining graph """
 
-        # experimentally normalizing by number of nodes appears to stablilize actor-critic training
-        # (and this normalization seems to be done in literature as well) -- but should confirm this with a side by side comparison
-        # TODO (Anant): get a long running result of training with and without normalization
         if self.config.normalization:
             norm_factor = self.state.num_nodes
         else:
@@ -66,21 +77,53 @@ class PhasingEnv(gym.Env):
         # compute the new MFC score
         previous_reward = self.current_total_reward
         # for each neighbor of the selected node in the graph
-        for nbr in self.state.frag_graph.g.neighbors(action):
-            if nbr not in self.state.H1:
-                self.current_total_reward += self.state.frag_graph.g[action][nbr]['weight']
-            else:
-                self.current_total_reward -= self.state.frag_graph.g[action][nbr]['weight']
-        return (self.current_total_reward - previous_reward) / norm_factor
+        cut_with_h1 = True
+        hap_list = [self.state.H0, self.state.H1]
+        complement_action = action
+        if action > self.state.num_nodes - 1:
+            # Assignment node i to Haplotype 1 is encoded as the action i + num nodes
+            cut_with_h1 = False
+            complement_action = action - self.state.num_nodes
+        for nbr in self.state.frag_graph.g.neighbors(complement_action):
+            if nbr in hap_list[cut_with_h1]:
+                self.current_total_reward += self.state.frag_graph.g[complement_action][nbr]['weight']
+
+        # Compute the corresponding reward, if clip, the reward ios clipped and normalized
+        if not self.config.clip:
+            return (self.current_total_reward - previous_reward) / norm_factor
+        else:
+            reward = max((self.current_total_reward - self.state.best_reward) / self.state.frag_graph.graph_properties[
+                "total_num_frag"], 0)
+            print(action, self.current_total_reward, self.state.best_reward, reward)
+            if self.current_total_reward > self.state.best_reward:
+                self.state.best_reward = self.current_total_reward
+                print("new best")
+            return reward
 
     def is_termination_action(self, action):
         return action == self.state.num_nodes
 
     def is_out_of_moves(self):
-        return len(self.state.H1) >= self.state.num_nodes
+        return len(self.state.H0) + len(self.state.H1) >= self.state.num_nodes
 
     def has_state(self):
         return self.state is not None
+
+    def update_features(self, hap, action):
+        self.state.g.ndata['cut_member_' + hap][action] = 1.0
+        if 'reachability_hap0' in list(self.state.g.ndata.keys()):
+            for node in self.state.frag_graph.graph_properties['compo'][
+                self.state.frag_graph.graph_properties['neg_connectivity'][action]]:
+                self.state.g.ndata['reachability_' + hap][node] += 1.0 / self.state.num_nodes
+        if 'shortest_pos_path_' + hap in list(self.state.g.ndata.keys()):
+            paths = self.state.frag_graph.graph_properties['pos_paths'][action]
+            for node in paths:
+                if node != action:
+                    if self.state.frag_graph.g.nodes[node]['val_pos_path_' + hap] == 0 or \
+                            self.state.frag_graph.g.nodes[node][
+                                'val_pos_path_' + hap] > paths[node]:
+                        self.state.frag_graph.g.nodes[node]['val_pos_path_' + hap] = paths[node]
+                        self.state.frag_graph.g.nodes[node]['shortest_pos_path_' + hap] = [paths[node] % 2.]
 
     def step(self, action):
         """Execute one action from given state """
@@ -89,21 +132,26 @@ class PhasingEnv(gym.Env):
         # assert action is a valid node and it has not been selected yet
         # update the current state by marking the node as selected
         self.state.assigned[action] = 1.0
-        if not self.is_termination_action(action):
-            self.state.g.ndata['x'][action] = 1.0
-            self.state.H1.append(action)
-            r_t = self.compute_mfc_reward(action)
-            is_done = self.is_out_of_moves()
+        if action > self.state.num_nodes - 1:
+            complement_action = action - self.state.num_nodes
+            self.state.H1.append(complement_action)
+            self.state.assigned[complement_action] = 1.0
+            self.update_features('hap1', complement_action)
         else:
-            r_t = 0
+            complement_action = action + self.state.num_nodes
+            self.state.H0.append(action)
+            self.state.assigned[complement_action] = 1.0
+            self.update_features("hap0", action)
+        r_t = self.compute_reward(action)
+        is_done = False
+        if self.is_out_of_moves():
             is_done = True
-        if is_done:
             self.finalize()
         return self.state, r_t, is_done
 
     def finalize(self):
         if self.record:
-            node_labels = self.state.g.ndata['x'][:, 0].cpu().numpy().tolist()
+            node_labels = self.state.g.ndata['cut_member_hap0'][:, 0].cpu().numpy().tolist()
             for i, frag in enumerate(self.state.frag_graph.fragments):
                 frag.assign_haplotype(node_labels[i])
             self.solutions.append(self.state.frag_graph.fragments)
@@ -130,23 +178,27 @@ class PhasingEnv(gym.Env):
         self.solutions.append(self.state.frag_graph.fragments)
 
     def get_solutions(self):
-        node_labels = self.state.g.ndata['x'][:, 0].cpu().numpy().tolist()
+        node_labels = self.state.g.ndata['cut_member_hap0'][:, 0].cpu().numpy().tolist()
         for i, frag in enumerate(self.state.frag_graph.fragments):
             frag.assign_haplotype(node_labels[i])
         return self.state.frag_graph.fragments
 
     def get_cut_value(self, node_labels=None):
         if not node_labels:
-            node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
+            node_labels = self.state.g.ndata['cut_member_hap0'][:].cpu().squeeze().numpy().tolist()
         if not isinstance(node_labels, list):
             node_labels = [node_labels]
         computed_cut = {i for i, e in enumerate(node_labels) if e != 0}
         net_x_graph = self.state.frag_graph.g
-        return nx.cut_size(net_x_graph, computed_cut, weight='weight')
+        if not self.config.fragment_norm and not self.config.clip:
+            return nx.cut_size(net_x_graph, computed_cut, weight='weight')
+        else:
+            return nx.cut_size(net_x_graph, computed_cut, weight='weight') * self.state.frag_graph.graph_properties["total_num_frag"]
+
 
     def render(self, mode='human'):
         """Display the environment"""
-        node_labels = self.state.g.ndata['x'][:].cpu().squeeze().numpy().tolist()
+        node_labels = self.state.g.ndata['cut_member_hap0'][:].cpu().squeeze().numpy().tolist()
         edge_weights = self.state.g.edata['weight'].cpu().squeeze().numpy().tolist()
         edges_src = self.state.g.edges()[0].cpu().squeeze().numpy().tolist()
         edges_dst = self.state.g.edges()[1].cpu().squeeze().numpy().tolist()
@@ -169,6 +221,9 @@ class PhasingEnv(gym.Env):
 
     def get_all_valid_actions(self):
         return (self.state.assigned == 0.).nonzero()
+
+    def get_all_non_neighbour_actions(self):
+        return (self.state.explorable == 0.).nonzero()
 
     def get_all_invalid_actions(self):
         return (self.state.assigned == 1.).nonzero()

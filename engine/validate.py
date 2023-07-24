@@ -12,7 +12,9 @@ import tqdm
 import envs.phasing_env as envs
 import os
 import models.actor_critic as agents
-import numpy as np
+import torch
+from joblib import Parallel, delayed
+
 
 
 def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, group):
@@ -21,7 +23,7 @@ def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, 
     for v in idx2var.values():
         v.assign_haplotype()
     idx2var = utils.post_processing.update_split_block_phase_sets(agent.env.solutions, idx2var)
-    output_vcf = config.validation_output_vcf + "_" +  str(group) + ".vcf"
+    output_vcf = config.validation_output_vcf + "_" + str(group) + ".vcf"
     vcf_writer.write_phased_vcf(validation_input_vcf, idx2var, output_vcf)
     chrom = benchmark.get_ref_name(output_vcf)
     benchmark_result = benchmark.vcf_vcf_error_rate(output_vcf, validation_input_vcf, indels=False)
@@ -64,17 +66,21 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
     return chrom, benchmark_result.switch_count[chrom], benchmark_result.mismatch_count[chrom], benchmark_result.flat_count[chrom], benchmark_result.phased_count[chrom]
 
 
-def validation_task(model_checkpoint_id, episode_id, sub_df, training_agent, config, group):
+def validation_task(input_tuple):
+    model_checkpoint_id, episode_id, sub_df, model_path, config, group = input_tuple
     task_component_stats = []
+    agent = None
     for index, component_row in tqdm.tqdm(sub_df.iterrows()):
         with open(component_row.component_path, 'rb') as f:
             subgraph = pickle.load(f)
             subgraph.indexed_graph_stats = component_row
 
             mini_env = envs.PhasingEnv(config, preloaded_graphs=subgraph, record_solutions=True)
-            agent = agents.DiscreteActorCriticAgent(mini_env)
-            agent.model.load_state_dict(training_agent.state_dict())
-
+            if agent is not None:
+                agent.env = mini_env
+            else:
+                agent = agents.DiscreteActorCriticAgent(mini_env)
+                agent.model.load_state_dict(torch.load(model_path))
             sum_of_rewards = 0
             sum_of_cuts = 0
             reward_val = agent.run_episode(config, test_mode=True)
@@ -102,21 +108,19 @@ def validation_task(model_checkpoint_id, episode_id, sub_df, training_agent, con
 
                 task_component_stats.append(cur_index)
     return pd.DataFrame(task_component_stats, columns=list(sub_df.columns) + ["switch", "mismatch", "flat", "phased", "reward_val", "cut_val", "chr"])
-def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config, executor):
+
+def validate(model_checkpoint_id, episode_id, validation_dataset, config):
     # benchmark the current model against a held out set of fragment graphs (validation panel)
 
-    validation_component_stats = []
     print("running validation with model number:  ", model_checkpoint_id, ", at episode: ", episode_id)
 
     input_tuples = []
     for i, sub_df in enumerate(validation_dataset):
-        input_tuples.append((model_checkpoint_id, episode_id, sub_df, agent.model, config, str(i)))
-    
-    validation_component_stats += executor.starmap(validation_task, input_tuples)
+        input_tuples.append((model_checkpoint_id, episode_id, sub_df, "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id), config, str(i)))
+    validation_component_stats = Parallel(n_jobs=config.num_cores_validation)(delayed(validation_task)(input_elem) for input_elem in input_tuples)
 
     validation_indexing_df = pd.concat(validation_component_stats)
     validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))
-
     def log_stats_for_filter(validation_filtered_df, descriptor="Overall"):
         metrics_of_interest = ["reward_val", "cut_val", "switch", "mismatch", "flat", "phased"]
         for metric in metrics_of_interest:
@@ -127,15 +131,15 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config,
             wandb.log({"Episode": episode_id, descriptor + " Validation " + "% with " + metric + " errors" + " on " + "_default_overall": len(validation_filtered_df[validation_filtered_df[metric] > 0]) / len(validation_filtered_df)})
 
     # stats for entire validation set
-    log_stats_for_filter(validation_indexing_df) 
-    
+    log_stats_for_filter(validation_indexing_df)
+
     # log stats for graphs from each quantile of each graph property specified in the validation config
     keys = validation_indexing_df.group.unique()
     for group in validation_indexing_df.group.unique():
         log_stats_for_filter(validation_indexing_df[validation_indexing_df["group"] == group], "group: " + str(group))
 
     # log specific plots to wandb for graph topologies we are interested in    
-    articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] > 0]
+    '''articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] > 0]
     log_stats_for_filter(articulation_df, "Articulation > 0:")
     articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] == 0]
     log_stats_for_filter(articulation_df, "Articulation == 0:")
@@ -145,6 +149,6 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, agent, config,
                                                       & (validation_indexing_df["n_nodes"] <= 100)]
     log_stats_for_filter(node_filter_df, "0 to 100 nodes:")
     node_filter_df = validation_indexing_df.loc[(101 <= validation_indexing_df["n_nodes"])]
-    log_stats_for_filter(node_filter_df, "101 plus nodes:")
+    log_stats_for_filter(node_filter_df, "101 plus nodes:")'''
 
     return validation_indexing_df["reward_val"].sum()

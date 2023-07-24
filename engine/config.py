@@ -6,6 +6,7 @@ import logging
 import sys
 import os
 import wandb
+import re
 
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
@@ -19,7 +20,6 @@ STATS_LOG_COLS_TRAIN = ['Episode',
                         'Reward',
                         'CutValue'
                         'Losses',
-                        'GraphProperties',
                         'Runtime']
 STATS_LOG_COLS_VALIDATE = ['Descriptor', 'Episode', 'SumOfCuts', 'SumOfRewards', 'Switch Count', 'Mismatch Count', 'Flat Count', 'Phased Count', 'AN50', 'N50']
 
@@ -43,9 +43,8 @@ class Config:
             'compress': True,
             'normalization': False,
             'debug': True,
-            'in_dim': 1,
-            'hidden_dim': 264,
-            'num_layers': 3,
+            'node_features_dim': 1,
+            'hidden_dim': [264, 264, 264],
             'light_logging': True
         }
         for k, v, in default_values.items():
@@ -104,7 +103,8 @@ class TrainingConfig(Config):
             wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, config=self, name=self.run_name)
         else:
             # automatically results in ignoring all wandb calls
-            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, mode="disabled")
+            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, id=config_file.id, mode="disabled")
+
 
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
@@ -214,7 +214,19 @@ class DataConfig(Config):
 def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     # Load a YAML configuration file
     with open(fname) as file:
-        config = yaml.load(file, Loader=yaml.FullLoader)
+        loader = yaml.FullLoader
+        # expression enabling yaml to read floats in scientific notation
+        loader.add_implicit_resolver(
+            u'tag:yaml.org,2002:float',
+            re.compile(u'''^(?:
+             [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
+            |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
+            |\\.[0-9_]+(?:[eE][-+][0-9]+)?
+            |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
+            |[-+]?\\.(?:inf|Inf|INF)
+            |\\.(?:nan|NaN|NAN))$''', re.X),
+            list(u'-+0123456789.'))
+        config = yaml.load(file, Loader=loader)
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:

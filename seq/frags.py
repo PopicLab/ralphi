@@ -67,6 +67,8 @@ class Fragment:
         self.read_barcode = None
         self.haplotype = None
         self.true_haplotype = None
+        self.quality = None
+        self.vcf_positions = None
 
     def __eq__(self, fragment):
         return (self.vcf_idx_start, self.vcf_idx_end, self.n_blocks, self.n_variants, self.blocks) == (
@@ -109,9 +111,12 @@ class Fragment:
         # parse quality scores for all variants
         qscores = fields[field_idx]
         qscore_idx = 0
+        frag.quality = []
         for block in frag.blocks:
             for variant in block.variants:
                 variant.qscore = qscores[qscore_idx]
+                prob_error = 10 ** (((ord(variant.qscore) - 33) / (-10)))
+                frag.quality.append(prob_error)
                 qscore_idx += 1
 
         frag.vcf_idx_start = frag.blocks[0].vcf_idx_start

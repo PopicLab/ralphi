@@ -36,9 +36,7 @@ while env.has_state():
     logging.debug("Component is non-trivial")
     start_time = time.time()
     done = False
-    while not done:
-        action = agent.select_action(greedy=True)
-        _, _, done = env.step(action)
+    reward = agent.run_episode(config, test_mode=True)
     logging.debug("Runtime: %f " % (time.time() - start_time))
     env.reset()
     n_episodes += 1

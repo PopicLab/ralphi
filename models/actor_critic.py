@@ -2,26 +2,32 @@ import dgl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.graph_models import GCN, GCNFirstLayer
+from models.graph_models import GAT, GINE, GIN, PNA, GCN, GCNv2
 import time
 import logging
 import engine.config as config
 import models.constants as constants
 import wandb
-import numpy as np
+from torch.nn.utils import spectral_norm
 
 class ActorCriticNet(nn.Module):
     def __init__(self, config):
+        layers_dict = {"gat": GAT, "gine": GINE, "gin": GIN, "pna": PNA, "gcn": GCN, "gcn2": GCNv2}
         super(ActorCriticNet, self).__init__()
         # linear transformation will be applied to the last dimension of the input tensor
         # which must equal hidden_dim -- number of features per node
-        self.policy_graph = nn.Linear(config.hidden_dim, 1)
-        self.policy_done = nn.Linear(config.hidden_dim, 1)
-        self.value = nn.Linear(config.hidden_dim, 1)
-        self.layers = nn.ModuleList([])
-        self.layers.append(GCN(config.in_dim, config.hidden_dim, F.relu))
-        for i in range(config.num_layers - 1):
-            self.layers.append(GCN(config.hidden_dim, config.hidden_dim, F.relu))
+        self.policy_graph_hap0 = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
+        nn.init.orthogonal_(self.policy_graph_hap0.weight.data)
+        self.policy_graph_hap1 = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
+        nn.init.orthogonal_(self.policy_graph_hap1.weight.data)
+        self.policy_done = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
+        nn.init.orthogonal_(self.policy_done.weight.data)
+        self.value = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
+        nn.init.orthogonal_(self.value.weight.data)
+        self.layers = layers_dict[config.layer_type](config.node_features_dim, config.hidden_dim, **config.embedding_vars)
+        self.feature_list = list(feature for feature_name in config.features
+                             for feature in constants.FEATURES_DICT[feature_name])
+
         self.actions = []
         self.rewards = []
 
@@ -31,16 +37,17 @@ class ActorCriticNet(nn.Module):
         - actor's policy: tensor of probabilities for each action
         - critic's value of the current state
         """
-        #h = torch.cat([genome_graph.ndata['x'], genome_graph.ndata['y'].float()], dim=1)
-        h = genome_graph.ndata['x']
-        for conv in self.layers:
-            h = conv(genome_graph, h)
+        features = list(genome_graph.ndata[feature] for feature in self.feature_list)
+        h = torch.cat(features, dim=1)
+        weights = genome_graph.edata['weight']
+        h = self.layers(genome_graph, h, edge_feat=weights[:, None], edge_weights=weights, etypes=torch.gt(weights,0))[-1]
+
         genome_graph.ndata['h'] = h
         mN = dgl.mean_nodes(genome_graph, 'h')
         v = self.value(mN)
-        pi = self.policy_graph(genome_graph.ndata['h'])
-        pi_done = self.policy_done(mN)
-        pi = torch.cat([pi, pi_done])
+        pi_hap0 = self.policy_graph_hap0(genome_graph.ndata['h'])
+        pi_hap1 = self.policy_graph_hap1(genome_graph.ndata['h'])
+        pi = torch.cat([pi_hap0, pi_hap1])
         genome_graph.ndata.pop('h')
         return pi, v
 
@@ -57,11 +64,13 @@ class DiscreteActorCriticAgent:
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.env.config.lr)
         self.batch_size = 32
 
-    def select_action(self, greedy=False):
+    def select_action(self, greedy=False, first=False):
         if self.env.state.num_nodes < 2:
             return 0
         [pi, val] = self.model(self.env.state.g)
         pi = pi.squeeze()
+        """if not first:
+            pi[self.env.get_all_non_neighbour_actions()] = -float('Inf')"""
         pi[self.env.get_all_invalid_actions()] = -float('Inf')
         if greedy:
             greedy_choice = torch.argmax(pi)
@@ -76,12 +85,12 @@ class DiscreteActorCriticAgent:
 
     def run_episode(self, config, test_mode=False, episode_id=None):
         start_time = time.time()
-        if self.env.state.num_nodes < 2:
-            return 0
         done = False
         episode_reward = 0
+        first = True
         while not done:
-            action = self.select_action(test_mode)
+            action = self.select_action(test_mode, first=first)
+            first = False
             _, reward, done = self.env.step(action)
             episode_reward += reward
             if not test_mode:
@@ -89,7 +98,7 @@ class DiscreteActorCriticAgent:
         if not test_mode:
             loss = self.update_model(episode_id)
             cut_size = self.env.get_cut_value()
-            self.log_episode_stats(episode_id, episode_reward, loss, time.time() - start_time)
+            #self.log_episode_stats(episode_id, episode_reward, loss, time.time() - start_time)
             wandb.log({"Episode": episode_id, "Training Episode Reward": episode_reward})
             wandb.log({"Episode": episode_id, "Training Cut Size": cut_size})
         if config.render:
@@ -98,7 +107,8 @@ class DiscreteActorCriticAgent:
 
     def log_episode_stats(self, episode_id, reward, loss, runtime):
         self.env.state.frag_graph.log_graph_properties(episode_id)
-        graph_stats = self.env.state.frag_graph.graph_properties
+        # graph_stats = self.env.state.frag_graph.graph_properties
+        graph_stats = []
         logging.getLogger(config.MAIN_LOG).info("Episode: %d. Reward: %d, ActorLoss: %d, CriticLoss: %d, TotalLoss: %d,"
                                                 " CutSize: %d, Runtime: %d" %
                                                 (episode_id, reward,
@@ -142,8 +152,7 @@ class DiscreteActorCriticAgent:
         wandb.log({"Episode": episode_id, "actor loss": torch.stack(loss_policy).sum().item()})
         wandb.log({"Episode": episode_id, "critic loss": torch.stack(loss_value).sum().item()})
         return {
-           constants.LossTypes.actor_loss: torch.stack(loss_policy).sum().item(),
-           constants.LossTypes.critic_loss: torch.stack(loss_value).sum().item(),
-           constants.LossTypes.total_loss: loss.item()
+            constants.LossTypes.actor_loss: torch.stack(loss_policy).sum().item(),
+            constants.LossTypes.critic_loss: torch.stack(loss_value).sum().item(),
+            constants.LossTypes.total_loss: loss.item()
         }
-
