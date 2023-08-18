@@ -27,25 +27,31 @@ class Config:
     def __init__(self, config_file):
         self.config_file = config_file
         self.experiment_dir = str(Path(config_file).parent.resolve())
-        self.device = torch.device("cpu")
         self.log_dir = self.experiment_dir + "/logs/"
         self.out_dir = self.experiment_dir + "/output/"
 
         # setup the experiment directory structure
         Path(self.log_dir).mkdir(parents=True, exist_ok=True)
         Path(self.out_dir).mkdir(parents=True, exist_ok=True)
-
+        
         # ...shared training and testing configs...
     def set_defaults(self):
         default_values = {
             'render': False,  # Enables the rendering of the environment
             'num_cores_torch': 4,  # Number of threads to use for Pytorch
+            'device': "cpu",             
             'compress': True,
             'normalization': False,
             'debug': True,
-            'node_features_dim': 1,
+            'epochs': 1,
+            'node_features_dim': 3,
             'hidden_dim': [264, 264, 264],
-            'light_logging': True
+            'light_logging': True,
+            'id': "vanilla",
+            'fragment_norm': False,
+            'weight_norm': False,
+            'clip': False,
+            'features': ["dual", "between"]
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
@@ -114,7 +120,12 @@ class TrainingConfig(Config):
         # enforce light logging if using multithreading validation
         if self.num_cores_validation > 1:
             self.light_logging = True
-                     
+
+        if self.device == "cuda" or self.device == "cuda:0" or self.device == "cuda:1":
+            self.device = torch.device(self.device if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = torch.device("cpu")
+    
     def __str__(self):
         s = " ===== Config =====\n"
         s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
@@ -137,6 +148,7 @@ class TrainingConfig(Config):
             'render_view': "weighted_view",  # Controls how the graph is rendered
             'interval_validate': 500,  # Number of episodes between model validation runs
             'log_wandb': False,
+            'ultra_light_mode': False,            
             # caching parameters
             'load_components': True,
             'store_components': True,
@@ -165,6 +177,11 @@ class TestConfig(Config):
                             handlers=[logging.FileHandler(self.log_dir + '/main.log', mode='w'),
                                       logging.StreamHandler(sys.stdout)])
         logging.info(self)
+        
+        if self.device == "cuda" or self.device == "cuda:0" or self.device == "cuda:1":
+            self.device = torch.device(self.device if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = torch.device("cpu") 
 
     def __str__(self):
         s = " ===== Config =====\n"
@@ -200,7 +217,6 @@ class DataConfig(Config):
             'shuffle': True,
             'seed': 1234,  # Random seed
             'num_samples_per_category_default': 1000,
-            'epochs': 1,
             'drop_redundant': False,
             'global_ranges': {},
             'ordering_ranges': {},

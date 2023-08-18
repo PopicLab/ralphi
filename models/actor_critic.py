@@ -10,6 +10,7 @@ import models.constants as constants
 import wandb
 from torch.nn.utils import spectral_norm
 
+
 class ActorCriticNet(nn.Module):
     def __init__(self, config):
         layers_dict = {"gat": GAT, "gine": GINE, "gin": GIN, "pna": PNA, "gcn": GCN, "gcn2": GCNv2}
@@ -55,13 +56,18 @@ class ActorCriticNet(nn.Module):
 class DiscreteActorCriticAgent:
     def __init__(self, env):
         self.env = env
-        self.model = ActorCriticNet(self.env.config)
+        self.model = ActorCriticNet(self.env.config).to(self.env.config.device)
         self.learning_mode = False
 
     def set_learning_params(self):
         self.gamma = self.env.config.gamma
         # very small learning rate appears to stabilize training; TODO (Anant): experiment with LR scheduler
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.env.config.lr)
+        for state in self.optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor):
+                    state[k] = v.to(self.env.config.device)
+        #self.optimizer = self.optimizer.to(device)
         self.batch_size = 32
 
     def select_action(self, greedy=False, first=False):
@@ -132,13 +138,13 @@ class DiscreteActorCriticAgent:
         for r in self.model.rewards[::-1]:
             R = r + self.gamma * R
             rewards.insert(0, R)
-        rewards = torch.tensor(rewards)
+        rewards = torch.tensor(rewards).to(self.env.config.device)
         loss_policy = []
         loss_value = []
         for (log_prob, value), reward in zip(self.model.actions, rewards):
             advantage = reward - value.item()
             loss_policy.append(-log_prob * advantage)
-            loss_value.append(F.smooth_l1_loss(value, torch.tensor([reward])))
+            loss_value.append(F.smooth_l1_loss(value, torch.tensor([reward]).to(self.env.config.device)))
         # reset gradients
         self.optimizer.zero_grad()
         loss = torch.stack(loss_policy).sum() + torch.stack(loss_value).sum()

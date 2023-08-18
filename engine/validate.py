@@ -68,6 +68,7 @@ def log_error_rates(solutions, input_vcf, sum_of_cuts, sum_of_rewards, model_che
 
 def validation_task(input_tuple):
     model_checkpoint_id, episode_id, sub_df, model_path, config, group = input_tuple
+    torch.set_num_threads(config.num_cores_torch)
     task_component_stats = []
     agent = None
     for index, component_row in tqdm.tqdm(sub_df.iterrows()):
@@ -97,9 +98,16 @@ def validation_task(input_tuple):
                     wandb.log({"Episode": episode_id,
                                "Cut Value on: " + str(component_row.genome) + "_" + str(component_row.coverage) + "_" + str(
                                    component_row.error_rate) + "_" + graph_path: graph_stats["cut_value"]})
-                vcf_path = component_row.component_path + ".vcf"
 
-                ch, sw, mis, flat, phased = log_error_rates([agent.env.state.frag_graph.fragments], vcf_path,
+                ch = 0
+                sw = 0
+                mis = 0
+                flat = 0
+                phased = 0
+                if not config.ultra_light_mode:
+                    vcf_path = component_row.component_path + ".vcf"
+
+                    ch, sw, mis, flat, phased = log_error_rates([agent.env.state.frag_graph.fragments], vcf_path,
                                                             cut_val, reward_val, model_checkpoint_id, episode_id, agent,
                                                             config, component_row.genome, group, graph_path)
 
@@ -107,6 +115,7 @@ def validation_task(input_tuple):
                 cur_index.extend([sw, mis, flat, phased, reward_val, cut_val, ch])
 
                 task_component_stats.append(cur_index)
+                    
     return pd.DataFrame(task_component_stats, columns=list(sub_df.columns) + ["switch", "mismatch", "flat", "phased", "reward_val", "cut_val", "chr"])
 
 def validate(model_checkpoint_id, episode_id, validation_dataset, config):

@@ -14,12 +14,13 @@ class State:
     and the nodes assigned to each haplotype (0: H0 1: H1)
     """
 
-    def __init__(self, frag_graph, features):
+    def __init__(self, frag_graph, features, device):
         self.frag_graph = frag_graph
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
         self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features)
+        self.g = self.g.to(device) 
         self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes * 2)
         self.explorable = torch.zeros(self.num_nodes * 2)
@@ -43,7 +44,7 @@ class PhasingEnv(gym.Env):
             preloaded_graphs.set_graph_properties(self.features, True)
             preloaded_graphs.set_node_features(self.features)
             preloaded_graphs.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
-            self.state = State(preloaded_graphs, self.features)
+            self.state = State(preloaded_graphs, self.features, config.device)
         else:
             self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
             self.state = self.init_state()
@@ -60,9 +61,9 @@ class PhasingEnv(gym.Env):
 
     def init_state(self):
         g = next(self.graph_gen)
-        g.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
         if g is not None:
-            return State(g, self.features)
+            g.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
+            return State(g, self.features, self.config.device)
         else:
             return None
 

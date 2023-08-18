@@ -39,7 +39,7 @@ class FragGraph:
         self.graph_properties = {}
         if compute_trivial:
             self.check_and_set_trivial()
-        if compute_properties:
+        if compute_properties and (self.trivial is None or not self.trivial):
             self.set_graph_properties(features, False)
 
     def set_ground_truth_assignment(self, node_id2hap_id):
@@ -49,7 +49,7 @@ class FragGraph:
         self.node_id2hap_id = node_id2hap_id
 
     @staticmethod
-    def build(fragments, compute_trivial=False, compress=False):
+    def build(fragments, features, compute_trivial=False, compress=False):
         if compress and fragments:
             # in a compressed graph: nodes are unique fragments, edge weights correspond to the number
             # of all fragment instances
@@ -97,7 +97,7 @@ class FragGraph:
                 if weight != 0:
                     frag_graph.add_edge(i, j, weight=weight)
 
-        return FragGraph(frag_graph, fragments, compute_trivial=compute_trivial)
+        return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)
 
     def set_graph_properties(self, features, precomputed=True):
         # TODO: which properties do we want to save here; probably not diameter since expensive to compute
@@ -129,7 +129,7 @@ class FragGraph:
                 degrees = [val for (node, val) in self.g.degree()]
                 self.graph_properties["max_degree"] = max(degrees)
                 self.graph_properties["min_degree"] = min(degrees)
-                self.graph_properties["n_nodes"] = self.g.number_of_nodes()
+                self.graph_properties["n_nodes"] = self.g.number_of_nodes() 
                 self.graph_properties["n_edges"] = self.g.number_of_edges()
                 self.graph_properties["density"] = nx.density(self.g)
                 self.graph_properties["articulation_points"] = len(self.graph_properties["list_articulation_points"])
@@ -138,10 +138,12 @@ class FragGraph:
                 self.graph_properties["diameter"] = nx.diameter(self.g)
                 self.graph_properties["trivial"] = self.trivial
                 variants = [frag.n_variants for frag in self.fragments]
+                _, self.graph_properties['num_variants'] = self.get_variants_set()                
                 self.graph_properties['max_num_variant'] = max(variants)
                 self.graph_properties['min_num_variant'] = min(variants)
                 self.graph_properties['avg_num_variant'] = np.mean(variants)
-            self.graph_properties['total_num_frag'] = sum([frag.n_copies for frag in self.fragments])
+                self.graph_properties['total_num_frag'] = sum([frag.n_copies for frag in self.fragments])
+                self.graph_properties['compression_factor'] = self.graph_properties['n_nodes'] / self.graph_properties['total_num_frag']
             if 'reachability_hap0' in features:
                 edges = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
                 edges[edges > 0] = 0
@@ -365,7 +367,7 @@ class FragGraph:
                 pruned_edges[v].append(u)
         return g, pruned_edges
 
-    def extract_subgraph(self, connected_component, compute_trivial=False, compute_properties=False):
+    def extract_subgraph(self, connected_component, features, compute_trivial=False, compute_properties=False):
         subg = self.g.subgraph(connected_component).copy()
         subg_frags = [self.fragments[node] for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
@@ -373,7 +375,7 @@ class FragGraph:
         if self.node_id2hap_id is not None:
             node_id2hap_id = {i: self.node_id2hap_id[j] for (i, j) in enumerate(subg.nodes)}
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
-        return FragGraph(subg_relabeled, subg_frags, node_id2hap_id, compute_trivial, compute_properties)
+        return FragGraph(subg_relabeled, subg_frags, features, node_id2hap_id, compute_trivial, compute_properties)
 
     def connected_components_subgraphs(self, features, skip_trivial_graphs=False, compute_properties=False):
         components = nx.connected_components(self.g)
@@ -381,7 +383,7 @@ class FragGraph:
         subgraphs = []
         print("Found connected components, now constructing subgraphs...")
         for component in tqdm.tqdm(components):
-            subgraph = self.extract_subgraph(component, compute_trivial=True, compute_properties=compute_properties)
+            subgraph = self.extract_subgraph(component, features, compute_trivial=True, compute_properties=compute_properties)
             if subgraph.trivial and skip_trivial_graphs:
                 continue
             # precompute node features/attributes
@@ -401,7 +403,7 @@ def load_connected_components(frag_file_fname, features, load_components=False, 
             connected_components = pickle.load(f)
     else:
         fragments = frags.parse_frag_file(frag_file_fname.strip())
-        graph = FragGraph.build(fragments, compute_trivial=False, compress=compress)
+        graph = FragGraph.build(fragments, features, compute_trivial=False, compress=compress)
         print("Fragment graph with ", graph.n_nodes, " nodes and ", graph.g.number_of_edges(), " edges")
         print("Finding connected components...")
         connected_components = graph.connected_components_subgraphs(
@@ -429,23 +431,24 @@ class FragGraphGen:
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
         if self.graph_dataset is not None:
-            index_df = self.graph_dataset
-            for index, component_row in index_df.iterrows():
-                with open(component_row.component_path, 'rb') as f:
-                    if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
-                        continue
-                    subgraph = pickle.load(f) #[component_row['index']]  # index in to list of graphs
-                    if self.is_invalid_subgraph(subgraph):
-                        continue
-                    print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
-                    subgraph.set_graph_properties(self.features, True)
-                    subgraph.set_node_features(self.features)
-                    yield subgraph
+            for epoch in range(self.config.epochs):
+                index_df = self.graph_dataset
+                for index, component_row in index_df.iterrows():
+                    with open(component_row.component_path, 'rb') as f:
+                        if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
+                            continue
+                        subgraph = pickle.load(f) #[component_row['index']]  # index in to list of graphs
+                        if self.is_invalid_subgraph(subgraph):
+                            continue
+                        print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
+                        subgraph.set_graph_properties(self.features, True)
+                        subgraph.set_node_features(self.features)
+                        yield subgraph
             yield None
         elif self.config.frag_panel_file is not None:
             with open(self.config.frag_panel_file, 'r') as panel:
                 for frag_file_fname in panel:
-                    connected_components = load_connected_components(frag_file_fname,
+                    connected_components = load_connected_components(frag_file_fname, self.features,
                                                                      load_components=self.config.load_components,
                                                                      store_components=self.config.store_components,
                                                                      compress=self.config.compress,
@@ -474,6 +477,7 @@ class FragGraphGen:
 class GraphDataset:
     def __init__(self, config, ordering_config=None, validation_mode=False):
         self.config = config
+        self.features = list(feature for feature_name in config.features for feature in constants.FEATURES_DICT[feature_name])
         self.ordering_config = ordering_config
         self.combined_graph_indexes = []
         self.validation_mode = validation_mode
@@ -544,12 +548,7 @@ class GraphDataset:
         if self.ordering_config.drop_redundant:
             df_single_epoch.drop_duplicates(inplace=True)
 
-        df_epochs = []
-        for i in range(self.ordering_config.epochs):
-            df_iter = df_single_epoch.copy()
-            df_epochs.append(df_iter)
-
-        final_df = pd.concat(df_epochs)
+        final_df = df_single_epoch
 
         if self.validation_mode:
             final_df = self.round_robin_chunkify(final_df)
@@ -582,7 +581,7 @@ class GraphDataset:
             vcf_panel = open(self.vcf_panel, 'r').readlines()
         for i in range(len(panel)):
             # precompute graph properties when generating distribution
-            connected_components = load_connected_components(panel[i],
+            connected_components = load_connected_components(panel[i], self.features,
                                                              load_components=self.config.load_components,
                                                              store_components=self.config.store_components,
                                                              compress=self.config.compress,
