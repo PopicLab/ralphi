@@ -88,17 +88,14 @@ class PhasingEnv(gym.Env):
         for nbr in self.state.frag_graph.g.neighbors(complement_action):
             if nbr in hap_list[cut_with_h1]:
                 self.current_total_reward += self.state.frag_graph.g[complement_action][nbr]['weight']
-
+        if self.current_total_reward > self.state.best_reward:
+            self.state.best_reward = self.current_total_reward
         # Compute the corresponding reward, if clip, the reward ios clipped and normalized
         if not self.config.clip:
             return (self.current_total_reward - previous_reward) / norm_factor
         else:
             reward = max((self.current_total_reward - self.state.best_reward) / self.state.frag_graph.graph_properties[
                 "total_num_frag"], 0)
-            print(action, self.current_total_reward, self.state.best_reward, reward)
-            if self.current_total_reward > self.state.best_reward:
-                self.state.best_reward = self.current_total_reward
-                print("new best")
             return reward
 
     def is_termination_action(self, action):
@@ -185,16 +182,10 @@ class PhasingEnv(gym.Env):
         return self.state.frag_graph.fragments
 
     def get_cut_value(self, node_labels=None):
-        if not node_labels:
-            node_labels = self.state.g.ndata['cut_member_hap0'][:].cpu().squeeze().numpy().tolist()
-        if not isinstance(node_labels, list):
-            node_labels = [node_labels]
-        computed_cut = {i for i, e in enumerate(node_labels) if e != 0}
-        net_x_graph = self.state.frag_graph.g
         if not self.config.fragment_norm and not self.config.clip:
-            return nx.cut_size(net_x_graph, computed_cut, weight='weight')
+            return self.state.best_reward
         else:
-            return nx.cut_size(net_x_graph, computed_cut, weight='weight') * self.state.frag_graph.graph_properties["total_num_frag"]
+            return self.state.best_reward * self.state.frag_graph.graph_properties["total_num_frag"]
 
 
     def render(self, mode='human'):
