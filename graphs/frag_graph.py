@@ -49,45 +49,87 @@ class FragGraph:
         self.node_id2hap_id = node_id2hap_id
 
     @staticmethod
-    def build(fragments, features, compute_trivial=False, compress=False):
-        if compress and fragments:
-            # in a compressed graph: nodes are unique fragments, edge weights correspond to the number
-            # of all fragment instances
-            frags_unique = []  # list of unique fragments, list allows comparisons based on equality only
-            search_block_idx = None
-            for f in fragments:
-                # fragments are sorted by the start index in the vcf
-                if search_block_idx is not None and frags_unique[search_block_idx].vcf_idx_start == f.vcf_idx_start:
-                    try:
-                        frags_unique[frags_unique.index(f, search_block_idx)].n_copies += 1
-                        continue
-                    except ValueError:
-                        pass
-                else:
-                    search_block_idx = len(frags_unique)
-                # new fragment
-                frags_unique.append(f)
-            fragments = frags_unique
-
-        frag_graph = nx.Graph()
-        print("Constructing fragment graph from %d fragments" % len(fragments))
-        for i, f1 in enumerate(tqdm.tqdm(fragments)):
-            frag_graph.add_node(i)
-            for j in range(i + 1, len(fragments)):
-                f2 = fragments[j]
-                if f1.vcf_idx_end < f2.vcf_idx_start:
-                    # optimization: since we sort the fragments by vcf_idx_start, do not need to consider
-                    # later fragments for potential edge existence due to overlap
-                    break
-                frag_variant_overlap = f1.overlap(f2)
-                if len(frag_variant_overlap) == 0:
+    def merge_fragments_by_identity(fragments):
+        # in a compressed graph: nodes are unique fragments,
+        # edge weights are adjusted by the number of all fragment instances
+        frags_unique = []  # list of unique fragments, list allows comparisons based on equality only
+        search_block_idx = None
+        for f in fragments:
+            # fragments are sorted by the start index in the vcf
+            if search_block_idx is not None and frags_unique[search_block_idx].vcf_idx_start == f.vcf_idx_start:
+                try:
+                    frags_unique[frags_unique.index(f, search_block_idx)].n_copies += 1
                     continue
-                n_variants = len(frag_variant_overlap)
+                except ValueError:
+                    pass
+            else:
+                search_block_idx = len(frags_unique)
+            # new fragment
+            frags_unique.append(f)
+        return frags_unique
+
+    @staticmethod
+    def merge_fragments_by_overlap(fragments, min_overlap_len=10, min_agreement_ratio=0.9):
+        merged_fragments = []
+        skip_frags = set()
+        for i, f1 in enumerate(tqdm.tqdm(fragments)):
+            if i in skip_frags: continue
+            best_match = None
+            for j in range(i + 1, len(fragments)):
+                if j in skip_frags: continue
+                f2 = fragments[j]
+                if f1.vcf_idx_end < f2.vcf_idx_start: break
+                frag_variant_overlap = f1.overlap(f2)
+                if not frag_variant_overlap: continue
                 n_conflicts = 0
                 for variant_pair in frag_variant_overlap:
                     if variant_pair[0].allele != variant_pair[1].allele:
                         n_conflicts += 1
-                weight = 1.0 * (-n_variants + 2 * n_conflicts)
+                agreement_ratio = (len(frag_variant_overlap) - n_conflicts)/len(frag_variant_overlap)
+               # print(len(frag_variant_overlap), n_conflicts, agreement_ratio)
+                if len(frag_variant_overlap) >= min_overlap_len and agreement_ratio >= min_agreement_ratio:
+                    #print(len(frag_variant_overlap), n_conflicts, agreement_ratio)
+                    if not best_match or len(frag_variant_overlap) > best_match[0]:
+                        best_match = (len(frag_variant_overlap), j)
+            if best_match:
+                merged_fragments.append(f1.merge(fragments[best_match[1]]))
+                skip_frags.add(best_match[1])
+            else:
+                merged_fragments.append(f1)
+        return merged_fragments
+
+    @staticmethod
+    def build(fragments, features, compute_trivial=False, compress=False, merge_fragments=True):
+        logging.info("Input number of fragments: %d" % len(fragments))
+        if compress and fragments:
+            logging.info("Compressing identical fragments")
+            fragments = FragGraph.merge_fragments_by_identity(fragments)
+            logging.info("Compressed number of fragments: %d" % len(fragments))
+        if merge_fragments and fragments:
+            logging.info("Merging fragments")
+            fragments = FragGraph.merge_fragments_by_overlap(fragments)
+            logging.info("Merged number of fragments: %d" % len(fragments))
+            fragments = FragGraph.merge_fragments_by_overlap(fragments)
+            logging.info("Merged number of fragments 2x: %d" % len(fragments))
+            fragments = FragGraph.merge_fragments_by_overlap(fragments)
+            logging.info("Merged number of fragments 3x: %d" % len(fragments))
+            fragments = FragGraph.merge_fragments_by_overlap(fragments)
+            logging.info("Merged number of fragments 4x: %d" % len(fragments))
+        frag_graph = nx.Graph()
+        logging.info("Constructing fragment graph from %d fragments" % len(fragments))
+        for i, f1 in enumerate(tqdm.tqdm(fragments)):
+            frag_graph.add_node(i)
+            for j in range(i + 1, len(fragments)):
+                f2 = fragments[j]
+                # skip since fragments are sorted by vcf_idx_start
+                if f1.vcf_idx_end < f2.vcf_idx_start: break
+                frag_variant_overlap = f1.overlap(f2)
+                if not frag_variant_overlap: continue
+                n_conflicts = 0
+                for variant_pair in frag_variant_overlap:
+                    if variant_pair[0].allele != variant_pair[1].allele:
+                        n_conflicts += 1
+                weight = 1.0 * (-len(frag_variant_overlap) + 2 * n_conflicts)
                 if compress:
                     weight = weight * f1.n_copies * f2.n_copies
                 # TODO(viq): differentiate between no overlap and half conflicts
@@ -95,7 +137,7 @@ class FragGraph:
                 # as otherwise half-conflicts can result in a variant being split between two connected components.
                 # TODO:(Anant): revisit this since these zero-weight edges provide no phasing information
                 if weight != 0:
-                    frag_graph.add_edge(i, j, weight=weight)
+                    frag_graph.add_edge(i, j, weight=weight, overlap=len(frag_variant_overlap), conflicts=n_conflicts)
 
         return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)
 
@@ -379,13 +421,11 @@ class FragGraph:
 
     def connected_components_subgraphs(self, features, skip_trivial_graphs=False, compute_properties=False):
         components = nx.connected_components(self.g)
-        print("Found connected components, now constructing subgraphs...")
+        logging.debug("Found connected components, now constructing subgraphs...")
         subgraphs = []
-        print("Found connected components, now constructing subgraphs...")
         for component in tqdm.tqdm(components):
             subgraph = self.extract_subgraph(component, features, compute_trivial=True, compute_properties=compute_properties)
-            if subgraph.trivial and skip_trivial_graphs:
-                continue
+            if subgraph.trivial and skip_trivial_graphs: continue
             # precompute node features/attributes
             subgraph.set_graph_properties(features, True)
             subgraph.set_node_features(features)
@@ -404,8 +444,8 @@ def load_connected_components(frag_file_fname, features, load_components=False, 
     else:
         fragments = frags.parse_frag_file(frag_file_fname.strip())
         graph = FragGraph.build(fragments, features, compute_trivial=False, compress=compress)
-        print("Fragment graph with ", graph.n_nodes, " nodes and ", graph.g.number_of_edges(), " edges")
-        print("Finding connected components...")
+        logging.info("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
+        logging.info("Finding connected components...")
         connected_components = graph.connected_components_subgraphs(
             features, skip_trivial_graphs=skip_trivial_graphs, compute_properties=compute_properties)
         if store_components:

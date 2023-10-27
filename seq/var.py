@@ -34,13 +34,11 @@ class Variant:
 def extract_variants(phased_frag_sets):
     idx2variant = {}
     for i, fragments in enumerate(phased_frag_sets):
-        #print(i, len(fragments))
         for frag in fragments:
-            for block in frag.blocks:
-                for var in block.variants:
-                    if var.vcf_idx not in idx2variant:
-                        idx2variant[var.vcf_idx] = Variant(var.vcf_idx)
-                    idx2variant[var.vcf_idx].phase_set = i
-                    idx2variant[var.vcf_idx].frag_variants.append((var, frag.n_copies))
+            for var in frag.variants:
+                if var.vcf_idx not in idx2variant:
+                    idx2variant[var.vcf_idx] = Variant(var.vcf_idx)
+                idx2variant[var.vcf_idx].phase_set = i
+                idx2variant[var.vcf_idx].frag_variants.append((var, frag.n_copies))
     return idx2variant
 
