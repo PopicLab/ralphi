@@ -95,7 +95,7 @@ class FragGraph:
                 # as otherwise half-conflicts can result in a variant being split between two connected components.
                 # TODO:(Anant): revisit this since these zero-weight edges provide no phasing information
                 if weight != 0:
-                    frag_graph.add_edge(i, j, weight=weight, overlap=len(frag_variant_overlap), conflicts=n_conflicts)
+                    frag_graph.add_edge(i, j, weight=weight)
 
         return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)
 
