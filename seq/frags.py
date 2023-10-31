@@ -2,18 +2,16 @@ import argparse
 
 
 class FragVariant:
-    def __init__(self, vcf_idx, allele, qscore=None, n_copies=1):
+    def __init__(self, vcf_idx, allele, qscore=None):
         self.vcf_idx = vcf_idx
         self.allele = allele  # 0 or 1
         self.qscore = qscore
-        self.n_copies = n_copies
 
         # phasing metadata
         self.haplotype = None
 
     def __str__(self):
-        return "Variant: vcf_idx={} allele={} qscore={} n_copies={}".format(self.vcf_idx, self.allele,
-                                                                            self.qscore, self.n_copies)
+        return "Variant: vcf_idx={} allele={} qscore={}".format(self.vcf_idx, self.allele, self.qscore)
 
     def __eq__(self, v):
         # temporarily disable equality check by qscore, since on simulated data this is not meaningful for compression
