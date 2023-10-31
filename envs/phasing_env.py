@@ -19,9 +19,11 @@ class State:
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
+        self.num_nodes = self.frag_graph.n_nodes
+        if self.frag_graph.trivial:
+            return
         self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features)
         self.g = self.g.to(device) 
-        self.num_nodes = self.g.number_of_nodes()
         self.assigned = torch.zeros(self.num_nodes * 2)
         self.explorable = torch.zeros(self.num_nodes * 2)
         self.H0 = []
@@ -41,7 +43,7 @@ class PhasingEnv(gym.Env):
         super(PhasingEnv, self).__init__()
         self.config = config
         if preloaded_graphs:
-            preloaded_graphs.set_graph_properties(self.features, True)
+            preloaded_graphs.set_graph_properties(self.features, approximate_betweenness=config.approximate_betweenness, num_pivots=config.num_pivots, seed=config.seed)
             preloaded_graphs.set_node_features(self.features)
             preloaded_graphs.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
             self.state = State(preloaded_graphs, self.features, config.device)

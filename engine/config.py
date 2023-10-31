@@ -51,7 +51,10 @@ class Config:
             'fragment_norm': False,
             'weight_norm': False,
             'clip': False,
-            'features': ["dual", "between"]
+            'features': ["dual", "between"],
+            'approximate_betweenness': False,
+            'num_pivots': 100,
+            'seed': 1234
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
