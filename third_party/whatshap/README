@@ -1,0 +1,5 @@
+This folder contains a modified subset of the Whatshap software package
+used to generate input fragments for Ralphi.
+
+We would like to thank Whatshap developers for releasing
+the very well-documented and easy to extend source code.

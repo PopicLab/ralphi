@@ -11,7 +11,7 @@ import re
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
-CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_DESIGN')
+CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_DESIGN FRAGS')
 
 MAIN_LOG = "MAIN"
 STATS_LOG_TRAIN = "STATS_TRAIN"
@@ -125,11 +125,6 @@ class TrainingConfig(Config):
             self.device = torch.device(self.device if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device("cpu")
-    
-    def __str__(self):
-        s = " ===== Config =====\n"
-        s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
-        return s
 
     def set_defaults(self):
         super().set_defaults()
@@ -183,10 +178,6 @@ class TestConfig(Config):
         else:
             self.device = torch.device("cpu") 
 
-    def __str__(self):
-        s = " ===== Config =====\n"
-        s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
-        return s
     def set_defaults(self):
         super().set_defaults()
         default_values = {
@@ -208,10 +199,6 @@ class DataConfig(Config):
         self.set_defaults()
         super().__init__(config_file)
 
-    def __str__(self):
-        s = " ===== Config =====\n"
-        s += '\n'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
-        return s
     def set_defaults(self):
         default_values = {
             'shuffle': True,
@@ -222,6 +209,98 @@ class DataConfig(Config):
             'ordering_ranges': {},
             'save_indexes_path': None
         }
+        for k, v, in default_values.items():
+            if not hasattr(self, k):
+                self.__setattr__(k, v)
+
+
+class FragmentConfig(Config):
+    def __init__(self, config_file, **entries):
+        self.__dict__.update(entries)
+        super().__init__(config_file)
+        self.log_file_main = self.log_dir + 'fragments_main.log'
+        file_handler = logging.FileHandler(self.log_file_main, mode='w')
+        logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.getLevelName("INFO"),
+                            handlers=[logging.StreamHandler(sys.stdout), file_handler])
+        self.set_defaults()
+
+    @staticmethod
+    def get_defaults_short():
+        return {
+            'log_reads': False,
+            'mapq': 20,
+            'mbq': 13,
+            'max_isize': 1000,
+            'allow_supplementary': False,
+            'allow_overlap': False,
+            'max_coverage': None,
+            'enable_read_selection': False,
+            "max_snp_coverage": 1000000000,
+            "min_coverage_to_filter_ref": 10000000,
+            "min_coverage_to_filter_alt": 10000000,
+            "realign_overhang": None,
+            "min_highmapq_ratio": 0.0,
+            "min_mapq1_ratio": 0.0,
+            "max_bad_allele_ratio": 1.0,
+            "min_alt_allele_ratio": 0.0,
+            'enable_strand_filter': False,
+            'reference': None,
+        }
+
+    @staticmethod
+    def get_defaults_ont():
+        return {
+            'log_reads': False,
+            'mapq': 20,
+            'mbq': 0,
+            'max_isize': None,
+            'allow_supplementary': False,
+            'allow_overlap': False,
+            'max_coverage': None,
+            'enable_read_selection': False,
+            "max_bad_allele_ratio": 0.5,
+            "min_alt_allele_ratio": 0.1,
+            "max_snp_coverage": 150,
+            "min_coverage_to_filter_ref": 10,
+            "min_coverage_to_filter_alt": 10,
+            "realign_overhang": 20,
+            "min_highmapq_ratio": 0.1,
+            "min_mapq1_ratio": 0.5,
+            'enable_strand_filter': True,
+        }
+
+    @staticmethod
+    def get_defaults_hifi():
+        return {
+            'log_reads': False,
+            'mapq': 20,
+            'mbq': 13,
+            'max_isize': None,
+            'allow_supplementary': False,
+            'allow_overlap': False,
+            'max_coverage': None,
+            'enable_read_selection': False,
+            "max_bad_allele_ratio": 0.5,
+            "min_alt_allele_ratio": 0.1,
+            "max_snp_coverage": 150,
+            "min_coverage_to_filter_ref": 10,
+            "min_coverage_to_filter_alt": 10,
+            "realign_overhang": 50,
+            "min_highmapq_ratio": 0.1,
+            "min_mapq1_ratio": 0.5,
+            'enable_strand_filter': False,
+        }
+
+    def set_defaults(self):
+        if self.platform == "ONT":
+            default_values = self.get_defaults_ont()
+        elif self.platform == "hifi":
+            default_values = self.get_defaults_hifi()
+        elif self.platform == "illumina":
+            default_values = self.get_defaults_short()
+        else:
+            print("Unexpected platform: " + self.platform)
+            sys.exit(-1)
         for k, v, in default_values.items():
             if not hasattr(self, k):
                 self.__setattr__(k, v)
@@ -249,6 +328,8 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
         return TestConfig(fname, **config)
     elif config_type == CONFIG_TYPE.DATA_DESIGN:
         return DataConfig(fname, **config)
+    elif config_type == CONFIG_TYPE.FRAGS:
+        return FragmentConfig(fname, **config)
 
 
 
