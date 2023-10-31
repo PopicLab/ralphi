@@ -1,0 +1,14 @@
+include doc/conf.py
+include doc/Makefile
+include doc/*.rst
+
+include tests/test*.py
+
+include whatshap/*.pyx
+include whatshap/*.pxd
+include whatshap/core.cpp
+include whatshap/priorityqueue.cpp
+include whatshap/align.cpp
+include whatshap/_variants.cpp
+
+include src/*.h
