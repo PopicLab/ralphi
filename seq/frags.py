@@ -107,9 +107,13 @@ class Fragment:
         qscore_idx = 0
         for block in blocks:
             for variant in block.variants:
-                variant.qscore = 10 ** ((ord(qscores[qscore_idx]) - 33) / (-10))
+                variant.qscore = convert_qscore(qscores[qscore_idx])
                 qscore_idx += 1
         return Fragment(fields[1], blocks=blocks)
+
+
+def convert_qscore(qscore):
+    return 10 ** ((ord(qscore) - 33) / (-10))
 
 
 def parse_frag_file(frags_fname):

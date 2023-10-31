@@ -39,7 +39,7 @@ class FragGraph:
         self.graph_properties = {}
         if compute_trivial:
             self.check_and_set_trivial()
-        if compute_properties and (self.trivial is None or not self.trivial):
+        if features and compute_properties and (self.trivial is None or not self.trivial):
             self.set_graph_properties(features, False)
 
     def set_ground_truth_assignment(self, node_id2hap_id):
@@ -69,7 +69,7 @@ class FragGraph:
         return frags_unique
 
     @staticmethod
-    def build(fragments, features, compute_trivial=False, compress=False):
+    def build(fragments, features=None, compute_trivial=False, compress=False):
         logging.info("Input number of fragments: %d" % len(fragments))
         if compress and fragments:
             logging.info("Compressing identical fragments")
@@ -102,6 +102,7 @@ class FragGraph:
         return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)
 
     def set_graph_properties(self, features, precomputed=True):
+        self.set_node_features(features)
         # TODO: which properties do we want to save here; probably not diameter since expensive to compute
         if not precomputed:
             self.graph_properties["pos_edges"] = 0
@@ -204,31 +205,28 @@ class FragGraph:
             warnings.warn(output_vcf + ' already exists!')
 
     def set_node_features(self, features):
-        # setup more complex node features/attributes
-        frag_graph = self.g
-        fragments = self.fragments
-        for node in frag_graph.nodes:
+        for node in self.g.nodes:
             if 'cut_member_hap0' in features:
-                frag_graph.nodes[node]['cut_member_hap0'] = [0.0]
-                frag_graph.nodes[node]['cut_member_hap1'] = [0.0]
+                self.g.nodes[node]['cut_member_hap0'] = [0.0]
+                self.g.nodes[node]['cut_member_hap1'] = [0.0]
 
             if 'betweenness' in features:
-                frag_graph.nodes[node]['betweenness'] = [self.graph_properties["betweenness"][node]]
+                self.g.nodes[node]['betweenness'] = [self.graph_properties["betweenness"][node]]
 
             if 'n_variants' in features:
-                frag_graph.nodes[node]['n_variants'] = [fragments[node].n_variants]
+                self.g.nodes[node]['n_variants'] = [self.fragments[node].n_variants]
 
             if 'min_qscore' in features:
-                frag_graph.nodes[node]['min_qscore'] = [min(fragments[node].quality)]
-                frag_graph.nodes[node]['max_qscore'] = [max(fragments[node].quality)]
-                frag_graph.nodes[node]['avg_qscore'] = [sum(fragments[node].quality) / len(fragments[node].quality)]
+                self.g.nodes[node]['min_qscore'] = [min(self.fragments[node].quality)]
+                self.g.nodes[node]['max_qscore'] = [max(self.fragments[node].quality)]
+                self.g.nodes[node]['avg_qscore'] = [sum(self.fragments[node].quality) / len(self.fragments[node].quality)]
 
             if 'pos_neighbors' in features:
                 num_pos = 0
                 num_neg = 0
                 max_weight = 0
                 min_weight = 0
-                for neighbor in frag_graph[node].items():
+                for neighbor in self.g[node].items():
                     nbr_weight = neighbor[1]['weight']
                     if nbr_weight > 0:
                         num_pos = num_pos + 1
@@ -238,46 +236,46 @@ class FragGraph:
                         num_neg = num_neg + 1
                         if nbr_weight < min_weight:
                             min_weight = nbr_weight
-                frag_graph.nodes[node]['pos_neighbors'] = [num_pos]
-                frag_graph.nodes[node]['neg_neighbors'] = [num_neg]
-                frag_graph.nodes[node]['max_weight_node'] = [
+                self.g.nodes[node]['pos_neighbors'] = [num_pos]
+                self.g.nodes[node]['neg_neighbors'] = [num_neg]
+                self.g.nodes[node]['max_weight_node'] = [
                     max_weight / self.graph_properties["max_weight"] if self.graph_properties["max_weight"] != 0 else 0]
-                frag_graph.nodes[node]['min_weight_node'] = [
+                self.g.nodes[node]['min_weight_node'] = [
                     min_weight / self.graph_properties["min_weight"] if self.graph_properties["min_weight"] != 0 else 0]
 
             if 'is_articulation' in features:
-                frag_graph.nodes[node]['is_articulation'] = [
+                self.g.nodes[node]['is_articulation'] = [
                     1 / self.graph_properties["articulation_points"] if node in self.graph_properties[
                         "list_articulation_points"] else 0]
 
             if 'n_nodes' in features:
-                frag_graph.nodes[node]['num_articulation'] = [self.graph_properties["articulation_points"]]
-                frag_graph.nodes[node]['diameter'] = [self.graph_properties["diameter"]]
-                frag_graph.nodes[node]['density'] = [self.graph_properties["density"]]
-                frag_graph.nodes[node]['max_degree'] = [self.graph_properties["max_degree"]]
-                frag_graph.nodes[node]['min_degree'] = [self.graph_properties["min_degree"]]
-                frag_graph.nodes[node]['n_nodes'] = [self.graph_properties["n_nodes"]]
-                frag_graph.nodes[node]['n_edges'] = [self.graph_properties["n_edges"]]
-                frag_graph.nodes[node]['node_connectivity'] = [self.graph_properties["node_connectivity"]]
-                frag_graph.nodes[node]['edge_connectivity'] = [self.graph_properties["edge_connectivity"]]
-                frag_graph.nodes[node]['max_weight'] = [self.graph_properties["max_weight"]]
-                frag_graph.nodes[node]['min_weight'] = [self.graph_properties["min_weight"]]
-                frag_graph.nodes[node]['num_fragments'] = [
+                self.g.nodes[node]['num_articulation'] = [self.graph_properties["articulation_points"]]
+                self.g.nodes[node]['diameter'] = [self.graph_properties["diameter"]]
+                self.g.nodes[node]['density'] = [self.graph_properties["density"]]
+                self.g.nodes[node]['max_degree'] = [self.graph_properties["max_degree"]]
+                self.g.nodes[node]['min_degree'] = [self.graph_properties["min_degree"]]
+                self.g.nodes[node]['n_nodes'] = [self.graph_properties["n_nodes"]]
+                self.g.nodes[node]['n_edges'] = [self.graph_properties["n_edges"]]
+                self.g.nodes[node]['node_connectivity'] = [self.graph_properties["node_connectivity"]]
+                self.g.nodes[node]['edge_connectivity'] = [self.graph_properties["edge_connectivity"]]
+                self.g.nodes[node]['max_weight'] = [self.graph_properties["max_weight"]]
+                self.g.nodes[node]['min_weight'] = [self.graph_properties["min_weight"]]
+                self.g.nodes[node]['num_fragments'] = [
                     self.fragments[node].n_copies / self.graph_properties['total_num_frag']]
-                frag_graph.nodes[node]['max_num_variant'] = [self.graph_properties['max_num_variant']]
-                frag_graph.nodes[node]['min_num_variant'] = [self.graph_properties['min_num_variant']]
-                frag_graph.nodes[node]['avg_num_variant'] = [self.graph_properties['avg_num_variant']]
-                frag_graph.nodes[node]['compression_factor'] = [self.graph_properties['compression_factor']]
+                self.g.nodes[node]['max_num_variant'] = [self.graph_properties['max_num_variant']]
+                self.g.nodes[node]['min_num_variant'] = [self.graph_properties['min_num_variant']]
+                self.g.nodes[node]['avg_num_variant'] = [self.graph_properties['avg_num_variant']]
+                self.g.nodes[node]['compression_factor'] = [self.graph_properties['compression_factor']]
 
             if 'reachability_hap0' in features:
-                frag_graph.nodes[node]['reachability_hap0'] = [0.0]
-                frag_graph.nodes[node]['reachability_hap1'] = [0.0]
+                self.g.nodes[node]['reachability_hap0'] = [0.0]
+                self.g.nodes[node]['reachability_hap1'] = [0.0]
 
-                frag_graph.nodes[node]['shortest_pos_path_hap0'] = [0]
-                frag_graph.nodes[node]['shortest_pos_path_hap1'] = [0]
+                self.g.nodes[node]['shortest_pos_path_hap0'] = [0]
+                self.g.nodes[node]['shortest_pos_path_hap1'] = [0]
 
-                frag_graph.nodes[node]['val_pos_path_hap0'] = 0
-                frag_graph.nodes[node]['val_pos_path_hap1'] = 0
+                self.g.nodes[node]['val_pos_path_hap0'] = 0
+                self.g.nodes[node]['val_pos_path_hap1'] = 0
 
     def compute_variant_bitmap(self, mask_len=200):
         # vcf_positions contains the list of vcf positions within the connected component formed by these fragments
@@ -379,7 +377,7 @@ class FragGraph:
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
         return FragGraph(subg_relabeled, subg_frags, features, node_id2hap_id, compute_trivial, compute_properties)
 
-    def connected_components_subgraphs(self, features, skip_trivial_graphs=False, compute_properties=False):
+    def connected_components_subgraphs(self, features=None, skip_trivial_graphs=False, compute_properties=False):
         components = nx.connected_components(self.g)
         logging.debug("Found connected components, now constructing subgraphs...")
         subgraphs = []
@@ -387,10 +385,7 @@ class FragGraph:
             subgraph = self.extract_subgraph(component, features, compute_trivial=True, compute_properties=compute_properties)
             if subgraph.trivial and skip_trivial_graphs: continue
             # precompute node features/attributes
-            subgraph.set_graph_properties(features, True)
-            subgraph.set_node_features(features)
-            if 'variant_bitmap' in features:
-                subgraph.compute_variant_bitmap()
+            if features: subgraph.set_graph_properties(features)
             subgraphs.append(subgraph)
         return subgraphs
 
@@ -441,8 +436,7 @@ class FragGraphGen:
                         if self.is_invalid_subgraph(subgraph):
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
-                        subgraph.set_graph_properties(self.features, True)
-                        subgraph.set_node_features(self.features)
+                        if self.features: subgraph.set_graph_properties(self.features)
                         yield subgraph
             yield None
         elif self.config.frag_panel_file is not None:
