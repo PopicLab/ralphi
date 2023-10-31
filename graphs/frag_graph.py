@@ -102,7 +102,6 @@ class FragGraph:
         return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)
 
     def set_graph_properties(self, features, precomputed=True):
-        self.set_node_features(features)
         # TODO: which properties do we want to save here; probably not diameter since expensive to compute
         if not precomputed:
             self.graph_properties["pos_edges"] = 0
@@ -162,6 +161,8 @@ class FragGraph:
 
         if 'betweenness' in features:
             self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g)
+
+        self.set_node_features(features)
 
     def log_graph_properties(self, episode_id):
         for key, value in self.graph_properties.items():
