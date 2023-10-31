@@ -69,52 +69,12 @@ class FragGraph:
         return frags_unique
 
     @staticmethod
-    def merge_fragments_by_overlap(fragments, min_overlap_len=10, min_agreement_ratio=0.9):
-        merged_fragments = []
-        skip_frags = set()
-        for i, f1 in enumerate(tqdm.tqdm(fragments)):
-            if i in skip_frags: continue
-            best_match = None
-            for j in range(i + 1, len(fragments)):
-                if j in skip_frags: continue
-                f2 = fragments[j]
-                if f1.vcf_idx_end < f2.vcf_idx_start: break
-                frag_variant_overlap = f1.overlap(f2)
-                if not frag_variant_overlap: continue
-                n_conflicts = 0
-                for variant_pair in frag_variant_overlap:
-                    if variant_pair[0].allele != variant_pair[1].allele:
-                        n_conflicts += 1
-                agreement_ratio = (len(frag_variant_overlap) - n_conflicts)/len(frag_variant_overlap)
-               # print(len(frag_variant_overlap), n_conflicts, agreement_ratio)
-                if len(frag_variant_overlap) >= min_overlap_len and agreement_ratio >= min_agreement_ratio:
-                    #print(len(frag_variant_overlap), n_conflicts, agreement_ratio)
-                    if not best_match or len(frag_variant_overlap) > best_match[0]:
-                        best_match = (len(frag_variant_overlap), j)
-            if best_match:
-                merged_fragments.append(f1.merge(fragments[best_match[1]]))
-                skip_frags.add(best_match[1])
-            else:
-                merged_fragments.append(f1)
-        return merged_fragments
-
-    @staticmethod
-    def build(fragments, features, compute_trivial=False, compress=False, merge_fragments=True):
+    def build(fragments, features, compute_trivial=False, compress=False):
         logging.info("Input number of fragments: %d" % len(fragments))
         if compress and fragments:
             logging.info("Compressing identical fragments")
             fragments = FragGraph.merge_fragments_by_identity(fragments)
             logging.info("Compressed number of fragments: %d" % len(fragments))
-        if merge_fragments and fragments:
-            logging.info("Merging fragments")
-            fragments = FragGraph.merge_fragments_by_overlap(fragments)
-            logging.info("Merged number of fragments: %d" % len(fragments))
-            fragments = FragGraph.merge_fragments_by_overlap(fragments)
-            logging.info("Merged number of fragments 2x: %d" % len(fragments))
-            fragments = FragGraph.merge_fragments_by_overlap(fragments)
-            logging.info("Merged number of fragments 3x: %d" % len(fragments))
-            fragments = FragGraph.merge_fragments_by_overlap(fragments)
-            logging.info("Merged number of fragments 4x: %d" % len(fragments))
         frag_graph = nx.Graph()
         logging.info("Constructing fragment graph from %d fragments" % len(fragments))
         for i, f1 in enumerate(tqdm.tqdm(fragments)):

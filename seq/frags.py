@@ -88,39 +88,6 @@ class Fragment:
                     shared_variants.append((v1, v2))
         return shared_variants
 
-    def merge(self, fragment):
-        variants = []
-        i1 = 0
-        i2 = 0
-        while i1 < len(self.variants) or i2 < len(fragment.variants):
-            if i1 == len(self.variants):
-                variants.append(fragment.variants[i2])
-                i2 += 1
-                continue
-            if i2 == len(fragment.variants):
-                variants.append(self.variants[i1])
-                i1 += 1
-                continue
-            v1 = self.variants[i1]
-            v2 = fragment.variants[i2]
-            if v2.vcf_idx < v1.vcf_idx:
-                variants.append(v2)
-                i2 += 1
-            elif v1.vcf_idx < v2.vcf_idx:
-                variants.append(v1)
-                i1 += 1
-            else:  # same variant position
-                assert v1.vcf_idx == v2.vcf_idx
-                if v1.allele == v2.allele:
-                    v1.n_copies += 1
-                    variants.append(v1)
-                else:
-                    # todo: remove variant?
-                    variants.append(v1)  # keep one of the alleles
-                i1 += 1
-                i2 += 1
-        return Fragment("%s_%s" % (self.read_id, fragment.read_id), variants=variants)
-
     def assign_haplotype(self, h):
         self.haplotype = h
         for var in self.variants:
