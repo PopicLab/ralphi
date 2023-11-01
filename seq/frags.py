@@ -1,7 +1,7 @@
 import argparse
 
 
-class FragVariantHandle:
+class FragVariant:
     def __init__(self, vcf_idx, allele, qscore=None):
         self.vcf_idx = vcf_idx
         self.allele = allele  # 0 or 1
@@ -26,7 +26,7 @@ class Block:
         self.variants = []
         for i in range(len(alleles)):
             qscore = None if (qscores is None) else qscores[i]
-            self.variants.append(FragVariantHandle(vcf_idx + i, alleles[i], qscore))
+            self.variants.append(FragVariant(vcf_idx + i, alleles[i], qscore))
         self.n_variants = len(self.variants)
 
     def __str__(self):
@@ -42,89 +42,78 @@ class Block:
 
 
 class Fragment:
-    def __init__(self, blocks=None):
-        if blocks is None:
-            blocks = []
-        self.blocks = blocks
-        self.n_blocks = len(blocks)
+    def __init__(self, read_name, blocks=None, variants=None):
+        self.read_id = read_name
+        self.n_copies = 1  # number of copies of this fragment
         self.n_variants = 0
+        self.variants = []  # flat list of all variants
         self.vcf_idx_start = None
         self.vcf_idx_end = None
-        if len(self.blocks) > 0:
-            self.vcf_idx_start = self.blocks[0].vcf_idx_start
-            self.vcf_idx_end = self.blocks[len(self.blocks)-1].vcf_idx_end
-            for block in self.blocks:
+        if blocks:
+            self.vcf_idx_start = blocks[0].vcf_idx_start
+            self.vcf_idx_end = blocks[len(blocks)-1].vcf_idx_end
+            for block in blocks:
                 self.n_variants += block.n_variants
+                self.variants.extend(block.variants)
+        elif variants:
+            self.variants = variants
+            self.vcf_idx_start = variants[0].vcf_idx
+            self.vcf_idx_end = variants[len(variants)-1].vcf_idx
+            self.n_variants += len(self.variants)
+        self.quality = [v.qscore for v in self.variants]
 
-        # number of copies of this fragment
-        self.n_copies = 1
-
-        self.read_id = None
-        self.paired = None
-        self.insert_size = None
         self.strand = None
-        self.matepos = None
         self.read_barcode = None
         self.haplotype = None
         self.true_haplotype = None
-        self.quality = None
         self.vcf_positions = None
 
     def __eq__(self, fragment):
-        return (self.vcf_idx_start, self.vcf_idx_end, self.n_blocks, self.n_variants, self.blocks) == (
-            fragment.vcf_idx_start, fragment.vcf_idx_end, fragment.n_blocks, fragment.n_variants, fragment.blocks)
+        return (self.vcf_idx_start, self.vcf_idx_end, self.n_variants, self.variants) == (
+            fragment.vcf_idx_start, fragment.vcf_idx_end, fragment.n_variants, fragment.variants)
+
+    def __str__(self):
+        return "\nread_id={} n_variants={} vaariants=\n".format(self.read_id, self.n_variants) + \
+               '\n'.join(map(str, self.variants))
 
     def overlap(self, fragment):
         if min(self.vcf_idx_end, fragment.vcf_idx_end) < max(self.vcf_idx_start, fragment.vcf_idx_start):
             return []
         shared_variants = []
-        for b1 in self.blocks:
-            for b2 in fragment.blocks:
-                if b1.overlaps(b2):
-                    # find the shared variants
-                    for v1 in b1.variants:
-                        for v2 in b2.variants:
-                            if v1.vcf_idx == v2.vcf_idx:
-                                shared_variants.append((v1, v2))
+        for v1 in self.variants:
+            for v2 in fragment.variants:
+                if v1.vcf_idx == v2.vcf_idx:
+                    shared_variants.append((v1, v2))
         return shared_variants
 
     def assign_haplotype(self, h):
         self.haplotype = h
-        for block in self.blocks:
-            for var in block.variants:
-                var.haplotype = h
+        for var in self.variants:
+            var.haplotype = h
 
     @staticmethod
     def parse_from_file(frag_line):
         fields = frag_line.split()
-        frag = Fragment()
-        frag.n_blocks = int(fields[0])
-        frag.read_id = fields[1]
+        n_blocks = int(fields[0])
         field_idx = 2
-        # parse each block
-        for _ in range(frag.n_blocks):
-            vcf_index = int(fields[field_idx]) - 1  # -1 since the variant index is 1-based in the HapCut file
+        blocks = []
+        for _ in range(n_blocks):  # parse each block
+            vcf_index = int(fields[field_idx]) - 1  # -1 since the variant index is 1-based in the fragment file
             alleles = fields[field_idx + 1]
             field_idx += 2
-            frag.blocks.append(Block(vcf_index, alleles))
-            frag.n_variants += len(alleles)
+            blocks.append(Block(vcf_index, alleles))
         # parse quality scores for all variants
         qscores = fields[field_idx]
         qscore_idx = 0
-        frag.quality = []
-        for block in frag.blocks:
+        for block in blocks:
             for variant in block.variants:
-                variant.qscore = qscores[qscore_idx]
-                prob_error = 10 ** (((ord(variant.qscore) - 33) / (-10)))
-                frag.quality.append(prob_error)
+                variant.qscore = convert_qscore(qscores[qscore_idx])
                 qscore_idx += 1
+        return Fragment(fields[1], blocks=blocks)
 
-        frag.vcf_idx_start = frag.blocks[0].vcf_idx_start
-        frag.vcf_idx_end = frag.blocks[len(frag.blocks) - 1].vcf_idx_end
-        return frag
 
-    def __str__(self):
-        return "\nread_id={} n_blocks={} blocks=\n".format(self.read_id, self.n_blocks) + '\n'.join(map(str, self.blocks))
+def convert_qscore(qscore):
+    return 10 ** ((ord(qscore) - 33) / (-10))
 
 
 def parse_frag_file(frags_fname):
