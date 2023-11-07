@@ -1,7 +1,7 @@
 import argparse
 
 
-class FragVariant:
+class FragVariantHandle:
     def __init__(self, vcf_idx, allele, qscore=None):
         self.vcf_idx = vcf_idx
         self.allele = allele  # 0 or 1
@@ -26,7 +26,7 @@ class Block:
         self.variants = []
         for i in range(len(alleles)):
             qscore = None if (qscores is None) else qscores[i]
-            self.variants.append(FragVariant(vcf_idx + i, alleles[i], qscore))
+            self.variants.append(FragVariantHandle(vcf_idx + i, alleles[i], qscore))
         self.n_variants = len(self.variants)
 
     def __str__(self):

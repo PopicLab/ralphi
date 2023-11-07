@@ -43,8 +43,7 @@ class PhasingEnv(gym.Env):
         super(PhasingEnv, self).__init__()
         self.config = config
         if preloaded_graphs:
-            preloaded_graphs.set_graph_properties(self.features, approximate_betweenness=config.approximate_betweenness, num_pivots=config.num_pivots, seed=config.seed)
-            preloaded_graphs.set_node_features(self.features)
+            preloaded_graphs.set_graph_properties(self.features, approximate_betweenness=self.config.approximate_betweenness, num_pivots=self.config.num_pivots, seed=self.config.seed)
             preloaded_graphs.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
             self.state = State(preloaded_graphs, self.features, config.device)
         else:

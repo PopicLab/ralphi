@@ -36,7 +36,7 @@ def write_phased_vcf(input_vcf, idx2var, output_vcf):
             mapping['PQ'] = '0'
 
         else:  # unphased
-            mapping['GT'] = "./."
+            mapping['GT'] = str(gt)
             mapping['PS'] = "."
             mapping['PD'] = "."
             mapping['PQ'] = '0'

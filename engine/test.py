@@ -19,7 +19,7 @@ total_start_time = time.time()
 
 config = config_utils.load_config(args.config, config_type=config_utils.CONFIG_TYPE.TEST)
 
-torch.set_num_threads(config.num_cores)
+torch.set_num_threads(config.num_cores_torch)
 env = envs.PhasingEnv(config, record_solutions=True)
 agent = algs.DiscreteActorCriticAgent(env)
 agent.model.load_state_dict(torch.load(config.model))
@@ -49,7 +49,6 @@ with open(config.phasing_output_path, 'wb') as phased_output:
 idx2var = var.extract_variants(env.solutions)
 for v in idx2var.values():
     v.assign_haplotype()
-idx2var = utils.post_processing.update_split_block_phase_sets(env.solutions, idx2var)
-logging.info("Post-processed blocks that were split up due to ambiguous variants")
+
 logging.info("Overall Runtime: %f " % (time.time() - total_start_time))
 vcf_writer.write_phased_vcf(config.input_vcf, idx2var, config.output_vcf)

@@ -101,69 +101,68 @@ class FragGraph:
 
     def set_graph_properties(self, features, approximate_betweenness, num_pivots, seed):
         # TODO: which properties do we want to save here; probably not diameter since expensive to compute
-            print("setting graph features on graph with :", self.n_nodes, "nodes")
-            if 'is_articulation' in features and "list_articulation_points" not in self.graph_properties:
-                self.graph_properties["list_articulation_points"] = list(nx.articulation_points(self.g))
-            if 'n_nodes' in features and "n_nodes" not in self.graph_properties:
-                self.graph_properties["pos_edges"] = 0
-                self.graph_properties["neg_edges"] = 0
-                self.graph_properties["zero_edges"] = 0
-                self.graph_properties["sum_of_pos_edge_weights"] = 0
-                self.graph_properties["sum_of_neg_edge_weights"] = 0
-                self.graph_properties['max_weight'] = 0
-                self.graph_properties['min_weight'] = 0
-                for _, _, a in self.g.edges(data=True):
-                    edge_weight = a['weight']
-                    if edge_weight > 0:
-                        self.graph_properties["pos_edges"] += 1
-                        self.graph_properties["sum_of_pos_edge_weights"] += edge_weight
-                        if edge_weight > self.graph_properties['max_weight']:
-                            self.graph_properties['max_weight'] = edge_weight
-                    elif edge_weight < 0:
-                        self.graph_properties["neg_edges"] += 1
-                        self.graph_properties["sum_of_neg_edge_weights"] += edge_weight
-                        if edge_weight < self.graph_properties['min_weight']:
-                            self.graph_properties['min_weight'] = edge_weight
-                    else:
-                        self.graph_properties["zero_edges"] += 1
-                degrees = [val for (node, val) in self.g.degree()]
-                self.graph_properties["max_degree"] = max(degrees)
-                self.graph_properties["min_degree"] = min(degrees)
-                self.graph_properties["n_nodes"] = self.g.number_of_nodes() 
-                self.graph_properties["n_edges"] = self.g.number_of_edges()
-                self.graph_properties["density"] = nx.density(self.g)
-                self.graph_properties["articulation_points"] = len(self.graph_properties["list_articulation_points"])
-                self.graph_properties["node_connectivity"] = nx.node_connectivity(self.g)
-                self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
-                self.graph_properties["diameter"] = nx.diameter(self.g)
-                self.graph_properties["trivial"] = self.trivial
-                variants = [frag.n_variants for frag in self.fragments]
-                _, self.graph_properties['num_variants'] = self.get_variants_set()                
-                self.graph_properties['max_num_variant'] = max(variants)
-                self.graph_properties['min_num_variant'] = min(variants)
-                self.graph_properties['avg_num_variant'] = np.mean(variants)
-                self.graph_properties['total_num_frag'] = sum([frag.n_copies for frag in self.fragments])
-                self.graph_properties['compression_factor'] = self.graph_properties['n_nodes'] / self.graph_properties['total_num_frag']
-            
-            if 'reachability_hap0' in features and "compo" not in self.graph_properties:
-                edges = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
-                edges[edges > 0] = 0
-                neg_graph = nx.from_numpy_array(edges)
-                self.graph_properties['compo'] = [c for c in nx.connected_components(neg_graph)]
-                self.graph_properties['neg_connectivity'] = {node: num for num, sub_compo in
-                                                             enumerate(self.graph_properties['compo']) for node in sub_compo}
-            if "shortest_pos_path_hap0" in features and 'pos_paths' not in self.graph_properties:
-                pos_graph = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
-                pos_graph[pos_graph < 0] = 0
-                pos_graph = nx.from_numpy_array(pos_graph)
-                self.graph_properties['pos_paths'] = dict(nx.shortest_path_length(pos_graph))
+        if 'is_articulation' in features and "list_articulation_points" not in self.graph_properties:
+            self.graph_properties["list_articulation_points"] = list(nx.articulation_points(self.g))
+        if 'n_nodes' in features and "n_nodes" not in self.graph_properties:
+            self.graph_properties["pos_edges"] = 0
+            self.graph_properties["neg_edges"] = 0
+            self.graph_properties["zero_edges"] = 0
+            self.graph_properties["sum_of_pos_edge_weights"] = 0
+            self.graph_properties["sum_of_neg_edge_weights"] = 0
+            self.graph_properties['max_weight'] = 0
+            self.graph_properties['min_weight'] = 0
+            for _, _, a in self.g.edges(data=True):
+                edge_weight = a['weight']
+                if edge_weight > 0:
+                    self.graph_properties["pos_edges"] += 1
+                    self.graph_properties["sum_of_pos_edge_weights"] += edge_weight
+                    if edge_weight > self.graph_properties['max_weight']:
+                        self.graph_properties['max_weight'] = edge_weight
+                elif edge_weight < 0:
+                    self.graph_properties["neg_edges"] += 1
+                    self.graph_properties["sum_of_neg_edge_weights"] += edge_weight
+                    if edge_weight < self.graph_properties['min_weight']:
+                        self.graph_properties['min_weight'] = edge_weight
+                else:
+                    self.graph_properties["zero_edges"] += 1
+            degrees = [val for (node, val) in self.g.degree()]
+            self.graph_properties["max_degree"] = max(degrees)
+            self.graph_properties["min_degree"] = min(degrees)
+            self.graph_properties["n_nodes"] = self.g.number_of_nodes() 
+            self.graph_properties["n_edges"] = self.g.number_of_edges()
+            self.graph_properties["density"] = nx.density(self.g)
+            self.graph_properties["articulation_points"] = len(self.graph_properties["list_articulation_points"])
+            self.graph_properties["node_connectivity"] = nx.node_connectivity(self.g)
+            self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
+            self.graph_properties["diameter"] = nx.diameter(self.g)
+            self.graph_properties["trivial"] = self.trivial
+            variants = [frag.n_variants for frag in self.fragments]
+            _, self.graph_properties['num_variants'] = self.get_variants_set()                
+            self.graph_properties['max_num_variant'] = max(variants)
+            self.graph_properties['min_num_variant'] = min(variants)
+            self.graph_properties['avg_num_variant'] = np.mean(variants)
+            self.graph_properties['total_num_frag'] = sum([frag.n_copies for frag in self.fragments])
+            self.graph_properties['compression_factor'] = self.graph_properties['n_nodes'] / self.graph_properties['total_num_frag']
+        
+        if 'reachability_hap0' in features and "compo" not in self.graph_properties:
+            edges = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
+            edges[edges > 0] = 0
+            neg_graph = nx.from_numpy_array(edges)
+            self.graph_properties['compo'] = [c for c in nx.connected_components(neg_graph)]
+            self.graph_properties['neg_connectivity'] = {node: num for num, sub_compo in
+                                                         enumerate(self.graph_properties['compo']) for node in sub_compo}
+        if "shortest_pos_path_hap0" in features and 'pos_paths' not in self.graph_properties:
+            pos_graph = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
+            pos_graph[pos_graph < 0] = 0
+            pos_graph = nx.from_numpy_array(pos_graph)
+            self.graph_properties['pos_paths'] = dict(nx.shortest_path_length(pos_graph))
 
-            if 'betweenness' in features and "betweenness" not in self.graph_properties:
-                # if there is more nodes than num_pivots, use "num_pivots" pivots for betweeness approximation
-                k = None
-                if approximate_betweenness and (num_pivots < self.n_nodes):
-                    k = num_pivots
-                self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=seed)
+        if 'betweenness' in features and "betweenness" not in self.graph_properties:
+            # if there is more nodes than num_pivots, use "num_pivots" pivots for betweeness approximation
+            k = None
+            if approximate_betweenness and (num_pivots < self.n_nodes):
+                k = num_pivots
+            self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=seed)
 
         self.set_node_features(features)
 
@@ -176,9 +175,8 @@ class FragGraph:
     def get_variants_set(self):
         vcf_positions = set()
         for frag in self.fragments:
-            for block in frag.blocks:
-                for var in block.variants:
-                    vcf_positions.add(var.vcf_idx)
+            for var in frag.variants:
+                vcf_positions.add(var.vcf_idx)
         return vcf_positions, len(vcf_positions)
 
     def construct_vcf_for_frag_graph(self, input_vcf, output_vcf, vcf_dict):
@@ -189,11 +187,8 @@ class FragGraph:
         for frag in self.fragments:
             frag.vcf_idx_start = node_mapping[frag.vcf_idx_start]
             frag.vcf_idx_end = node_mapping[frag.vcf_idx_end]
-            for block in frag.blocks:
-                block.vcf_idx_start = node_mapping[block.vcf_idx_start]
-                block.vcf_idx_end = node_mapping[block.vcf_idx_end]
-                for var in block.variants:
-                    var.vcf_idx = node_mapping[var.vcf_idx]
+            for var in frag.variants:
+                var.vcf_idx = node_mapping[var.vcf_idx]
 
         if os.path.exists(output_vcf + ".vcf"):
             warnings.warn(output_vcf + ".vcf" + ' already exists!')
@@ -381,7 +376,7 @@ class FragGraph:
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
         return FragGraph(subg_relabeled, subg_frags, features, node_id2hap_id, compute_trivial)
 
-    def connected_components_subgraphs(self, features=None, config, skip_trivial_graphs=False):
+    def connected_components_subgraphs(self, config, features=None, skip_trivial_graphs=False):
         components = nx.connected_components(self.g)
         logging.debug("Found connected components, now constructing subgraphs...")
         subgraphs = []
@@ -405,7 +400,7 @@ def load_connected_components(frag_file_fname, features, config):
         logging.info("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
         logging.info("Finding connected components...")
         connected_components = graph.connected_components_subgraphs(
-            features, config, skip_trivial_graphs=config.skip_trivial_graphs)
+            config, features, skip_trivial_graphs=config.skip_trivial_graphs)
         if config.store_components:
             with open(component_file_fname, 'wb') as f:
                 pickle.dump(connected_components, f)
@@ -440,7 +435,7 @@ class FragGraphGen:
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
                         if self.features: 
-                            subgraph.set_graph_properties(self.features, approximate_betweenness=config.approximate_betweenness, num_pivots=config.num_pivots, seed=config.seed)
+                            subgraph.set_graph_properties(self.features, approximate_betweenness=self.config.approximate_betweenness, num_pivots=self.config.num_pivots, seed=self.config.seed)
                         yield subgraph
             yield None
         elif self.config.frag_panel_file is not None:
@@ -463,7 +458,7 @@ class FragGraphGen:
         else:
             while True:
                 graph = generate_rand_frag_graph()
-                for subgraph in graph.connected_components_subgraphs(self.features):
+                for subgraph in graph.connected_components_subgraphs(self.config, self.features):
                     yield subgraph
 
 
