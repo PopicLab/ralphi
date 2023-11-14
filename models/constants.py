@@ -72,5 +72,15 @@ FEATURES_DICT = {
 
     "bitmap": [
         'variant_bitmap'
+    ],
+    "edge_homophily": [
+        "edge_homophily"
+    ],
+    "node_homophily": [
+        "node_homophily"
+    ],
+    "discordance_ratio": [
+        "discordance_ratio"
     ]
+
 }

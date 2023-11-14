@@ -67,7 +67,7 @@ class FragGraph:
         return frags_unique
 
     @staticmethod
-    def build(fragments, features=None, compute_trivial=False, compress=False):
+    def build(fragments, features=None, compute_trivial=False, compress=False, discordance_ratio=True):
         logging.info("Input number of fragments: %d" % len(fragments))
         if compress and fragments:
             logging.info("Compressing identical fragments")
@@ -77,6 +77,8 @@ class FragGraph:
         logging.info("Constructing fragment graph from %d fragments" % len(fragments))
         for i, f1 in enumerate(tqdm.tqdm(fragments)):
             frag_graph.add_node(i)
+            discordance = 0
+            number_overlap = 0
             for j in range(i + 1, len(fragments)):
                 f2 = fragments[j]
                 # skip since fragments are sorted by vcf_idx_start
@@ -96,6 +98,11 @@ class FragGraph:
                 # TODO:(Anant): revisit this since these zero-weight edges provide no phasing information
                 if weight != 0:
                     frag_graph.add_edge(i, j, weight=weight)
+                if discordance_ratio:
+                    discordance += (len(frag_variant_overlap)-n_conflicts) * n_conflicts
+                    number_overlap += 1
+            frag_graph.node[i]["discordance_ratio"] = discordance / f1.n_variants / number_overlap
+
 
         return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)
 
@@ -220,7 +227,7 @@ class FragGraph:
                 self.g.nodes[node]['max_qscore'] = [max(self.fragments[node].quality)]
                 self.g.nodes[node]['avg_qscore'] = [sum(self.fragments[node].quality) / len(self.fragments[node].quality)]
 
-            if 'pos_neighbors' in features:
+            if 'pos_neighbors' in features or "homophily" in features:
                 num_pos = 0
                 num_neg = 0
                 max_weight = 0
@@ -235,12 +242,15 @@ class FragGraph:
                         num_neg = num_neg + 1
                         if nbr_weight < min_weight:
                             min_weight = nbr_weight
-                self.g.nodes[node]['pos_neighbors'] = [num_pos]
-                self.g.nodes[node]['neg_neighbors'] = [num_neg]
-                self.g.nodes[node]['max_weight_node'] = [
-                    max_weight / self.graph_properties["max_weight"] if self.graph_properties["max_weight"] != 0 else 0]
-                self.g.nodes[node]['min_weight_node'] = [
-                    min_weight / self.graph_properties["min_weight"] if self.graph_properties["min_weight"] != 0 else 0]
+                if "node_homophily" in features:
+                    self.g.nodes[node]['node_homophily'] = [num_pos/(num_pos + num_neg)]
+                if 'pos_neighbors' in features:
+                    self.g.nodes[node]['pos_neighbors'] = [num_pos]
+                    self.g.nodes[node]['neg_neighbors'] = [num_neg]
+                    self.g.nodes[node]['max_weight_node'] = [
+                        max_weight / self.graph_properties["max_weight"] if self.graph_properties["max_weight"] != 0 else 0]
+                    self.g.nodes[node]['min_weight_node'] = [
+                        min_weight / self.graph_properties["min_weight"] if self.graph_properties["min_weight"] != 0 else 0]
 
             if 'is_articulation' in features:
                 self.g.nodes[node]['is_articulation'] = [
@@ -275,6 +285,11 @@ class FragGraph:
 
                 self.g.nodes[node]['val_pos_path_hap0'] = 0
                 self.g.nodes[node]['val_pos_path_hap1'] = 0
+
+            if "edge_homophily" in features:
+                self.g.nodes[node]['edge_homophily'] = [0.0]
+
+
 
     def compute_variant_bitmap(self, mask_len=200):
         # vcf_positions contains the list of vcf positions within the connected component formed by these fragments
@@ -396,7 +411,7 @@ def load_connected_components(frag_file_fname, features, config):
             connected_components = pickle.load(f)
     else:
         fragments = frags.parse_frag_file(frag_file_fname.strip())
-        graph = FragGraph.build(fragments, features, compute_trivial=False, compress=config.compress)
+        graph = FragGraph.build(fragments, features, compute_trivial=False, compress=config.compress, discordance_ratio="discordance_ratio" in features)
         logging.info("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
         logging.info("Finding connected components...")
         connected_components = graph.connected_components_subgraphs(
