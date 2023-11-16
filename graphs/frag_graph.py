@@ -99,9 +99,14 @@ class FragGraph:
                 if weight != 0:
                     frag_graph.add_edge(i, j, weight=weight)
                 if discordance_ratio:
-                    discordance += (len(frag_variant_overlap)-n_conflicts) * n_conflicts
+                    # maximum discordance between two nodes is 1
+                    discordance += 4 * (len(frag_variant_overlap) - n_conflicts) * n_conflicts / len(
+                        frag_variant_overlap) ** 2
                     number_overlap += 1
-            frag_graph.node[i]["discordance_ratio"] = discordance / f1.n_variants / number_overlap
+            if discordance_ratio and number_overlap > 0:
+                frag_graph.nodes[i]["discordance_ratio"] = [discordance / number_overlap]
+            elif discordance_ratio:
+                frag_graph.nodes[i]["discordance_ratio"] = [0]
 
 
         return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)

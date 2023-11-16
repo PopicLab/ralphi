@@ -129,9 +129,8 @@ class PhasingEnv(gym.Env):
                 homo = 0
                 if self.state.g.ndata['cut_member_' + hap][action] == self.state.g.ndata['cut_member_' + hap][node]:
                     homo = 1
-                self.state.frag_graph.g.nodes[node]['edge_homophily'] = self.state.frag_graph.g.nodes[node]['edge_homophily'] + homo / len(self.state.frag_graph.g.neighbors(node))
-                self.state.frag_graph.g.nodes[action]['edge_homophily'] += homo
-            self.state.frag_graph.g.nodes[action]['edge_homophily'] += homo / len(self.state.frag_graph.g.neighbors(action))
+                self.state.frag_graph.g.nodes[node]['edge_homophily'][0] = self.state.frag_graph.g.nodes[node]['edge_homophily'][0] + homo / len(self.state.frag_graph.g.neighbors(node))
+                self.state.frag_graph.g.nodes[action]['edge_homophily'][0] = self.state.frag_graph.g.nodes[action]['edge_homophily'][0] + homo / len(self.state.frag_graph.g.neighbors(action))
     def step(self, action):
         """Execute one action from given state """
         """Return: next state, reward from current state, is_done, info """
