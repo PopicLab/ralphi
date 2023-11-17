@@ -75,13 +75,13 @@ class FragGraph:
             logging.info("Compressed number of fragments: %d" % len(fragments))
         frag_graph = nx.Graph()
         logging.info("Constructing fragment graph from %d fragments" % len(fragments))
+        overlap = [0 for _ in fragments]
+        discordance = [0 for _ in fragments]
+        number_overlap = [0 for _ in fragments]
+        current_overlap_max = [0 for _ in fragments]
+        one_coverage_var = [f1.variants for f1 in fragments]
         for i, f1 in enumerate(tqdm.tqdm(fragments)):
             frag_graph.add_node(i)
-            overlap = 0
-            discordance = 0
-            number_overlap = 0
-            current_overlap_max = 0
-            one_coverage_var = f1.variants
             for j in range(i + 1, len(fragments)):
                 f2 = fragments[j]
                 # skip since fragments are sorted by vcf_idx_start
@@ -106,34 +106,40 @@ class FragGraph:
                 # Even fragments with 0 weight edges are considered to compute the features
                 if 'discordance_ratio' in features:
                     # maximum discordance between two nodes is 1
-                    discordance += 4 * (len(frag_variant_overlap) - n_conflicts) * n_conflicts / len(
+                    aux = 4 * (len(frag_variant_overlap) - n_conflicts) * n_conflicts / len(
                         frag_variant_overlap) ** 2
+                    discordance[i] += aux
+                    discordance[j] += aux
                 if 'overlap_ratio' in features or 'average_coverage' in features:
-                    overlap += len(frag_variant_overlap)
+                    overlap[i] += len(frag_variant_overlap)
+                    overlap[j] += len(frag_variant_overlap)
                 if 'discordance_ratio' in features or 'overlap_ratio' in features:
-                    number_overlap += 1
-                if 'overlap_max' in features and len(frag_variant_overlap) > current_overlap_max:
-                    current_overlap_max = len(frag_variant_overlap)
+                    number_overlap[i] += 1
+                    number_overlap[j] += 1
+                if 'overlap_max' in features and len(frag_variant_overlap) > current_overlap_max[i]:
+                    current_overlap_max[i] = len(frag_variant_overlap)
+                if 'overlap_max' in features and len(frag_variant_overlap) > current_overlap_max[j]:
+                    current_overlap_max[j] = len(frag_variant_overlap)
             # The discordance ratio is the average product between agreement and disagreement between the fragment and its neighbors
             # It is normalized such that it is 0 if there is perfect agreement or disagreement with neighbors and the higher the more errors in the read or the neighbors
-            if 'discordance_ratio' in features and number_overlap > 0:
-                frag_graph.nodes[i]["discordance_ratio"] = [discordance / number_overlap]
+            if 'discordance_ratio' in features and number_overlap[i] > 0:
+                frag_graph.nodes[i]["discordance_ratio"] = [discordance[i] / number_overlap[i]]
             elif 'discordance_ratio' in features:
                 frag_graph.nodes[i]["discordance_ratio"] = [0]
             # The overlap ratio is the average ratio of overlap of a fragment's variants compared to the total size of the fragment
-            if 'overlap_ratio' in features and number_overlap > 0:
-                frag_graph.nodes[i]["overlap_ratio"] = [overlap / len(f1.variants) / number_overlap]
+            if 'overlap_ratio' in features and number_overlap[i] > 0:
+                frag_graph.nodes[i]["overlap_ratio"] = [overlap[i] / len(f1.variants) / number_overlap[i]]
             elif 'overlap_ratio' in features:
                 frag_graph.nodes[i]["overlap_ratio"] = [0]
             # Maximum overlap normalized by length
             if 'overlap_max' in features:
-                frag_graph.nodes[i]["overlap_max"] = [current_overlap_max / len(f1.variants)]
+                frag_graph.nodes[i]["overlap_max"] = [current_overlap_max[i] / len(f1.variants)]
             # Average number of other fragments covering this fragment's variants
             if 'average_coverage' in features:
-                frag_graph.nodes[i]["average_coverage"] = [overlap / len(f1.variants)]
+                frag_graph.nodes[i]["average_coverage"] = [overlap[i] / len(f1.variants)]
             # Number of variants only covered by this fragments, normalized by the length
             if 'one_coverage' in features:
-                frag_graph.nodes[i]["average_coverage"] = [len(one_coverage_var) / len(f1.variants)]
+                frag_graph.nodes[i]["average_coverage"] = [len(one_coverage_var[i]) / len(f1.variants)]
         return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)
 
     def set_graph_properties(self, features, approximate_betweenness, num_pivots, seed):
