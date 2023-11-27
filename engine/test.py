@@ -45,6 +45,9 @@ logging.info("Total number of episodes: %d " % n_episodes)
 with open(config.phasing_output_path, 'wb') as phased_output:
     pickle.dump(env.solutions, phased_output, protocol=pickle.HIGHEST_PROTOCOL)
 
+if config.articulation_stitch:
+    var.stitch_fragments(env.solutions)
+
 # output the phased VCF (phase blocks)
 idx2var = var.extract_variants(env.solutions)
 for v in idx2var.values():

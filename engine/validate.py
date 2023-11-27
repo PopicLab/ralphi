@@ -75,8 +75,7 @@ def validation_task(input_tuple):
         with open(component_row.component_path, 'rb') as f:
             subgraph = pickle.load(f)
             subgraph.indexed_graph_stats = component_row
-
-            mini_env = envs.PhasingEnv(config, preloaded_graphs=subgraph, record_solutions=True)
+            mini_env = envs.PhasingEnv(config, preloaded_graphs=subgraph, record_solutions= not config.ultra_light_mode)
             if agent is not None:
                 agent.env = mini_env
             else:

@@ -52,6 +52,8 @@ class Config:
             'weight_norm': False,
             'clip': False,
             'features': ["dual", "between"],
+            'articulation_split': False,
+            'articulation_stitch': False,
             'approximate_betweenness': False,
             'num_pivots': 100,
             'seed': 1234

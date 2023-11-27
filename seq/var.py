@@ -1,4 +1,5 @@
 from collections import defaultdict 
+import logging
 
 class Variant:
     """
@@ -39,10 +40,41 @@ class Variant:
         else:
             self.h = None
 
-
     def __str__(self):
         return "Variant: vcf_idx={} frag_graph_idx={} depth={}".format(self.vcf_idx, self.phase_set,
                                                                        len(self.phase_set))
+
+def flip_phase(h):
+    if h == None:
+        return h
+    return (h + 1) % 2
+
+def stitch_specific(frag_list, join, lookup_component):
+    first_hap = join[0][1].haplotype
+    first_index = lookup_component[join[0][0]]
+    for comp_index, frag in join[1:]:
+        if frag.haplotype != first_hap:
+            for frag_to_flip in frag_list[lookup_component[comp_index]]:
+                frag_to_flip.assign_haplotype(flip_phase(frag_to_flip.haplotype))
+        frag_list[first_index].extend(frag_list[lookup_component[comp_index]])
+        frag_list[lookup_component[comp_index]] = []
+        lookup_component[comp_index] = first_index
+    return frag_list, lookup_component
+
+
+def stitch_fragments(solutions):
+    logging.info("Stitching fragments...")
+    lookup_stitch = {}
+    lookup_component = {i: i for i in range(len(solutions))}
+    for component_index, frag_list in enumerate(solutions):
+        for frag in frag_list:
+            if frag.fragment_group_id is not None:
+                lookup_stitch.setdefault(frag.fragment_group_id, []).append((component_index, frag))
+    condensed_components = solutions
+    for elem in lookup_stitch:
+        condensed_components, lookup_component = stitch_specific(condensed_components, lookup_stitch[elem], lookup_component)
+    logging.info("Finished stitching fragments...")
+    return condensed_components
 
 def extract_variants(phased_frag_sets):
     idx2variant = {}
