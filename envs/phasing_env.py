@@ -29,6 +29,7 @@ class State:
         self.H0 = []
         self.H1 = []
         self.best_reward = 0
+        self.current_total_reward = 0
         print("Number of nodes: ", self.frag_graph.n_nodes, ", number of edges: ", self.frag_graph.g.number_of_edges())
 
 
@@ -56,7 +57,6 @@ class PhasingEnv(gym.Env):
         self.action_space = spaces.Discrete(self.num_actions)
         self.observation_space = {}
         # other bookkeeping
-        self.current_total_reward = 0
         self.record = record_solutions
         self.solutions = []
 
@@ -77,7 +77,7 @@ class PhasingEnv(gym.Env):
         else:
             norm_factor = 1
         # compute the new MFC score
-        previous_reward = self.current_total_reward
+        previous_reward = self.state.current_total_reward
         # for each neighbor of the selected node in the graph
         cut_with_h1 = True
         hap_list = [self.state.H0, self.state.H1]
@@ -88,14 +88,14 @@ class PhasingEnv(gym.Env):
             complement_action = action - self.state.num_nodes
         for nbr in self.state.frag_graph.g.neighbors(complement_action):
             if nbr in hap_list[cut_with_h1]:
-                self.current_total_reward += self.state.frag_graph.g[complement_action][nbr]['weight']
-        if self.current_total_reward > self.state.best_reward:
-            self.state.best_reward = self.current_total_reward
+                self.state.current_total_reward += self.state.frag_graph.g[complement_action][nbr]['weight']
+        if self.state.current_total_reward > self.state.best_reward:
+            self.state.best_reward = self.state.current_total_reward
         # Compute the corresponding reward, if clip, the reward ios clipped and normalized
         if not self.config.clip:
-            return (self.current_total_reward - previous_reward) / norm_factor
+            return (self.state.current_total_reward - previous_reward) / norm_factor
         else:
-            reward = max((self.current_total_reward - self.state.best_reward) / self.state.frag_graph.graph_properties[
+            reward = max((self.state.current_total_reward - self.state.best_reward) / self.state.frag_graph.graph_properties[
                 "total_num_frag"], 0)
             return reward
 
