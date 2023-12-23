@@ -27,7 +27,6 @@ def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, 
     for v in idx2var.values():
         v.assign_haplotype()
 
-    idx2var = utils.post_processing.update_split_block_phase_sets(agent.env.solutions, idx2var)
     output_vcf = config.validation_output_vcf + "_" + str(group) + ".vcf"
     vcf_writer.write_phased_vcf(validation_input_vcf, idx2var, output_vcf)
     chrom = benchmark.get_ref_name(output_vcf)
