@@ -510,23 +510,18 @@ class GraphDataset:
             num_samples = self.ordering_config.num_samples_per_category_default
             if "num_samples" in group_dict:
                 num_samples = group_dict["num_samples"]
-            quantiles_lookup = {}
-            for rule in group_dict["rules"]:
-                rule_dict = group_dict["rules"][rule]
-                if "quantiles" in rule_dict:
-                    quantiles = rule_dict["quantiles"]
-                    buckets = df[rule].quantile(quantiles)
-                    quantiles_lookup[rule] = buckets
             for rule in group_dict["rules"]:
                 rule_dict = group_dict["rules"][rule]
                 if ("min" in rule_dict) and ("max" in rule_dict):
                     subsampled_df = self.extract_examples(subsampled_df, rule, rule_dict["min"], rule_dict["max"])
                 elif "quantiles" in rule_dict:
-                    subsampled_df = self.extract_examples(subsampled_df, rule, quantiles_lookup[rule][rule_dict["quantiles"][0]], quantiles_lookup[rule][rule_dict["quantiles"][1]])
+                    quantiles = rule_dict["quantiles"]
+                    buckets = subsampled_df[rule].quantile(quantiles)
+                    subsampled_df = self.extract_examples(subsampled_df, rule, buckets[rule_dict["quantiles"][0]],
+                                                          buckets[rule_dict["quantiles"][1]]) 
             subsampled_df = subsampled_df.sample(n=min(num_samples, subsampled_df.shape[0]), random_state=self.ordering_config.seed)
             subsampled_df["group"] = group
             df_combined.append(subsampled_df)
-            #print("subsampled from group: ", group, subsampled_df, subsampled_df.describe())
 
         if len(df_combined) == 0:            
             df_single_epoch = df
