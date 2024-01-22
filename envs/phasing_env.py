@@ -110,11 +110,12 @@ class PhasingEnv(gym.Env):
 
     def update_features(self, hap, action):
         self.state.g.ndata['cut_member_' + hap][action] = 1.0
-        if 'reachability_hap0' in list(self.state.g.ndata.keys()):
+        features = list(self.state.g.ndata.keys())
+        if 'reachability_hap0' in features:
             for node in self.state.frag_graph.graph_properties['compo'][
                 self.state.frag_graph.graph_properties['neg_connectivity'][action]]:
                 self.state.g.ndata['reachability_' + hap][node] += 1.0 / self.state.num_nodes
-        if 'shortest_pos_path_' + hap in list(self.state.g.ndata.keys()):
+        if 'shortest_pos_path_' + hap in features:
             paths = self.state.frag_graph.graph_properties['pos_paths'][action]
             for node in paths:
                 if node != action:
@@ -123,7 +124,13 @@ class PhasingEnv(gym.Env):
                                 'val_pos_path_' + hap] > paths[node]:
                         self.state.frag_graph.g.nodes[node]['val_pos_path_' + hap] = paths[node]
                         self.state.frag_graph.g.nodes[node]['shortest_pos_path_' + hap] = [paths[node] % 2.]
-
+        if 'edge_homophily' in features:
+            for node in self.state.frag_graph.g.neighbors(action):
+                homo = 0
+                if self.state.g.ndata['cut_member_' + hap][action] == self.state.g.ndata['cut_member_' + hap][node]:
+                    homo = 1
+                self.state.frag_graph.g.nodes[node]['edge_homophily'][0] = self.state.frag_graph.g.nodes[node]['edge_homophily'][0] + homo / len(self.state.frag_graph.g.neighbors(node))
+                self.state.frag_graph.g.nodes[action]['edge_homophily'][0] = self.state.frag_graph.g.nodes[action]['edge_homophily'][0] + homo / len(self.state.frag_graph.g.neighbors(action))
     def step(self, action):
         """Execute one action from given state """
         """Return: next state, reward from current state, is_done, info """

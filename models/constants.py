@@ -7,11 +7,11 @@ class LossTypes(str, Enum):
     total_loss = 'total_loss'
 
 
-"""
+'''
 defines the node features to use during message passing,
 note all of these are precomputed upon graph construction
 due to caching. This enum enables and disables these features.
-"""
+'''
 FEATURES_DICT = {
     ### MANDATORY FEATURES ###
     'dual': [
@@ -70,7 +70,25 @@ FEATURES_DICT = {
         , 'avg_qscore'
     ],
 
-    "bitmap": [
+    'bitmap': [
         'variant_bitmap'
+    ],
+    'edge_homophily': [
+        'edge_homophily'
+    ],
+    'node_homophily': [
+        'node_homophily'
+    ],
+    'discordance_ratio': [
+        'discordance_ratio'
+    ],
+    'overlap_ratio': [
+        'overlap_ratio'
+    ],
+    'overlap_max': [
+        'overlap_max'
+    ],
+    'average_coverage': [
+        'average_coverage'
     ]
 }

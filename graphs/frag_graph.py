@@ -77,6 +77,11 @@ class FragGraph:
             fragments = frags.split_articulation_fragments(fragments)
         frag_graph = nx.Graph()
         logging.info("Constructing fragment graph from %d fragments" % len(fragments))
+        overlap = [0 for _ in fragments]
+        discordance = [0 for _ in fragments]
+        number_overlap = [0 for _ in fragments]
+        current_overlap_max = [0 for _ in fragments]
+        one_coverage_var = [f1.variants for f1 in fragments]
         for i, f1 in enumerate(tqdm.tqdm(fragments)):
             frag_graph.add_node(i)
             for j in range(i + 1, len(fragments)):
@@ -84,6 +89,8 @@ class FragGraph:
                 # skip since fragments are sorted by vcf_idx_start
                 if f1.vcf_idx_end < f2.vcf_idx_start: break
                 frag_variant_overlap = f1.overlap(f2)
+                if 'one_coverage' in features:
+                    one_coverage_var = [var for var in one_coverage_var if var not in frag_variant_overlap]
                 if not frag_variant_overlap: continue
                 n_conflicts = 0
                 for variant_pair in frag_variant_overlap:
@@ -98,7 +105,43 @@ class FragGraph:
                 # TODO:(Anant): revisit this since these zero-weight edges provide no phasing information
                 if weight != 0:
                     frag_graph.add_edge(i, j, weight=weight)
-
+                # Even fragments with 0 weight edges are considered to compute the features
+                if 'discordance_ratio' in features:
+                    # maximum discordance between two nodes is 1
+                    aux = 4 * (len(frag_variant_overlap) - n_conflicts) * n_conflicts / len(
+                        frag_variant_overlap) ** 2
+                    discordance[i] += aux
+                    discordance[j] += aux
+                if 'overlap_ratio' in features or 'average_coverage' in features:
+                    overlap[i] += len(frag_variant_overlap)
+                    overlap[j] += len(frag_variant_overlap)
+                if 'discordance_ratio' in features or 'overlap_ratio' in features:
+                    number_overlap[i] += 1
+                    number_overlap[j] += 1
+                if 'overlap_max' in features and len(frag_variant_overlap) > current_overlap_max[i]:
+                    current_overlap_max[i] = len(frag_variant_overlap)
+                if 'overlap_max' in features and len(frag_variant_overlap) > current_overlap_max[j]:
+                    current_overlap_max[j] = len(frag_variant_overlap)
+            # The discordance ratio is the average product between agreement and disagreement between the fragment and its neighbors
+            # It is normalized such that it is 0 if there is perfect agreement or disagreement with neighbors and the higher the more errors in the read or the neighbors
+            if 'discordance_ratio' in features and number_overlap[i] > 0:
+                frag_graph.nodes[i]["discordance_ratio"] = [discordance[i] / number_overlap[i]]
+            elif 'discordance_ratio' in features:
+                frag_graph.nodes[i]["discordance_ratio"] = [0]
+            # The overlap ratio is the average ratio of overlap of a fragment's variants compared to the total size of the fragment
+            if 'overlap_ratio' in features and number_overlap[i] > 0:
+                frag_graph.nodes[i]["overlap_ratio"] = [overlap[i] / len(f1.variants) / number_overlap[i]]
+            elif 'overlap_ratio' in features:
+                frag_graph.nodes[i]["overlap_ratio"] = [0]
+            # Maximum overlap normalized by length
+            if 'overlap_max' in features:
+                frag_graph.nodes[i]["overlap_max"] = [current_overlap_max[i] / len(f1.variants)]
+            # Average number of other fragments covering this fragment's variants
+            if 'average_coverage' in features:
+                frag_graph.nodes[i]["average_coverage"] = [overlap[i] / len(f1.variants)]
+            # Number of variants only covered by this fragments, normalized by the length
+            if 'one_coverage' in features:
+                frag_graph.nodes[i]["average_coverage"] = [len(one_coverage_var[i]) / len(f1.variants)]
         return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)
 
     def set_graph_properties(self, features, config=None):
@@ -130,7 +173,7 @@ class FragGraph:
             degrees = [val for (node, val) in self.g.degree()]
             self.graph_properties["max_degree"] = max(degrees)
             self.graph_properties["min_degree"] = min(degrees)
-            self.graph_properties["n_nodes"] = self.g.number_of_nodes() 
+            self.graph_properties["n_nodes"] = self.g.number_of_nodes()
             self.graph_properties["n_edges"] = self.g.number_of_edges()
             self.graph_properties["density"] = nx.density(self.g)
             self.graph_properties["articulation_points"] = len(self.graph_properties["list_articulation_points"])
@@ -139,20 +182,22 @@ class FragGraph:
             self.graph_properties["diameter"] = nx.diameter(self.g)
             self.graph_properties["trivial"] = self.trivial
             variants = [frag.n_variants for frag in self.fragments]
-            _, self.graph_properties['num_variants'] = self.get_variants_set()                
+            _, self.graph_properties['num_variants'] = self.get_variants_set()
             self.graph_properties['max_num_variant'] = max(variants)
             self.graph_properties['min_num_variant'] = min(variants)
             self.graph_properties['avg_num_variant'] = np.mean(variants)
             self.graph_properties['total_num_frag'] = sum([frag.n_copies for frag in self.fragments])
-            self.graph_properties['compression_factor'] = self.graph_properties['n_nodes'] / self.graph_properties['total_num_frag']
-        
+            self.graph_properties['compression_factor'] = self.graph_properties['n_nodes'] / self.graph_properties[
+                'total_num_frag']
+
         if 'reachability_hap0' in features and "compo" not in self.graph_properties:
             edges = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
             edges[edges > 0] = 0
             neg_graph = nx.from_numpy_array(edges)
             self.graph_properties['compo'] = [c for c in nx.connected_components(neg_graph)]
             self.graph_properties['neg_connectivity'] = {node: num for num, sub_compo in
-                                                         enumerate(self.graph_properties['compo']) for node in sub_compo}
+                                                         enumerate(self.graph_properties['compo']) for node in
+                                                         sub_compo}
         if "shortest_pos_path_hap0" in features and 'pos_paths' not in self.graph_properties:
             pos_graph = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
             pos_graph[pos_graph < 0] = 0
@@ -222,9 +267,10 @@ class FragGraph:
             if 'min_qscore' in features:
                 self.g.nodes[node]['min_qscore'] = [min(self.fragments[node].quality)]
                 self.g.nodes[node]['max_qscore'] = [max(self.fragments[node].quality)]
-                self.g.nodes[node]['avg_qscore'] = [sum(self.fragments[node].quality) / len(self.fragments[node].quality)]
+                self.g.nodes[node]['avg_qscore'] = [
+                    sum(self.fragments[node].quality) / len(self.fragments[node].quality)]
 
-            if 'pos_neighbors' in features:
+            if 'pos_neighbors' in features or "homophily" in features:
                 num_pos = 0
                 num_neg = 0
                 max_weight = 0
@@ -239,12 +285,17 @@ class FragGraph:
                         num_neg = num_neg + 1
                         if nbr_weight < min_weight:
                             min_weight = nbr_weight
-                self.g.nodes[node]['pos_neighbors'] = [num_pos]
-                self.g.nodes[node]['neg_neighbors'] = [num_neg]
-                self.g.nodes[node]['max_weight_node'] = [
-                    max_weight / self.graph_properties["max_weight"] if self.graph_properties["max_weight"] != 0 else 0]
-                self.g.nodes[node]['min_weight_node'] = [
-                    min_weight / self.graph_properties["min_weight"] if self.graph_properties["min_weight"] != 0 else 0]
+                if "node_homophily" in features:
+                    self.g.nodes[node]['node_homophily'] = [num_pos / (num_pos + num_neg)]
+                if 'pos_neighbors' in features:
+                    self.g.nodes[node]['pos_neighbors'] = [num_pos]
+                    self.g.nodes[node]['neg_neighbors'] = [num_neg]
+                    self.g.nodes[node]['max_weight_node'] = [
+                        max_weight / self.graph_properties["max_weight"] if self.graph_properties[
+                                                                                "max_weight"] != 0 else 0]
+                    self.g.nodes[node]['min_weight_node'] = [
+                        min_weight / self.graph_properties["min_weight"] if self.graph_properties[
+                                                                                "min_weight"] != 0 else 0]
 
             if 'is_articulation' in features:
                 self.g.nodes[node]['is_articulation'] = [
@@ -279,6 +330,9 @@ class FragGraph:
 
                 self.g.nodes[node]['val_pos_path_hap0'] = 0
                 self.g.nodes[node]['val_pos_path_hap1'] = 0
+
+            if "edge_homophily" in features:
+                self.g.nodes[node]['edge_homophily'] = [0.0]
 
     def compute_variant_bitmap(self, mask_len=200):
         # vcf_positions contains the list of vcf positions within the connected component formed by these fragments
@@ -392,6 +446,7 @@ class FragGraph:
             subgraphs.append(subgraph)
         return subgraphs
 
+
 def load_connected_components(frag_file_fname, features, config):
     logging.info("Fragment file: %s" % frag_file_fname)
     component_file_fname = frag_file_fname.strip() + ".components"
@@ -434,7 +489,7 @@ class FragGraphGen:
                     with open(component_row.component_path, 'rb') as f:
                         if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                             continue
-                        subgraph = pickle.load(f) #[component_row['index']]  # index in to list of graphs
+                        subgraph = pickle.load(f)  # [component_row['index']]  # index in to list of graphs
                         if self.is_invalid_subgraph(subgraph):
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
@@ -469,7 +524,8 @@ class FragGraphGen:
 class GraphDataset:
     def __init__(self, config, ordering_config=None, validation_mode=False):
         self.config = config
-        self.features = list(feature for feature_name in config.features for feature in constants.FEATURES_DICT[feature_name])
+        self.features = list(
+            feature for feature_name in config.features for feature in constants.FEATURES_DICT[feature_name])
         self.ordering_config = ordering_config
         self.combined_graph_indexes = []
         self.validation_mode = validation_mode
@@ -484,11 +540,14 @@ class GraphDataset:
 
     def extract_examples(self, df, condition, lower_bound, upper_bound):
         return df[(df[condition] >= lower_bound) & (df[condition] <= upper_bound)]
-    
+
     def global_filter(self, df):
         for filter_condition in self.ordering_config.global_ranges:
-            df = self.extract_examples(df, filter_condition, self.ordering_config.global_ranges[filter_condition]["min"],  self.ordering_config.global_ranges[filter_condition]["max"])
+            df = self.extract_examples(df, filter_condition,
+                                       self.ordering_config.global_ranges[filter_condition]["min"],
+                                       self.ordering_config.global_ranges[filter_condition]["max"])
         return df
+
     def round_robin_chunkify(self, df):
         size_ordered = df.sort_values(by=['n_nodes'], ascending=True)
         chunks = []
@@ -503,9 +562,9 @@ class GraphDataset:
         df = self.global_filter(df)
 
         df_combined = []
-        
+
         for group in self.ordering_config.ordering_ranges:
-            group_dict = self.ordering_config.ordering_ranges[group] 
+            group_dict = self.ordering_config.ordering_ranges[group]
             subsampled_df = df.copy()
             num_samples = self.ordering_config.num_samples_per_category_default
             if "num_samples" in group_dict:
@@ -523,7 +582,7 @@ class GraphDataset:
             subsampled_df["group"] = group
             df_combined.append(subsampled_df)
 
-        if len(df_combined) == 0:            
+        if len(df_combined) == 0:
             df_single_epoch = df
             if "group" not in df_single_epoch:
                 df_single_epoch["group"] = "original"
@@ -573,7 +632,7 @@ class GraphDataset:
             if self.vcf_panel is not None:
                 vcf_dict = construct_vcf_idx_to_record_dict(vcf_panel[i].strip())
             for component_index, component in enumerate(connected_components):
-                component_path = panel[i].strip() + ".components" # + "_" + str(component_index)
+                component_path = panel[i].strip() + ".components"  # + "_" + str(component_index)
                 if self.vcf_panel is not None:
                     # in this case, we need graph/vcf files per every single graph for validation
                     component_path = component_path + "_" + str(component_index)
