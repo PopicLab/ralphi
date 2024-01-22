@@ -19,10 +19,14 @@ from joblib import Parallel, delayed
 
 def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, group):
     # given any subset of phasing solutions, computes errors rates against ground truth VCF
+    
+    if config.articulation_stitch:
+        var.stitch_fragments(solutions)
+
     idx2var = var.extract_variants(solutions)
     for v in idx2var.values():
         v.assign_haplotype()
-    idx2var = utils.post_processing.update_split_block_phase_sets(agent.env.solutions, idx2var)
+
     output_vcf = config.validation_output_vcf + "_" + str(group) + ".vcf"
     vcf_writer.write_phased_vcf(validation_input_vcf, idx2var, output_vcf)
     chrom = benchmark.get_ref_name(output_vcf)
@@ -75,8 +79,7 @@ def validation_task(input_tuple):
         with open(component_row.component_path, 'rb') as f:
             subgraph = pickle.load(f)
             subgraph.indexed_graph_stats = component_row
-
-            mini_env = envs.PhasingEnv(config, preloaded_graphs=subgraph, record_solutions=True)
+            mini_env = envs.PhasingEnv(config, preloaded_graphs=subgraph, record_solutions= not config.ultra_light_mode)
             if agent is not None:
                 agent.env = mini_env
             else:

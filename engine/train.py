@@ -50,7 +50,6 @@ if __name__ == '__main__':
 while agent.env.has_state():
     if config.max_episodes is not None and episode_id >= config.max_episodes:
         break
-    episode_reward = agent.run_episode(config, episode_id=episode_id)
     if episode_id % config.interval_validate == 0:
         torch.save(agent.model.state_dict(), "%s/dphase_model_%d.pt" % (config.out_dir, model_checkpoint_id))
         if config.panel_validation_frags and config.panel_validation_vcfs:
@@ -59,6 +58,7 @@ while agent.env.has_state():
             if reward > best_validation_reward:
                 best_validation_reward = reward
                 torch.save(agent.model.state_dict(), config.best_model_path)
+    episode_reward = agent.run_episode(config, episode_id=episode_id)
     episode_id += 1
     agent.env = env_train
     agent.env.reset()

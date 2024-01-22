@@ -67,12 +67,14 @@ class FragGraph:
         return frags_unique
 
     @staticmethod
-    def build(fragments, features=None, compute_trivial=False, compress=False):
+    def build(fragments, features=None, compute_trivial=False, compress=False, articulation_split=False):
         logging.info("Input number of fragments: %d" % len(fragments))
         if compress and fragments:
             logging.info("Compressing identical fragments")
             fragments = FragGraph.merge_fragments_by_identity(fragments)
             logging.info("Compressed number of fragments: %d" % len(fragments))
+        if articulation_split:
+            fragments = frags.split_articulation_fragments(fragments)
         frag_graph = nx.Graph()
         logging.info("Constructing fragment graph from %d fragments" % len(fragments))
         overlap = [0 for _ in fragments]
@@ -142,7 +144,7 @@ class FragGraph:
                 frag_graph.nodes[i]["average_coverage"] = [len(one_coverage_var[i]) / len(f1.variants)]
         return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)
 
-    def set_graph_properties(self, features, approximate_betweenness, num_pivots, seed):
+    def set_graph_properties(self, features, config=None):
         # TODO: which properties do we want to save here; probably not diameter since expensive to compute
         if 'is_articulation' in features and "list_articulation_points" not in self.graph_properties:
             self.graph_properties["list_articulation_points"] = list(nx.articulation_points(self.g))
@@ -205,8 +207,10 @@ class FragGraph:
         if 'betweenness' in features and "betweenness" not in self.graph_properties:
             # if there is more nodes than num_pivots, use "num_pivots" pivots for betweeness approximation
             k = None
-            if approximate_betweenness and (num_pivots < self.n_nodes):
-                k = num_pivots
+            seed = 1234
+            if config and config.approximate_betweenness and (config.num_pivots < self.n_nodes):
+                k = config.num_pivots
+                seed = config.seed
             self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=seed)
 
         self.set_node_features(features)
@@ -430,7 +434,7 @@ class FragGraph:
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
         return FragGraph(subg_relabeled, subg_frags, features, node_id2hap_id, compute_trivial)
 
-    def connected_components_subgraphs(self, config, features=None, skip_trivial_graphs=False):
+    def connected_components_subgraphs(self, config=None, features=None, skip_trivial_graphs=False):
         components = nx.connected_components(self.g)
         logging.debug("Found connected components, now constructing subgraphs...")
         subgraphs = []
@@ -438,8 +442,7 @@ class FragGraph:
             subgraph = self.extract_subgraph(component, features, compute_trivial=True)
             if subgraph.trivial and skip_trivial_graphs: continue
             if features and not subgraph.trivial:
-                subgraph.set_graph_properties(features, approximate_betweenness=config.approximate_betweenness,
-                                              num_pivots=config.num_pivots, seed=config.seed)
+                subgraph.set_graph_properties(features, config=config)
             subgraphs.append(subgraph)
         return subgraphs
 
@@ -452,7 +455,7 @@ def load_connected_components(frag_file_fname, features, config):
             connected_components = pickle.load(f)
     else:
         fragments = frags.parse_frag_file(frag_file_fname.strip())
-        graph = FragGraph.build(fragments, features, compute_trivial=False, compress=config.compress)
+        graph = FragGraph.build(fragments, features, compute_trivial=False, compress=config.compress, articulation_split=config.articulation_split)
         logging.info("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
         logging.info("Finding connected components...")
         connected_components = graph.connected_components_subgraphs(
@@ -471,7 +474,7 @@ class FragGraphGen:
         self.graph_dataset = graph_dataset
 
     def is_invalid_subgraph(self, subgraph):
-        return subgraph.n_nodes < 2 and (self.config.skip_singleton_graphs or subgraph.fragments[0].n_variants < 2)
+        return subgraph.n_nodes < 2 and self.config.skip_singleton_graphs
 
     def is_not_in_size_range(self, subgraph):
         return not (self.config.min_graph_size <= subgraph.n_nodes <= self.config.max_graph_size)
@@ -490,10 +493,8 @@ class FragGraphGen:
                         if self.is_invalid_subgraph(subgraph):
                             continue
                         print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
-                        if self.features:
-                            subgraph.set_graph_properties(self.features,
-                                                          approximate_betweenness=self.config.approximate_betweenness,
-                                                          num_pivots=self.config.num_pivots, seed=self.config.seed)
+                        if self.features: 
+                            subgraph.set_graph_properties(self.features, config=self.config)
                         yield subgraph
             yield None
         elif self.config.frag_panel_file is not None:
@@ -568,25 +569,18 @@ class GraphDataset:
             num_samples = self.ordering_config.num_samples_per_category_default
             if "num_samples" in group_dict:
                 num_samples = group_dict["num_samples"]
-            quantiles_lookup = {}
-            for rule in group_dict["rules"]:
-                rule_dict = group_dict["rules"][rule]
-                if "quantiles" in rule_dict:
-                    quantiles = rule_dict["quantiles"]
-                    buckets = df[rule].quantile(quantiles)
-                    quantiles_lookup[rule] = buckets
             for rule in group_dict["rules"]:
                 rule_dict = group_dict["rules"][rule]
                 if ("min" in rule_dict) and ("max" in rule_dict):
                     subsampled_df = self.extract_examples(subsampled_df, rule, rule_dict["min"], rule_dict["max"])
                 elif "quantiles" in rule_dict:
-                    subsampled_df = self.extract_examples(subsampled_df, rule,
-                                                          quantiles_lookup[rule][rule_dict["quantiles"][0]],
-                                                          quantiles_lookup[rule][rule_dict["quantiles"][1]])
-            subsampled_df = subsampled_df.sample(n=num_samples, random_state=self.ordering_config.seed)
+                    quantiles = rule_dict["quantiles"]
+                    buckets = subsampled_df[rule].quantile(quantiles)
+                    subsampled_df = self.extract_examples(subsampled_df, rule, buckets[rule_dict["quantiles"][0]],
+                                                          buckets[rule_dict["quantiles"][1]]) 
+            subsampled_df = subsampled_df.sample(n=min(num_samples, subsampled_df.shape[0]), random_state=self.ordering_config.seed)
             subsampled_df["group"] = group
             df_combined.append(subsampled_df)
-            # print("subsampled from group: ", group, subsampled_df, subsampled_df.describe())
 
         if len(df_combined) == 0:
             df_single_epoch = df
