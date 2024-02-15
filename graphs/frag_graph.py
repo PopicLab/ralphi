@@ -67,7 +67,7 @@ class FragGraph:
         return frags_unique
 
     @staticmethod
-    def build(fragments, features=None, compute_trivial=False, compress=False, articulation_split=False):
+    def build(fragments, features=[], compute_trivial=False, compress=False, articulation_split=False):
         logging.info("Input number of fragments: %d" % len(fragments))
         if compress and fragments:
             logging.info("Compressing identical fragments")
@@ -425,7 +425,7 @@ class FragGraph:
         return g, pruned_edges
 
     def extract_subgraph(self, connected_component, features, compute_trivial=False):
-        subg = self.g.subgraph(connected_component).copy()
+        subg = self.g.subgraph(connected_component)
         subg_frags = [self.fragments[node] for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
         node_id2hap_id = None

@@ -18,5 +18,7 @@ node_features_dim: 2 # Number of node features fed to the GNN
 weight_norm: False # Normalization of the edge weights by an upper bound on the maxcut
 fragment_norm: False # Normalization of the edge weights by the number of fragments
 features: ["dual"] # List of features to use, the names are detailed in the constants.py file
+postprocess_ambiguous: False
+evidence_threshold: 0
 articulation_split: False
 articulation_stitch: False

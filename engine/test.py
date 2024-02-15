@@ -53,5 +53,9 @@ idx2var = var.extract_variants(env.solutions)
 for v in idx2var.values():
     v.assign_haplotype()
 
+if config.postprocess_ambiguous:
+    idx2var = utils.post_processing.postprocess_ambiguous(env.solutions, idx2var, config.evidence_threshold)
+    logging.info("Post-processed blocks that were split up due to ambiguous variants")
+
 logging.info("Overall Runtime: %f " % (time.time() - total_start_time))
 vcf_writer.write_phased_vcf(config.input_vcf, idx2var, config.output_vcf)

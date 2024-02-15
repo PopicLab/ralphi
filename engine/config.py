@@ -52,6 +52,8 @@ class Config:
             'weight_norm': False,
             'clip': False,
             'features': ["dual", "between"],
+            'postprocess_ambiguous': False,
+            'evidence_threshold': 0,
             'articulation_split': False,
             'articulation_stitch': False,
             'approximate_betweenness': False,
@@ -114,7 +116,7 @@ class TrainingConfig(Config):
             wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, config=self, name=self.run_name)
         else:
             # automatically results in ignoring all wandb calls
-            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, id=config_file.id, mode="disabled")
+            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, mode="disabled")
 
 
         # logging

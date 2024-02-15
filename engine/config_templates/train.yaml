@@ -38,3 +38,5 @@ fragment_norm: False # Normalization of the edge weights by the number of fragme
 features: [dual] # List of features to use, the names are detailed in the constants.py file
 clip: False # Clipped and normalized reward
 light_logging: True # Less logging for faster training
+# post-processing parameters
+postprocess_ambiguous: False
