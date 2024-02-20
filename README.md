@@ -74,10 +74,10 @@ and benchmarking. The script can be executed as follows:
 ```python3 third-party/HapCUT2/utilities/calculate_haplotype_statistics.py -v1 /path/to/output -v2 /path/to/ground_truth```
 
 
-#### Setup Python virtual environment (recommended)
+#### Setup Python virtual environment (tested using Python 3.10.12) (recommended)
 
 1. Create the virtual environment (in the venv directory): 
-```$> python3.7 -m venv env```
+```$> python -m venv env```
 
 2. Activate the environment: 
 ```$> source env/bin/activate```
