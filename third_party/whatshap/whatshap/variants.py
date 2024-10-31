@@ -3,14 +3,15 @@ Detect variants in reads.
 """
 import logging
 from collections import defaultdict, Counter
+from intervaltree import IntervalTree
 from typing import Iterable, Iterator, List, Optional
 from dataclasses import dataclass
+import random
 
 from .core import Read, ReadSet, NumericSampleIds
 from .bam import SampleBamReader, MultiBamReader, BamReader
 from .align import edit_distance, edit_distance_affine_gap
 from ._variants import _iterate_cigar, _detect_alleles
-
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +174,49 @@ class ReadSetReader:
             #     )
             yield group
 
+    def get_reference_span(self, cigar):
+        ref_span = 0
+        cigar_idx = 0
+        op_len_str = ""
+        while cigar_idx < len(cigar):
+            if not cigar[cigar_idx].isdigit():
+                if cigar[cigar_idx] in ["M", "D", "N", "=", "X"]:
+                    ref_span += int(op_len_str)
+                op_len_str = ""
+            else:
+                op_len_str += cigar[cigar_idx]
+            cigar_idx += 1
+        return ref_span
+
+    def get_read_start(self, cigar, strand):
+        op_len_str = ""
+        if strand == "+":
+            cigar_idx = 0
+            while cigar[cigar_idx].isdigit():
+                op_len_str += cigar[cigar_idx]
+                cigar_idx += 1
+            if cigar[cigar_idx] in ["H", "S"]:
+                return int(op_len_str)
+        elif cigar[-1] in ["H", "S"]:
+            cigar_idx = -2
+            while cigar[cigar_idx].isdigit():
+                op_len_str += cigar[cigar_idx]
+                cigar_idx -= 1
+            return int(op_len_str[::-1])
+        return 0
+
+
+    def is_bad_aln(self, read, args):
+        if not read.has_tag('NM'): return False
+        CIGAR_OPS = ['M', 'I', 'D', 'N', 'S', 'H', 'P', '=', 'X', 'B']
+        len_large_indels = 0
+        for op, op_len in read.cigartuples:
+            if CIGAR_OPS[op] in ["D", "I"] and op_len > 30:
+                len_large_indels += op_len
+        ref_span = read.reference_end - read.reference_start + 1
+        discordance_ratio = (int(read.get_tag('NM')) - len_large_indels) / ref_span
+        return discordance_ratio >= args.max_discordance
+
     def _usable_alignments(self, chromosome, sample, regions=None, args=None):
         """
         Retrieve usable (suficient mapping quality, not secondary etc.)
@@ -181,37 +225,94 @@ class ReadSetReader:
         if regions is None:
             regions = [(0, None)]
         for s, e in regions:
+            seen2keep = defaultdict(list)
+            seen2singleton = defaultdict(list)
             for alignment in self._reader.fetch(
                 reference=chromosome, sample=sample, start=s, end=e
             ):
                 # skip alignments
-                if (alignment.bam_alignment.mapping_quality < self._mapq_threshold
-                    or alignment.bam_alignment.is_secondary
-                    or alignment.bam_alignment.is_unmapped
-                    or alignment.bam_alignment.is_duplicate
-                    or alignment.bam_alignment.is_qcfail
-                    or (not args.allow_supplementary and alignment.bam_alignment.is_supplementary)):
-                    continue
+                if alignment.bam_alignment.mapping_quality < self._mapq_threshold: continue
+                if alignment.bam_alignment.is_secondary or alignment.bam_alignment.is_unmapped: continue
+                if alignment.bam_alignment.is_duplicate or alignment.bam_alignment.is_qcfail: continue
+                if args.filter_bad_reads and self.is_bad_aln(alignment.bam_alignment, args): continue
 
-                # paired short reads
+                # ---------- paired short reads
                 # split read pairs that map discordantly
                 if alignment.bam_alignment.is_paired:
-                    # overlap = \
-                    #     max(alignment.bam_alignment.reference_start, alignment.bam_alignment.next_reference_start) \
-                    #     <= min(alignment.bam_alignment.reference_end, alignment.bam_alignment.next_reference_start +
-                    #            len(alignment.bam_alignment.seq))
+                    if alignment.bam_alignment.is_supplementary: continue
                     if (abs(alignment.bam_alignment.template_length) > args.max_isize
                         or alignment.bam_alignment.template_length == 0
                         or alignment.bam_alignment.mate_is_unmapped
                         or alignment.bam_alignment.next_reference_name != alignment.bam_alignment.reference_name
                         or alignment.bam_alignment.is_reverse == alignment.bam_alignment.mate_is_reverse):
                         alignment.bam_alignment.qname += "_" + "12"[alignment.bam_alignment.is_read2]
+                    else: alignment.bam_alignment.qname += "_MP"  # join read pairs
+                    yield alignment
+                    continue
+
+                # ------------- long reads
+                if not alignment.bam_alignment.has_tag('SA'):
+                    yield alignment
+                    continue
+
+                if alignment.bam_alignment.qname in seen2keep:
+                    # already seen a partial alignment, yield if pre-selected
+                    read_start = self.get_read_start(alignment.bam_alignment.cigarstring,
+                                                     "-" if alignment.bam_alignment.is_reverse else "+")
+                    if read_start in seen2keep[alignment.bam_alignment.qname]:
+                        #alignment.bam_alignment.qname += "_" + "+-"[alignment.bam_alignment.is_reverse]
+                        yield alignment
+                        continue
+                    elif read_start in seen2singleton[alignment.bam_alignment.qname]:
+                        alignment.bam_alignment.qname += "_" + str(random.randint(0, 1000))
+                        continue
                     else:
-                        # join read pairs that map concordantly
-                        alignment.bam_alignment.qname += "_MP"
-                else:
-                    # include the strand into read name to only group reads on the same strand
-                    alignment.bam_alignment.qname += "_" + "+-"[alignment.bam_alignment.is_reverse]
+                        assert False
+
+                # extract all partial alignments to this chromosome
+                ref_span = alignment.bam_alignment.reference_end - alignment.bam_alignment.reference_start + 1
+                curr_strand = "-" if alignment.bam_alignment.is_reverse else "+"
+                curr_read_start = self.get_read_start(alignment.bam_alignment.cigarstring, curr_strand)
+                partial_alignments = [(alignment.bam_alignment.mapping_quality, ref_span,
+                                       alignment.bam_alignment.reference_start,
+                                       alignment.bam_alignment.reference_end, curr_read_start, curr_strand)]
+                for tag in alignment.bam_alignment.get_tag('SA').rstrip(";").split(';'):
+                    entries = tag.split(',')
+                    if entries[0] != chromosome: continue
+                    ref_start = int(entries[1])
+                    strand, cigar, mapq, _ = entries[2:]
+                    if int(mapq) < self._mapq_threshold: continue
+                    ref_end = ref_start + self.get_reference_span(cigar)
+                    ref_span = ref_end - ref_start + 1
+                    read_start = self.get_read_start(cigar, strand)
+                    partial_alignments.append((int(mapq), ref_span, ref_start, ref_end, read_start, strand))
+
+                selected_intervals = IntervalTree()
+                selected_alns = []
+                for aln in sorted(partial_alignments, key=lambda element: (element[0], element[1]), reverse=True):
+                    if not selected_intervals.overlaps(aln[2], aln[3]):
+                        selected_intervals.addi(aln[2], aln[3], aln)
+                        selected_alns.append(aln)
+                    select = True
+                    for c in selected_intervals.overlap(aln[2], aln[3]):
+                        overlap = min(aln[3], c.data[3]) - max(aln[2], c.data[2])
+                        if overlap > args.read_overlap_th:
+                            select = False
+                            seen2singleton[alignment.bam_alignment.qname].append(aln[4])
+                            break
+                    if select:
+                        selected_intervals.addi(aln[2], aln[3], aln)
+                        selected_alns.append(aln)
+
+                aln_sorted_by_pos = sorted(selected_alns, key=lambda element: element[2])
+                seen2keep[alignment.bam_alignment.qname].append(aln_sorted_by_pos[0][4])
+                for i in range(1, len(aln_sorted_by_pos)):
+                    if abs(aln_sorted_by_pos[i-1][3] - aln_sorted_by_pos[i][2]) < args.supp_distance_th:
+                        seen2keep[alignment.bam_alignment.qname].append(aln_sorted_by_pos[i][4])
+                    else:
+                        seen2singleton[alignment.bam_alignment.qname].append(aln_sorted_by_pos[i][4])
+                if curr_read_start not in seen2keep[alignment.bam_alignment.qname]:
+                    alignment.bam_alignment.qname += "_" + str(random.randint(0, 1000))
                 yield alignment
 
     def has_reference(self, chromosome):
@@ -573,6 +674,7 @@ def merge_two_reads(read1: Read, read2: Read) -> Read:
     """
     assert read1.is_sorted()
     assert read2.is_sorted()
+
     if read2:
         result = Read(
             read1.name,
@@ -617,7 +719,11 @@ def merge_two_reads(read1: Read, read2: Read) -> Read:
             # Variant on self-overlapping read pair
             assert read1[i1].position == read2[i2].position
             # If both alleles agree, merge into single variant and add up qualities
-            if read1[i1].allele == read2[i2].allele:
+            if read1[i1].allele == -1:
+                add2()
+            elif read2[i2].allele == -1:
+                add1()
+            elif read1[i1].allele == read2[i2].allele:
                 quality = read1[i1].quality + read2[i2].quality
                 result.add_variant(read1[i1].position, read1[i1].allele, quality)
             #else: # viq: don't allow overlap
