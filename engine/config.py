@@ -11,17 +11,15 @@ import re
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
-CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_DESIGN FRAGS')
+CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST FRAGS')
 
 MAIN_LOG = "MAIN"
 STATS_LOG_TRAIN = "STATS_TRAIN"
 STATS_LOG_VALIDATE = "STATS_VALIDATE"
-STATS_LOG_COLS_TRAIN = ['Episode',
-                        'Reward',
-                        'CutValue'
-                        'Losses',
-                        'Runtime']
-STATS_LOG_COLS_VALIDATE = ['Descriptor', 'Episode', 'SumOfCuts', 'SumOfRewards', 'Switch Count', 'Mismatch Count', 'Flat Count', 'Phased Count', 'AN50', 'N50']
+STATS_LOG_COLS_TRAIN = ['Episode', 'Reward', 'CutValue' 'Losses', 'Runtime']
+STATS_LOG_COLS_VALIDATE = ['Descriptor', 'Episode', 'SumOfCuts', 'SumOfRewards', 'Switch Count', 'Mismatch Count',
+                           'Flat Count', 'Phased Count', 'AN50', 'N50']
+
 
 class Config:
     def __init__(self, config_file):
@@ -33,13 +31,13 @@ class Config:
         # setup the experiment directory structure
         Path(self.log_dir).mkdir(parents=True, exist_ok=True)
         Path(self.out_dir).mkdir(parents=True, exist_ok=True)
-        
+
         # ...shared training and testing configs...
+
     def set_defaults(self):
         default_values = {
-            'render': False,  # Enables the rendering of the environment
             'num_cores_torch': 4,  # Number of threads to use for Pytorch
-            'device': "cpu",             
+            'device': "cpu",
             'compress': True,
             'normalization': False,
             'debug': True,
@@ -52,13 +50,16 @@ class Config:
             'weight_norm': False,
             'clip': False,
             'features': ["dual", "between"],
-            'postprocess_ambiguous': False,
+            'consensus_ambiguous': False,
+            'variants_ambiguous': False,
+            'cut_ambiguous': False,
             'evidence_threshold': 0,
             'articulation_split': False,
             'articulation_stitch': False,
-            'approximate_betweenness': False,
+            'approximate_betweenness': True,
             'num_pivots': 100,
-            'seed': 1234
+            'seed': 1234,
+            'done': True
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
@@ -118,12 +119,11 @@ class TrainingConfig(Config):
             # automatically results in ignoring all wandb calls
             wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, mode="disabled")
 
-
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
                             handlers=[logging.FileHandler(self.log_dir + '/training.log', mode='w'),
                                       logging.StreamHandler(sys.stdout)])
-    
+
         # enforce light logging if using multithreading validation
         if self.num_cores_validation > 1:
             self.light_logging = True
@@ -138,8 +138,8 @@ class TrainingConfig(Config):
         default_values = {
             'project_name': "dphase_experiments",
             'run_name': "vanilla",
-            'panel_validation_frags': None, # Fragment files for validation
-            'panel_validation_vcfs': None, # VCF files for validation
+            'panel_validation_frags': None,  # Fragment files for validation
+            'panel_validation_vcfs': None,  # VCF files for validation
             'num_cores_validation': 8,
             'min_graph_size': 1,  # Minimum size of graphs to use for training
             'max_graph_size': 1000,  # Maximum size of graphs to use for training
@@ -150,7 +150,7 @@ class TrainingConfig(Config):
             'render_view': "weighted_view",  # Controls how the graph is rendered
             'interval_validate': 500,  # Number of episodes between model validation runs
             'log_wandb': False,
-            'ultra_light_mode': False,            
+            'ultra_light_mode': False,
             # caching parameters
             'load_components': True,
             'store_components': True,
@@ -158,7 +158,8 @@ class TrainingConfig(Config):
             # model parameters
             'pretrained_model': None,  # path to pretrained model; null or "path/to/model"
             'gamma': 0.98,
-            'lr': 0.00003
+            'lr': 0.00003,
+            'drop_chr20': True
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
@@ -172,33 +173,36 @@ class TestConfig(Config):
         super().__init__(config_file)
         self.phasing_output_path = self.out_dir + "phasing_output.pickle"
         self.output_vcf = self.out_dir + "dphase_phased.vcf"
-
+        if self.max_graph_size == "inf":
+            self.max_graph_size = float('inf')
         # logging
         # noinspection PyArgumentList
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
                             handlers=[logging.FileHandler(self.log_dir + '/main.log', mode='w'),
                                       logging.StreamHandler(sys.stdout)])
         logging.info(self)
-        
+
         if self.device == "cuda" or self.device == "cuda:0" or self.device == "cuda:1":
             self.device = torch.device(self.device if torch.cuda.is_available() else "cpu")
         else:
-            self.device = torch.device("cpu") 
+            self.device = torch.device("cpu")
 
     def set_defaults(self):
         super().set_defaults()
         default_values = {
             'min_graph_size': 1,
             'max_graph_size': float('inf'),
-            'skip_singleton_graphs': True,
+            'skip_singleton_graphs': False,
             'skip_trivial_graphs': False,
             # caching parameters
             'load_components': False,
             'store_components': False,
+            'save_solution': False,
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
                 self.__setattr__(k, v)
+
 
 class DataConfig(Config):
     def __init__(self, config_file, **entries):
@@ -234,69 +238,45 @@ class FragmentConfig(Config):
     @staticmethod
     def get_defaults_short():
         return {
-            'log_reads': False,
             'mapq': 20,
             'mbq': 13,
-            'max_isize': 1000,
-            'allow_supplementary': False,
-            'allow_overlap': False,
-            'max_coverage': None,
-            'enable_read_selection': False,
-            "max_snp_coverage": 1000000000,
-            "min_coverage_to_filter_ref": 10000000,
-            "min_coverage_to_filter_alt": 10000000,
             "realign_overhang": None,
-            "min_highmapq_ratio": 0.0,
-            "min_mapq1_ratio": 0.0,
-            "max_bad_allele_ratio": 1.0,
-            "min_alt_allele_ratio": 0.0,
+            'filter_bad_reads': False,
+            'enable_read_selection': False,
+            'no_filter': False,
+            "max_snp_coverage": 20000,
+            'require_hiqh_mapq': False,
+            "min_highmapq_ratio": 0,
+            "min_coverage_to_filter": 1000000,
             'enable_strand_filter': False,
-            'reference': None,
+            'supp_distance_th': 1000000,
+            'read_overlap_th': None,
         }
 
     @staticmethod
     def get_defaults_ont():
         return {
-            'log_reads': False,
             'mapq': 20,
             'mbq': 0,
-            'max_isize': None,
-            'allow_supplementary': False,
-            'allow_overlap': False,
-            'max_coverage': None,
-            'enable_read_selection': False,
-            "max_bad_allele_ratio": 0.5,
-            "min_alt_allele_ratio": 0.1,
-            "max_snp_coverage": 150,
-            "min_coverage_to_filter_ref": 10,
-            "min_coverage_to_filter_alt": 10,
-            "realign_overhang": 20,
-            "min_highmapq_ratio": 0.1,
-            "min_mapq1_ratio": 0.5,
+            "realign_overhang": 10,
+            'filter_bad_reads': True,
+            'max_discordance': 0.1,
+            'enable_read_selection': True,
+            'max_coverage': 15,
+            'no_filter': False,
+            "max_snp_coverage": 200,
+            'require_hiqh_mapq': True,
+            "min_highmapq_ratio": 0,
+            "min_coverage_to_filter": 8,
+            "min_coverage_strand": 10,
             'enable_strand_filter': True,
+            'supp_distance_th': 1000000,
+            'read_overlap_th': 100,
         }
 
     @staticmethod
     def get_defaults_hifi():
-        return {
-            'log_reads': False,
-            'mapq': 20,
-            'mbq': 13,
-            'max_isize': None,
-            'allow_supplementary': False,
-            'allow_overlap': False,
-            'max_coverage': None,
-            'enable_read_selection': False,
-            "max_bad_allele_ratio": 0.5,
-            "min_alt_allele_ratio": 0.1,
-            "max_snp_coverage": 150,
-            "min_coverage_to_filter_ref": 10,
-            "min_coverage_to_filter_alt": 10,
-            "realign_overhang": 50,
-            "min_highmapq_ratio": 0.1,
-            "min_mapq1_ratio": 0.5,
-            'enable_strand_filter': False,
-        }
+        return {}
 
     def set_defaults(self):
         if self.platform == "ONT":
@@ -308,6 +288,8 @@ class FragmentConfig(Config):
         else:
             print("Unexpected platform: " + self.platform)
             sys.exit(-1)
+        default_values["window_size"] = 1
+        default_values['log_reads'] = False
         for k, v, in default_values.items():
             if not hasattr(self, k):
                 self.__setattr__(k, v)
@@ -316,25 +298,11 @@ class FragmentConfig(Config):
 def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     # Load a YAML configuration file
     with open(fname) as file:
-        loader = yaml.FullLoader
-        # expression enabling yaml to read floats in scientific notation
-        loader.add_implicit_resolver(
-            u'tag:yaml.org,2002:float',
-            re.compile(u'''^(?:
-             [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
-            |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
-            |\\.[0-9_]+(?:[eE][-+][0-9]+)?
-            |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
-            |[-+]?\\.(?:inf|Inf|INF)
-            |\\.(?:nan|NaN|NAN))$''', re.X),
-            list(u'-+0123456789.'))
-        config = yaml.load(file, Loader=loader)
+        config = yaml.load(file, Loader=yaml.FullLoader)
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
         return TestConfig(fname, **config)
-    elif config_type == CONFIG_TYPE.DATA_DESIGN:
-        return DataConfig(fname, **config)
     elif config_type == CONFIG_TYPE.FRAGS:
         return FragmentConfig(fname, **config)
 

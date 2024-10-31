@@ -151,21 +151,21 @@ def select_variants(reads, config, variant_table):
             if allele == -1:  # only bad alleles cover the variant, always filter
                 filter_by_type['single_allele_bad'] += 1
                 filtered_variants.add(variant_position + 1)
-            elif allele == 0 and pos2coverage['all'][variant_position] >= config.min_coverage_to_filter_ref:
+            elif allele == 0 and pos2coverage['all'][variant_position] >= config.min_coverage_to_filter:
                 filter_by_type['single_allele_ref'] += 1
                 filtered_variants.add(variant_position + 1)
-            elif allele == 1 and pos2coverage['all'][variant_position] >= config.min_coverage_to_filter_alt:
+            elif allele == 1 and pos2coverage['all'][variant_position] >= config.min_coverage_to_filter:
                 filter_by_type['single_allele_alt'] += 1
                 filtered_variants.add(variant_position + 1)
         else:  # we have at least two different alleles
             if len(pos2alleles['all'][variant_position]) == 2 and -1 in pos2alleles['all'][variant_position]:
                 # one of the alleles is a bad allele, the others are either all ALT or REF
                 if 0 in pos2alleles['all'][variant_position] and pos2coverage['all'][variant_position] >= \
-                        config.min_coverage_to_filter_ref:
+                        config.min_coverage_to_filter:
                     filter_by_type['double_allele_with_ref_and_bad'] += 1
                     filtered_variants.add(variant_position + 1)
                 elif 1 in pos2alleles['all'][variant_position] and pos2coverage['all'][variant_position] >= \
-                        config.min_coverage_to_filter_alt:
+                        config.min_coverage_to_filter:
                     filter_by_type['double_allele_with_alt_and_bad'] += 1
                     filtered_variants.add(variant_position + 1)
 
