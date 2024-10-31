@@ -13,15 +13,13 @@ class State:
     State consists of the genome fragment graph
     and the nodes assigned to each haplotype (0: H0 1: H1)
     """
-
     def __init__(self, frag_graph, features, device):
         self.frag_graph = frag_graph
         edge_attrs = None
         if frag_graph.n_nodes > 1:
             edge_attrs = ['weight']
         self.num_nodes = self.frag_graph.n_nodes
-        if self.frag_graph.trivial:
-            return
+        if self.frag_graph.trivial: return
         self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features)
         self.g = self.g.to(device) 
         self.assigned = torch.zeros(self.num_nodes * 2)
@@ -34,10 +32,6 @@ class State:
 
 
 class PhasingEnv(gym.Env):
-    """
-    Genome phasing environment
-    """
-
     def __init__(self, config, record_solutions=False, graph_dataset=None, preloaded_graphs=None):
         self.features = list(feature for feature_name in config.features
                              for feature in constants.FEATURES_DICT[feature_name])
@@ -83,7 +77,7 @@ class PhasingEnv(gym.Env):
         hap_list = [self.state.H0, self.state.H1]
         complement_action = action
         if action > self.state.num_nodes - 1:
-            # Assignment node i to Haplotype 1 is encoded as the action i + num nodes
+            # qssignment node i to Haplotype 1 is encoded as the action i + num nodes
             cut_with_h1 = False
             complement_action = action - self.state.num_nodes
         for nbr in self.state.frag_graph.g.neighbors(complement_action):
@@ -91,13 +85,12 @@ class PhasingEnv(gym.Env):
                 self.state.current_total_reward += self.state.frag_graph.g[complement_action][nbr]['weight']
         if self.state.current_total_reward > self.state.best_reward:
             self.state.best_reward = self.state.current_total_reward
-        # Compute the corresponding reward, if clip, the reward ios clipped and normalized
+        # compute the corresponding reward, if clip, the reward ios clipped and normalized
         if not self.config.clip:
             return (self.state.current_total_reward - previous_reward) / norm_factor
         else:
-            reward = max((self.state.current_total_reward - self.state.best_reward) / self.state.frag_graph.graph_properties[
-                "total_num_frag"], 0)
-            return reward
+            return max((self.state.current_total_reward - self.state.best_reward) /
+                       self.state.frag_graph.graph_properties["total_num_frag"], 0)
 
     def is_termination_action(self, action):
         return action == self.state.num_nodes
@@ -110,27 +103,7 @@ class PhasingEnv(gym.Env):
 
     def update_features(self, hap, action):
         self.state.g.ndata['cut_member_' + hap][action] = 1.0
-        features = list(self.state.g.ndata.keys())
-        if 'reachability_hap0' in features:
-            for node in self.state.frag_graph.graph_properties['compo'][
-                self.state.frag_graph.graph_properties['neg_connectivity'][action]]:
-                self.state.g.ndata['reachability_' + hap][node] += 1.0 / self.state.num_nodes
-        if 'shortest_pos_path_' + hap in features:
-            paths = self.state.frag_graph.graph_properties['pos_paths'][action]
-            for node in paths:
-                if node != action:
-                    if self.state.frag_graph.g.nodes[node]['val_pos_path_' + hap] == 0 or \
-                            self.state.frag_graph.g.nodes[node][
-                                'val_pos_path_' + hap] > paths[node]:
-                        self.state.frag_graph.g.nodes[node]['val_pos_path_' + hap] = paths[node]
-                        self.state.frag_graph.g.nodes[node]['shortest_pos_path_' + hap] = [paths[node] % 2.]
-        if 'edge_homophily' in features:
-            for node in self.state.frag_graph.g.neighbors(action):
-                homo = 0
-                if self.state.g.ndata['cut_member_' + hap][action] == self.state.g.ndata['cut_member_' + hap][node]:
-                    homo = 1
-                self.state.frag_graph.g.nodes[node]['edge_homophily'][0] = self.state.frag_graph.g.nodes[node]['edge_homophily'][0] + homo / len(self.state.frag_graph.g.neighbors(node))
-                self.state.frag_graph.g.nodes[action]['edge_homophily'][0] = self.state.frag_graph.g.nodes[action]['edge_homophily'][0] + homo / len(self.state.frag_graph.g.neighbors(action))
+
     def step(self, action):
         """Execute one action from given state """
         """Return: next state, reward from current state, is_done, info """
@@ -175,12 +148,9 @@ class PhasingEnv(gym.Env):
         assert self.state.frag_graph.hap_a_frags is not None and self.state.frag_graph.hap_b_frags is not None, \
             "The solution was not precomputed"
         for i, frag in enumerate(self.state.frag_graph.fragments):
-            if i in self.state.frag_graph.hap_a_frags:
-                frag.assign_haplotype(0.0)
-            elif i in self.state.frag_graph.hap_b_frags:
-                frag.assign_haplotype(1.0)
-            else:
-                raise RuntimeError("Fragment wasn't assigned to any cluster")
+            if i in self.state.frag_graph.hap_a_frags: frag.assign_haplotype(0.0)
+            elif i in self.state.frag_graph.hap_b_frags: frag.assign_haplotype(1.0)
+            else: raise RuntimeError("Fragment wasn't assigned to any cluster")
         self.solutions.append(self.state.frag_graph.fragments)
 
     def get_solutions(self):
@@ -189,44 +159,21 @@ class PhasingEnv(gym.Env):
             frag.assign_haplotype(node_labels[i])
         return self.state.frag_graph.fragments
 
-    # def get_cut_value(self, node_labels=None):
-    #     if not self.config.fragment_norm and not self.config.clip:
-    #         return self.state.best_reward
-    #     else:
-    #         return self.state.best_reward * self.state.frag_graph.graph_properties["total_num_frag"]
-
     def get_cut_value(self):
-        mult = 1
-        if self.config.fragment_norm or self.config.clip:
-            mult = self.state.frag_graph.graph_properties["total_num_frag"]
-        reward = self.state.current_total_reward
-        if self.config.take_best:
-            reward = self.state.best_reward
-
-        return reward * mult
+        return self.state.current_total_reward
 
     def render(self, mode='human'):
         """Display the environment"""
         node_labels = self.state.g.ndata['cut_member_hap0'][:].cpu().squeeze().numpy().tolist()
-        edge_weights = self.state.g.edata['weight'].cpu().squeeze().numpy().tolist()
-        edges_src = self.state.g.edges()[0].cpu().squeeze().numpy().tolist()
-        edges_dst = self.state.g.edges()[1].cpu().squeeze().numpy().tolist()
-        edge_indices = zip(edges_src, edges_dst)
-        edge_weights = dict(zip(edge_indices, edge_weights))
         if mode == 'view':
             vis.plot_network(self.state.g.to_networkx(), node_labels)
         elif mode == 'weighted_view':
+            edge_weights = self.state.g.edata['weight'].cpu().squeeze().numpy().tolist()
+            edges_src = self.state.g.edges()[0].cpu().squeeze().numpy().tolist()
+            edges_dst = self.state.g.edges()[1].cpu().squeeze().numpy().tolist()
+            edge_indices = zip(edges_src, edges_dst)
+            edge_weights = dict(zip(edge_indices, edge_weights))
             vis.plot_weighted_network(self.state.g.to_networkx(), node_labels, edge_weights)
-        elif mode == "bipartite":
-            vis.plot_bipartite_network(self.state.g.to_networkx(), node_labels, edge_weights)
-        elif mode == "density":
-            vis.visualize_dense_graph(self.state.g.to_networkx(), node_labels, edge_weights)
-        else:
-            # save the plot to file
-            pass
-
-    def get_random_valid_action(self):
-        pass
 
     def get_all_valid_actions(self):
         return (self.state.assigned == 0.).nonzero()

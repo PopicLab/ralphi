@@ -15,8 +15,6 @@ class ActorCriticNet(nn.Module):
     def __init__(self, config):
         layers_dict = {"gat": GAT, "gine": GINE, "gin": GIN, "pna": PNA, "gcn": GCN, "gcn2": GCNv2}
         super(ActorCriticNet, self).__init__()
-        # linear transformation will be applied to the last dimension of the input tensor
-        # which must equal hidden_dim -- number of features per node
         self.policy_graph_hap0 = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
         nn.init.orthogonal_(self.policy_graph_hap0.weight.data)
         self.policy_graph_hap1 = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
@@ -61,13 +59,11 @@ class DiscreteActorCriticAgent:
 
     def set_learning_params(self):
         self.gamma = self.env.config.gamma
-        # very small learning rate appears to stabilize training; TODO (Anant): experiment with LR scheduler
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.env.config.lr)
         for state in self.optimizer.state.values():
             for k, v in state.items():
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(self.env.config.device)
-        #self.optimizer = self.optimizer.to(device)
         self.batch_size = 32
 
     def select_action(self, greedy=False, first=False):
@@ -75,22 +71,17 @@ class DiscreteActorCriticAgent:
             return 0
         [pi, val] = self.model(self.env.state.g)
         pi = pi.squeeze()
-        """if not first:
-            pi[self.env.get_all_non_neighbour_actions()] = -float('Inf')"""
         pi[self.env.get_all_invalid_actions()] = -float('Inf')
         if greedy:
             greedy_choice = torch.argmax(pi)
             return greedy_choice.item()
         pi = F.softmax(pi, dim=0)
-        # print("pi: ", pi)
         dist = torch.distributions.categorical.Categorical(pi)
         action = dist.sample()
-        # print("action: ", action)
         self.model.actions.append((dist.log_prob(action), val[0]))
         return action.item()
 
     def run_episode(self, config, test_mode=False, episode_id=None):
-        start_time = time.time()
         done = False
         episode_reward = 0
         first = True
@@ -99,19 +90,16 @@ class DiscreteActorCriticAgent:
             first = False
             _, reward, done = self.env.step(action)
             episode_reward += reward
-            if not test_mode:
-                self.model.rewards.append(reward)
+            if not test_mode: self.model.rewards.append(reward)
         if not test_mode:
-            loss = self.update_model(episode_id)
+            self.update_model(episode_id)
             cut_size = self.env.get_cut_value()
-            #self.log_episode_stats(episode_id, episode_reward, loss, time.time() - start_time)
             wandb.log({"Episode": episode_id, "Training Episode Reward": episode_reward})
             wandb.log({"Episode": episode_id, "Training Cut Size": cut_size})
         return episode_reward
 
     def log_episode_stats(self, episode_id, reward, loss, runtime):
         self.env.state.frag_graph.log_graph_properties(episode_id)
-        # graph_stats = self.env.state.frag_graph.graph_properties
         graph_stats = []
         logging.getLogger(config.MAIN_LOG).info("Episode: %d. Reward: %d, ActorLoss: %d, CriticLoss: %d, TotalLoss: %d,"
                                                 " CutSize: %d, Runtime: %d" %

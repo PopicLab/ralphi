@@ -1,4 +1,3 @@
-import seq.sim as seq
 import seq.frags as frags
 import networkx as nx
 import engine.config as config_utils
@@ -67,18 +66,15 @@ class FragGraph:
         return frags_unique
 
     @staticmethod
-    def build(fragments, features=[], compute_trivial=False, compress=False, articulation_split=False):
+    def build(fragments, features=[], compute_trivial=False, compress=False):
         logging.info("Input number of fragments: %d" % len(fragments))
         if compress and fragments:
             logging.info("Compressing identical fragments")
             fragments = FragGraph.merge_fragments_by_identity(fragments)
             logging.info("Compressed number of fragments: %d" % len(fragments))
-        # if articulation_split:
-        #     fragments = frags.split_articulation_fragments(fragments)
         frag_graph = nx.Graph()
         logging.info("Constructing fragment graph from %d fragments" % len(fragments))
 
-        one_coverage_var = [f1.variants for f1 in fragments]
         for i, f1 in enumerate(tqdm.tqdm(fragments)):
             frag_graph.add_node(i)
             for j in range(i + 1, len(fragments)):
@@ -86,8 +82,6 @@ class FragGraph:
                 # skip since fragments are sorted by vcf_idx_start
                 if f1.vcf_idx_end < f2.vcf_idx_start: break
                 frag_variant_overlap = f1.overlap(f2)
-                if 'one_coverage' in features:
-                    one_coverage_var = [var for var in one_coverage_var if var not in frag_variant_overlap]
                 if not frag_variant_overlap: continue
                 n_conflicts = 0
                 for variant_pair in frag_variant_overlap:
@@ -97,22 +91,16 @@ class FragGraph:
                 if compress:
                     weight = weight * f1.n_copies * f2.n_copies
                 # TODO(viq): differentiate between no overlap and half conflicts
-                # Include zero-weight edges for now so that we ensure a variant only belongs to one connected component,
-                # as otherwise half-conflicts can result in a variant being split between two connected components.
-                # TODO:(Anant): revisit this since these zero-weight edges provide no phasing information
-                if weight != 0:
-                    frag_graph.add_edge(i, j, weight=weight)
+                if weight != 0: frag_graph.add_edge(i, j, weight=weight)
         return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)
 
     def set_graph_properties(self, features, config=None):
         if 'betweenness' in features and "betweenness" not in self.graph_properties:
-            # if there is more nodes than num_pivots, use "num_pivots" pivots for betweeness approximation
             k = None
-            seed = 1234
-            if config and config.approximate_betweenness and (int(config.num_pivots) < self.n_nodes):
-                k = int(config.num_pivots)
-                seed = config.seed
-            self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=seed)
+            if config.approximate_betweenness and (config.num_pivots < self.n_nodes):
+                # if there is more nodes than num_pivots, use "num_pivots" pivots for betweenness approximation
+                k = config.num_pivots
+            self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=config.seed)
         self.set_node_features(features)
 
     def log_graph_properties(self, episode_id):
@@ -129,7 +117,6 @@ class FragGraph:
         return vcf_positions, len(vcf_positions)
 
     def construct_vcf_for_frag_graph(self, input_vcf, output_vcf, vcf_dict):
-        print("updating graph indexes to reflect seperated VCF")
         vcf_positions, _ = self.get_variants_set()
         node_mapping = {j: i for (i, j) in enumerate(sorted(vcf_positions))}
 
@@ -256,7 +243,7 @@ def load_connected_components(frag_file_fname, features, config):
             connected_components = pickle.load(f)
     else:
         fragments = frags.parse_frag_file(frag_file_fname.strip())
-        graph = FragGraph.build(fragments, features, compute_trivial=False, compress=config.compress, articulation_split=config.articulation_split)
+        graph = FragGraph.build(fragments, features, compute_trivial=False, compress=config.compress)
         logging.info("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
         logging.info("Finding connected components...")
         connected_components = graph.connected_components_subgraphs(
@@ -284,16 +271,14 @@ class FragGraphGen:
         # client = storage.Client() #.from_service_account_json('/full/path/to/service-account.json')
         # bucket = client.get_bucket('bucket-id-here')
         if self.graph_dataset is not None:
-            for epoch in range(self.config.epochs):
-                index_df = self.graph_dataset
-                for index, component_row in index_df.iterrows():
+            for _ in range(self.config.epochs):
+                for index, component_row in self.graph_dataset.iterrows():
                     with open(component_row.component_path, 'rb') as f:
                         if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
                             continue
-                        subgraph = pickle.load(f)  # [component_row['index']]  # index in to list of graphs
-                        if self.is_invalid_subgraph(subgraph):
-                            continue
-                        print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
+                        subgraph = pickle.load(f)
+                        if self.is_invalid_subgraph(subgraph): continue
+                        logging.debug("Processing subgraph with %d nodes..." % subgraph.n_nodes)
                         if self.features: 
                             subgraph.set_graph_properties(self.features, config=self.config)
                         yield subgraph
@@ -302,19 +287,16 @@ class FragGraphGen:
             with open(self.config.frag_panel_file, 'r') as panel:
                 for frag_file_fname in panel:
                     connected_components = load_connected_components(frag_file_fname, self.features, self.config)
-                    if not self.config.debug:
-                        # decorrelate connected components, since otherwise we may end up processing connected components in
-                        # the order of the corresponding variants which could result in some unwanted correlation
-                        # during training between e.g. if there are certain regions of variants with many errors
+                    if not self.config.test_mode:
                         random.seed(self.config.seed)
                         random.shuffle(connected_components)
                     print("Number of connected components: ", len(connected_components))
                     for subgraph in connected_components:
                         if self.is_invalid_subgraph(subgraph) or self.is_not_in_size_range(subgraph):
                             continue
-                        print("Processing subgraph with ", subgraph.n_nodes, " nodes...")
+                        logging.debug("Processing subgraph with %d nodes..." % subgraph.n_nodes)
                         yield subgraph
-                    print("Finished processing file: ", frag_file_fname)
+                    logging.info("Finished processing file: %s" % frag_file_fname)
             yield None
         else:
             while True:

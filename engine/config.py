@@ -198,6 +198,7 @@ class TestConfig(Config):
             'load_components': False,
             'store_components': False,
             'save_solution': False,
+            'test_mode': True,
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):

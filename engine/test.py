@@ -6,7 +6,6 @@ import envs.phasing_env
 import seq.var as var
 import engine.config as config_utils
 import seq.phased_vcf as vcf_writer
-import utils.post_processing
 
 
 # ------ CLI ------
