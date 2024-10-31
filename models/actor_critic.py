@@ -107,8 +107,6 @@ class DiscreteActorCriticAgent:
             #self.log_episode_stats(episode_id, episode_reward, loss, time.time() - start_time)
             wandb.log({"Episode": episode_id, "Training Episode Reward": episode_reward})
             wandb.log({"Episode": episode_id, "Training Cut Size": cut_size})
-        if config.render:
-            self.env.render(config.render_view)
         return episode_reward
 
     def log_episode_stats(self, episode_id, reward, loss, runtime):

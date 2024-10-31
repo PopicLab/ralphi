@@ -73,14 +73,11 @@ class FragGraph:
             logging.info("Compressing identical fragments")
             fragments = FragGraph.merge_fragments_by_identity(fragments)
             logging.info("Compressed number of fragments: %d" % len(fragments))
-        if articulation_split:
-            fragments = frags.split_articulation_fragments(fragments)
+        # if articulation_split:
+        #     fragments = frags.split_articulation_fragments(fragments)
         frag_graph = nx.Graph()
         logging.info("Constructing fragment graph from %d fragments" % len(fragments))
-        overlap = [0 for _ in fragments]
-        discordance = [0 for _ in fragments]
-        number_overlap = [0 for _ in fragments]
-        current_overlap_max = [0 for _ in fragments]
+
         one_coverage_var = [f1.variants for f1 in fragments]
         for i, f1 in enumerate(tqdm.tqdm(fragments)):
             frag_graph.add_node(i)
@@ -105,114 +102,14 @@ class FragGraph:
                 # TODO:(Anant): revisit this since these zero-weight edges provide no phasing information
                 if weight != 0:
                     frag_graph.add_edge(i, j, weight=weight)
-                # Even fragments with 0 weight edges are considered to compute the features
-                if 'discordance_ratio' in features:
-                    # maximum discordance between two nodes is 1
-                    aux = 4 * (len(frag_variant_overlap) - n_conflicts) * n_conflicts / len(
-                        frag_variant_overlap) ** 2
-                    discordance[i] += aux
-                    discordance[j] += aux
-                if 'overlap_ratio' in features or 'average_coverage' in features:
-                    overlap[i] += len(frag_variant_overlap)
-                    overlap[j] += len(frag_variant_overlap)
-                if 'discordance_ratio' in features or 'overlap_ratio' in features:
-                    number_overlap[i] += 1
-                    number_overlap[j] += 1
-                if 'overlap_max' in features and len(frag_variant_overlap) > current_overlap_max[i]:
-                    current_overlap_max[i] = len(frag_variant_overlap)
-                if 'overlap_max' in features and len(frag_variant_overlap) > current_overlap_max[j]:
-                    current_overlap_max[j] = len(frag_variant_overlap)
-            # The discordance ratio is the average product between agreement and disagreement between the fragment and its neighbors
-            # It is normalized such that it is 0 if there is perfect agreement or disagreement with neighbors and the higher the more errors in the read or the neighbors
-            if 'discordance_ratio' in features and number_overlap[i] > 0:
-                frag_graph.nodes[i]["discordance_ratio"] = [discordance[i] / number_overlap[i]]
-            elif 'discordance_ratio' in features:
-                frag_graph.nodes[i]["discordance_ratio"] = [0]
-            # The overlap ratio is the average ratio of overlap of a fragment's variants compared to the total size of the fragment
-            if 'overlap_ratio' in features and number_overlap[i] > 0:
-                frag_graph.nodes[i]["overlap_ratio"] = [overlap[i] / len(f1.variants) / number_overlap[i]]
-            elif 'overlap_ratio' in features:
-                frag_graph.nodes[i]["overlap_ratio"] = [0]
-            # Maximum overlap normalized by length
-            if 'overlap_max' in features:
-                frag_graph.nodes[i]["overlap_max"] = [current_overlap_max[i] / len(f1.variants)]
-            # Average number of other fragments covering this fragment's variants
-            if 'average_coverage' in features:
-                frag_graph.nodes[i]["average_coverage"] = [overlap[i] / len(f1.variants)]
-            # Number of variants only covered by this fragments, normalized by the length
-            if 'one_coverage' in features:
-                frag_graph.nodes[i]["average_coverage"] = [len(one_coverage_var[i]) / len(f1.variants)]
         return FragGraph(frag_graph, fragments, features, compute_trivial=compute_trivial)
 
     def set_graph_properties(self, features, config=None):
-        # TODO: which properties do we want to save here; probably not diameter since expensive to compute
-        if 'is_articulation' in features and "list_articulation_points" not in self.graph_properties:
-            self.graph_properties["list_articulation_points"] = list(nx.articulation_points(self.g))
-        if 'n_nodes' in features and "n_nodes" not in self.graph_properties:
-            self.graph_properties["pos_edges"] = 0
-            self.graph_properties["neg_edges"] = 0
-            self.graph_properties["zero_edges"] = 0
-            self.graph_properties["sum_of_pos_edge_weights"] = 0
-            self.graph_properties["sum_of_neg_edge_weights"] = 0
-            self.graph_properties['max_weight'] = 0
-            self.graph_properties['min_weight'] = 0
-            for _, _, a in self.g.edges(data=True):
-                edge_weight = a['weight']
-                if edge_weight > 0:
-                    self.graph_properties["pos_edges"] += 1
-                    self.graph_properties["sum_of_pos_edge_weights"] += edge_weight
-                    if edge_weight > self.graph_properties['max_weight']:
-                        self.graph_properties['max_weight'] = edge_weight
-                elif edge_weight < 0:
-                    self.graph_properties["neg_edges"] += 1
-                    self.graph_properties["sum_of_neg_edge_weights"] += edge_weight
-                    if edge_weight < self.graph_properties['min_weight']:
-                        self.graph_properties['min_weight'] = edge_weight
-                else:
-                    self.graph_properties["zero_edges"] += 1
-            degrees = [val for (node, val) in self.g.degree()]
-            self.graph_properties["max_degree"] = max(degrees)
-            self.graph_properties["min_degree"] = min(degrees)
-            self.graph_properties["n_nodes"] = self.g.number_of_nodes()
-            self.graph_properties["n_edges"] = self.g.number_of_edges()
-            self.graph_properties["density"] = nx.density(self.g)
-            self.graph_properties["articulation_points"] = len(self.graph_properties["list_articulation_points"])
-            self.graph_properties["node_connectivity"] = nx.node_connectivity(self.g)
-            self.graph_properties["edge_connectivity"] = nx.edge_connectivity(self.g)
-            self.graph_properties["diameter"] = nx.diameter(self.g)
-            self.graph_properties["trivial"] = self.trivial
-            variants = [frag.n_variants for frag in self.fragments]
-            _, self.graph_properties['num_variants'] = self.get_variants_set()
-            self.graph_properties['max_num_variant'] = max(variants)
-            self.graph_properties['min_num_variant'] = min(variants)
-            self.graph_properties['avg_num_variant'] = np.mean(variants)
-            self.graph_properties['total_num_frag'] = sum([frag.n_copies for frag in self.fragments])
-            self.graph_properties['compression_factor'] = self.graph_properties['n_nodes'] / self.graph_properties[
-                'total_num_frag']
-
-        if 'reachability_hap0' in features and "compo" not in self.graph_properties:
-            edges = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
-            edges[edges > 0] = 0
-            neg_graph = nx.from_numpy_array(edges)
-            self.graph_properties['compo'] = [c for c in nx.connected_components(neg_graph)]
-            self.graph_properties['neg_connectivity'] = {node: num for num, sub_compo in
-                                                         enumerate(self.graph_properties['compo']) for node in
-                                                         sub_compo}
-        if "shortest_pos_path_hap0" in features and 'pos_paths' not in self.graph_properties:
-            pos_graph = nx.to_numpy_array(self.g, nodelist=self.g.nodes(), weight='weight')
-            pos_graph[pos_graph < 0] = 0
-            pos_graph = nx.from_numpy_array(pos_graph)
-            self.graph_properties['pos_paths'] = dict(nx.shortest_path_length(pos_graph))
-
         if 'betweenness' in features and "betweenness" not in self.graph_properties:
             # if there is more nodes than num_pivots, use "num_pivots" pivots for betweeness approximation
-            k = None
-            seed = 1234
             if config and config.approximate_betweenness and (config.num_pivots < self.n_nodes):
-                k = config.num_pivots
-                seed = config.seed
-            self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=seed)
-
+                self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=config.num_pivots,
+                                                                                 seed=config.seed)
         self.set_node_features(features)
 
     def log_graph_properties(self, episode_id):
@@ -260,105 +157,6 @@ class FragGraph:
 
             if 'betweenness' in features:
                 self.g.nodes[node]['betweenness'] = [self.graph_properties["betweenness"][node]]
-
-            if 'n_variants' in features:
-                self.g.nodes[node]['n_variants'] = [self.fragments[node].n_variants]
-
-            if 'min_qscore' in features:
-                self.g.nodes[node]['min_qscore'] = [min(self.fragments[node].quality)]
-                self.g.nodes[node]['max_qscore'] = [max(self.fragments[node].quality)]
-                self.g.nodes[node]['avg_qscore'] = [
-                    sum(self.fragments[node].quality) / len(self.fragments[node].quality)]
-
-            if 'pos_neighbors' in features or "homophily" in features:
-                num_pos = 0
-                num_neg = 0
-                max_weight = 0
-                min_weight = 0
-                for neighbor in self.g[node].items():
-                    nbr_weight = neighbor[1]['weight']
-                    if nbr_weight > 0:
-                        num_pos = num_pos + 1
-                        if nbr_weight > max_weight:
-                            max_weight = nbr_weight
-                    elif nbr_weight < 0:
-                        num_neg = num_neg + 1
-                        if nbr_weight < min_weight:
-                            min_weight = nbr_weight
-                if "node_homophily" in features:
-                    self.g.nodes[node]['node_homophily'] = [num_pos / (num_pos + num_neg)]
-                if 'pos_neighbors' in features:
-                    self.g.nodes[node]['pos_neighbors'] = [num_pos]
-                    self.g.nodes[node]['neg_neighbors'] = [num_neg]
-                    self.g.nodes[node]['max_weight_node'] = [
-                        max_weight / self.graph_properties["max_weight"] if self.graph_properties[
-                                                                                "max_weight"] != 0 else 0]
-                    self.g.nodes[node]['min_weight_node'] = [
-                        min_weight / self.graph_properties["min_weight"] if self.graph_properties[
-                                                                                "min_weight"] != 0 else 0]
-
-            if 'is_articulation' in features:
-                self.g.nodes[node]['is_articulation'] = [
-                    1 / self.graph_properties["articulation_points"] if node in self.graph_properties[
-                        "list_articulation_points"] else 0]
-
-            if 'n_nodes' in features:
-                self.g.nodes[node]['num_articulation'] = [self.graph_properties["articulation_points"]]
-                self.g.nodes[node]['diameter'] = [self.graph_properties["diameter"]]
-                self.g.nodes[node]['density'] = [self.graph_properties["density"]]
-                self.g.nodes[node]['max_degree'] = [self.graph_properties["max_degree"]]
-                self.g.nodes[node]['min_degree'] = [self.graph_properties["min_degree"]]
-                self.g.nodes[node]['n_nodes'] = [self.graph_properties["n_nodes"]]
-                self.g.nodes[node]['n_edges'] = [self.graph_properties["n_edges"]]
-                self.g.nodes[node]['node_connectivity'] = [self.graph_properties["node_connectivity"]]
-                self.g.nodes[node]['edge_connectivity'] = [self.graph_properties["edge_connectivity"]]
-                self.g.nodes[node]['max_weight'] = [self.graph_properties["max_weight"]]
-                self.g.nodes[node]['min_weight'] = [self.graph_properties["min_weight"]]
-                self.g.nodes[node]['num_fragments'] = [
-                    self.fragments[node].n_copies / self.graph_properties['total_num_frag']]
-                self.g.nodes[node]['max_num_variant'] = [self.graph_properties['max_num_variant']]
-                self.g.nodes[node]['min_num_variant'] = [self.graph_properties['min_num_variant']]
-                self.g.nodes[node]['avg_num_variant'] = [self.graph_properties['avg_num_variant']]
-                self.g.nodes[node]['compression_factor'] = [self.graph_properties['compression_factor']]
-
-            if 'reachability_hap0' in features:
-                self.g.nodes[node]['reachability_hap0'] = [0.0]
-                self.g.nodes[node]['reachability_hap1'] = [0.0]
-
-                self.g.nodes[node]['shortest_pos_path_hap0'] = [0]
-                self.g.nodes[node]['shortest_pos_path_hap1'] = [0]
-
-                self.g.nodes[node]['val_pos_path_hap0'] = 0
-                self.g.nodes[node]['val_pos_path_hap1'] = 0
-
-            if "edge_homophily" in features:
-                self.g.nodes[node]['edge_homophily'] = [0.0]
-
-    def compute_variant_bitmap(self, mask_len=200):
-        # vcf_positions contains the list of vcf positions within the connected component formed by these fragments
-        # since this is a variable length node features, we need to zero-pad it such that it retains a fixed size
-        # TODO: by default keep the experimental variant bitmap off for now
-        #  revisit feature toggles once we finalize which features to use
-        vcf_positions = set()
-        for frag in self.fragments:
-            for block in frag.blocks:
-                for var in range(block.vcf_idx_start, block.vcf_idx_end + 1):
-                    vcf_positions.add(var)
-        vcf_positions = sorted(list(vcf_positions))
-        var_mapping = {j: i for (i, j) in enumerate(vcf_positions)}
-        for frag in self.fragments:
-            frag.vcf_positions = [0.0] * mask_len
-            for block in frag.blocks:
-                for var in range(block.vcf_idx_start, block.vcf_idx_end + 1):
-                    try:
-                        frag.vcf_positions[var_mapping[var]] = 1.0
-                        continue
-                    except IndexError:
-                        # if there are more variants than the mask_len, then we chop off the overflowing variants
-                        pass
-
-        for node in self.g.nodes:
-            self.g.nodes[node]['variant_bitmap'] = [self.fragments[node].vcf_positions]
 
     def normalize_edges(self, weight_norm, fragment_norm):
         if weight_norm:
