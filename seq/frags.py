@@ -6,18 +6,14 @@ from collections import defaultdict
 class FragVariantHandle:
     def __init__(self, vcf_idx, allele, qscore=None):
         self.vcf_idx = vcf_idx
-        self.allele = allele  # 0 or 1
+        self.allele = allele
         self.qscore = qscore
-
-        # phasing metadata
         self.haplotype = None
 
     def __str__(self):
         return "Variant: vcf_idx={} allele={} qscore={}".format(self.vcf_idx, self.allele, self.qscore)
 
     def __eq__(self, v):
-        # temporarily disable equality check by qscore, since on simulated data this is not meaningful for compression
-        #return (self.vcf_idx, self.allele, self.qscore, self.haplotype) == (v.vcf_idx, v.allele, v.qscore, v.haplotype)
         return(self.vcf_idx, self.allele, self.haplotype) == (v.vcf_idx, v.allele, v.haplotype)
 
 
@@ -79,13 +75,6 @@ class Fragment:
         return "\nread_id={} n_variants={} variants=\n".format(self.read_id, self.n_variants) + \
                '\n'.join(map(str, self.variants))
 
-
-    def split_at(self, position):
-        assert(self.vcf_idx_start <= position <= self.vcf_idx_end) 
-        split_index = next(i for i, variant in enumerate(self.variants) if variant.vcf_idx >= position)
-        return Fragment(self.read_id, variants=self.variants[:split_index], n_copies=self.n_copies),  Fragment(self.read_id, variants=self.variants[split_index:], n_copies=self.n_copies)
-
- 
     def overlap(self, fragment):
         if min(self.vcf_idx_end, fragment.vcf_idx_end) < max(self.vcf_idx_start, fragment.vcf_idx_start):
             return []
@@ -126,63 +115,6 @@ def convert_qscore(qscore):
     return 10 ** ((ord(qscore) - 33) / (-10))
 
 
-def split_articulation_fragments(fragments):
-    """
-    Splits fragments at positions where exactly one fragment provides incoming evidence
-    connecting previous positions to the position. Assumes that input fragments are sorted.
-    TODO: directly compute connected components (phasing blocks) within this logic
-    TODO: redesign this using an interval tree for faster lookup of incident fragments
-    """
-
-    logging.info("Splitting articulation fragments...")
-
-    frag2split = defaultdict(list)
-    frag2evidence = defaultdict(list)
-
-    vcf_positions = sorted(set(var.vcf_idx for frag in fragments for var in frag.variants))
-
-    frag_search_idx = 0
-    for index, position in tqdm.tqdm(enumerate(vcf_positions[1:], start=1)):
-        single_incident_frag_idx = None
-        for i in range(frag_search_idx, len(fragments)):
-            if fragments[i].vcf_idx_start >= position: break
-            if fragments[i].vcf_idx_end < position: continue
-            # fragments[i] provides incoming evidence into position
-            if single_incident_frag_idx is None:
-                single_incident_frag_idx = i
-                # optimization: when looking for incident fragments at the next position,
-                # directly start search at fragments[i] (due to fragment sorted order guarantee)
-                frag_search_idx = i
-            else:
-                # multiple pieces of evidence
-                single_incident_frag_idx = None
-                break
-        if single_incident_frag_idx is not None:
-            if vcf_positions[index - 1] not in frag2evidence[single_incident_frag_idx]:
-                frag2split[single_incident_frag_idx].append(position)
-            frag2evidence[single_incident_frag_idx].append(position)
-
-    split_fragments = []
-    for frag_index, frag in enumerate(fragments):
-        if not frag2split[frag_index]:
-            split_fragments.append(frag)
-        else:
-            cur_frag = frag
-            # iteratively split fragment at each splitting location
-            for elem in sorted(frag2split[frag_index]):
-                if cur_frag.vcf_idx_start < elem <= cur_frag.vcf_idx_end:
-                    left, right = cur_frag.split_at(elem)
-                    left.fragment_group_id = frag_index
-                    split_fragments.append(left)
-                    cur_frag = right
-
-            cur_frag.fragment_group_id = frag_index
-            split_fragments.append(cur_frag)
-
-    logging.info("Finished splitting articulation fragments...")
-    return sorted(split_fragments, key=lambda frag: frag.vcf_idx_start)
-
-
 def parse_frag_file(frags_fname):
     fragments = []
     with open(frags_fname, 'r') as f:
@@ -191,11 +123,3 @@ def parse_frag_file(frags_fname):
     # sort fragments to optimize graph construction
     fragments = sorted(fragments, key=lambda frag: frag.vcf_idx_start)
     return fragments
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Load fragment file")
-    parser.add_argument('--frags', help='Input fragment file')
-    args = parser.parse_args()
-    fragments = parse_frag_file(args.frags)
-
