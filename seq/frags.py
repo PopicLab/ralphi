@@ -105,7 +105,7 @@ class Fragment:
     def parse_from_file(frag_line):
         fields = frag_line.split()
         n_blocks = int(fields[0])
-        field_idx = 2
+        field_idx = 1
         blocks = []
         for _ in range(n_blocks):  # parse each block
             vcf_index = int(fields[field_idx]) - 1  # -1 since the variant index is 1-based in the fragment file

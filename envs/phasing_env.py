@@ -170,10 +170,10 @@ class PhasingEnv(gym.Env):
         self.state = self.init_state()
         return self.state, not self.has_state()
 
-    def lookup_error_free_instance(self):
-        assert self.state.frag_graph.trivial, "Looking up a solution for a non-trivial graph!"
+    def process_error_free_instance(self):
+        assert self.state.frag_graph.trivial
         assert self.state.frag_graph.hap_a_frags is not None and self.state.frag_graph.hap_b_frags is not None, \
-            "The solution was not computed"
+            "The solution was not precomputed"
         for i, frag in enumerate(self.state.frag_graph.fragments):
             if i in self.state.frag_graph.hap_a_frags:
                 frag.assign_haplotype(0.0)
@@ -189,12 +189,21 @@ class PhasingEnv(gym.Env):
             frag.assign_haplotype(node_labels[i])
         return self.state.frag_graph.fragments
 
-    def get_cut_value(self, node_labels=None):
-        if not self.config.fragment_norm and not self.config.clip:
-            return self.state.best_reward
-        else:
-            return self.state.best_reward * self.state.frag_graph.graph_properties["total_num_frag"]
+    # def get_cut_value(self, node_labels=None):
+    #     if not self.config.fragment_norm and not self.config.clip:
+    #         return self.state.best_reward
+    #     else:
+    #         return self.state.best_reward * self.state.frag_graph.graph_properties["total_num_frag"]
 
+    def get_cut_value(self):
+        mult = 1
+        if self.config.fragment_norm or self.config.clip:
+            mult = self.state.frag_graph.graph_properties["total_num_frag"]
+        reward = self.state.current_total_reward
+        if self.config.take_best:
+            reward = self.state.best_reward
+
+        return reward * mult
 
     def render(self, mode='human'):
         """Display the environment"""

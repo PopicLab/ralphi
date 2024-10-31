@@ -49,8 +49,6 @@ def write_fragments(reads, variants, out_file_name):
         blocks = get_fragment_blocks(read, pos2idx)
         block_allele_str = " ".join(str(b[0]) + " " + b[1] for b in blocks)
         block_qual_str = "".join(str(c) if c in string.printable else '!' for b in blocks for c in b[2])
-        assert len(blocks) > 0
-        assert len(block_qual_str) > 1
         print(len(blocks), block_allele_str, block_qual_str, sep=" ", file=frags_file)
 
 
@@ -170,8 +168,8 @@ def select_variants(reads, config, variant_table):
                     filtered_variants.add(variant_position + 1)
 
 
-    #logging.info("Number of variants filtered: %d" % len(filtered_variants))
-    #logging.info("Variants filtered by types: %s" %  filter_by_type)
+    logging.info("Number of variants filtered: %d" % len(filtered_variants))
+    logging.info("Variants filtered by types: %s" %  filter_by_type)
     # remove variants from reads
     for read in reads:
         read_filtered_ids = set()
@@ -197,6 +195,7 @@ def main():
     config = config_utils.load_config(args.config, config_type=config_utils.CONFIG_TYPE.FRAGS)
     logging.info(config)
     generate_fragments(config)
+
 
 if __name__ == "__main__":
     main()

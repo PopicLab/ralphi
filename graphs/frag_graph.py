@@ -107,9 +107,12 @@ class FragGraph:
     def set_graph_properties(self, features, config=None):
         if 'betweenness' in features and "betweenness" not in self.graph_properties:
             # if there is more nodes than num_pivots, use "num_pivots" pivots for betweeness approximation
-            if config and config.approximate_betweenness and (config.num_pivots < self.n_nodes):
-                self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=config.num_pivots,
-                                                                                 seed=config.seed)
+            k = None
+            seed = 1234
+            if config and config.approximate_betweenness and (int(config.num_pivots) < self.n_nodes):
+                k = int(config.num_pivots)
+                seed = config.seed
+            self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=seed)
         self.set_node_features(features)
 
     def log_graph_properties(self, episode_id):
@@ -303,6 +306,7 @@ class FragGraphGen:
                         # decorrelate connected components, since otherwise we may end up processing connected components in
                         # the order of the corresponding variants which could result in some unwanted correlation
                         # during training between e.g. if there are certain regions of variants with many errors
+                        random.seed(self.config.seed)
                         random.shuffle(connected_components)
                     print("Number of connected components: ", len(connected_components))
                     for subgraph in connected_components:
