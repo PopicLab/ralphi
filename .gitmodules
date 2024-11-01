@@ -1,6 +1,0 @@
-[submodule "third-party/HapCUT2"]
-	path = third_party/HapCUT2
-	url = https://github.com/vibansal/HapCUT2.git
-[submodule "third-party/htslib"]
-	path = third_party/htslib
-	url = https://github.com/samtools/htslib.git
