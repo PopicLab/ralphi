@@ -39,4 +39,4 @@ The key required and optional YAML parameters for phasing are listed below:
 * ```n_proc```  [*optional*] number of cores to use for phasing (default: 1)
 
 Two models are currently provided in the ```data/models``` directory: 
-(1) ralphi.long.pt is recommended for ONT inputs and (2) ralphi.short.pt is recommended for Illumina short-read inputs.
+(1) ralphi.v1.long.pt is recommended for ONT inputs and (2) ralphi.v1.short.pt is recommended for Illumina short-read inputs.
