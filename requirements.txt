@@ -10,7 +10,7 @@ click==8.1.7
 cloudpickle==3.0.0
 contourpy==1.2.0
 cycler==0.12.1
-dgl==2.0.0+cu118
+dgl==2.1.0
 dglgo==0.0.2
 docker-pycreds==0.4.0
 docutils==0.20.1
@@ -103,3 +103,4 @@ wandb==0.16.3
 xopen==1.9.0
 zipp==3.17.0
 zlib-ng==0.4.0
+intervaltree==3.1.0

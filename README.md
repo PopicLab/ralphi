@@ -1,88 +1,42 @@
-## RL-based genome phasing
+## Deep reinforcement learning framework for haplotype assembly
 
 ### Overview
 
-Genome phasing is a classic key problem in genome analysis that involves partitioning read fragments into the maternal 
-and paternal haplotype sets. Reads that span more than one variant position provide evidence about which alleles 
-occur on the same haplotype; however, read errors make this problem challenging. 
-Current read-based phasing methods heuristically partition the fragments using a variety of metrics, 
-for example minimizing the number of errors that need to be corrected in each set 
-(the NP-hard MEC objective used by HapCut) or solving a max-cut problem (the NP-hard MFC objective used by RefHap). 
-In this project, we investigate a new approach to genome phasing based on reinforcement learning. 
-Our RL agent acts by selecting and assigning a fragment to a haplotype given the MFC-based reward and a state 
-represented by a graph convolutional network, which embeds the read fragment overlap graph derived 
-from the input dataset. 
+```ralphi``` is a deep reinforcement learning framework for haplotype
+assembly, which leverages a graph convolutional neural network and an actor-critic 
+reinforcement learning model to learn the read-to-haplotype assignment algorithm 
+based on the maximum fragment cut (MFC) objective. 
 
-### Code execution
+<a name="install"></a>
+### Installation
 
-Clone the repository with its submodules:
+* Clone the repository:  ```$> git clone git@github.com:PopicLab/ralphi.git```
 
-```git clone --recursive git@github.com:PopicLab/dphase.git```
+* ```$> cd ralphi```
 
-Prior to running the code, setup a Python virtual environment (as described below) 
-and set the PYTHONPATH as follows: ```export PYTHONPATH=${PYTHONPATH}:${PATH_TO_REPO}```
+* Create a new virtual environment: ```$> python3.10 -m venv env```
 
-The ```engine``` directory contains the following key scripts to train/evaluate the model:
+* Activate the environment: ```$> source env/bin/activate```
 
-* ```train.py```: trains the phasing network given a panel of fragment files
-* ```test.py```: phases an input VCF file given a pre-trained model and an input fragment file 
+* Install all the required packages: ```$> pip install -r requirements.txt```
 
-Execution:
+* Set the ```PYTHONPATH``` as follows: ```export PYTHONPATH=${PYTHONPATH}:/path/to/ralphi```
 
-```python engine/train.py --config /path/to/config/train.yaml```
+<a name="guide"></a>
+### Execution
 
-```python engine/test.py  --config /path/to/config/test.yaml```
+To run: ```$> python engine/phase.py --config </path/to/config>```
 
-See `````/engine/config_templates/train.yaml````` for an example of a training config file, and 
-`````/engine/config_templates/test.yaml````` for an example of a testing config file. Note that training requires
-specifying a panel of fragment files to train on, as well as a panel of validation VCF files to provide validation
-stats to help quantify performance of the agent as it trains.
+```engine/phase.py``` phases an input VCF file given a pre-trained model and an input BAM file.
+The key required and optional YAML parameters for phasing are listed below:
 
-### Input fragment file generation
+* ```vcf``` [*required*] path to the VCF variant file (must be compressed and indexed)
+* ```bam``` [*required*] path to the BAM alignment file 
+* ```platform``` [*required*] sequencing platform (options: ```illumina``` or ```ONT```) 
+* ```fa``` [*required*] path to the referene FASTA file
+* ```model_path``` [*required*] path to the pretrained ralphi model (available under )
+* ```chr_names``` [*optional*] list of chromosomes to process: null (all) or a specific list e.g. ["chr1", "chr21"] (default: null)
+* ```n_proc```  [*optional*] number of cores to use for phasing (default: 1)
 
-A per-chromosome fragment file is generated from an unphased VCF and BAM file pair using the third-party 
-HapCUT2 ```extractHAIRS``` script. 
-The WDL workflow to produce such fragment files is implemented in ```workflows/frags.wdl```.
-The inputs to this workflow are: a TSV panel of samples (which includes sample names and bam file paths), 
-a list of chromosomes, and a path to a VCF directory 
-(see the example input parameter file: ```workflows/frags.json```). 
-The output of the workflow is a set of fragment files -- one for each sample and chromosome specified
-in the input. See ```seq/frags.py``` for information about the format of fragment files.
-
-To execute the workflow using WDL/Cromwell:
-```java -jar cromwell-51.jar run workflows/frags.wdl --inputs workflows/frags.json```
-
-### Fragment graphs and phasing environment basics
-
-A fragment graph (```FragGraph```) is initialized given a fragment file: nodes represent read fragments 
-spanning >= 2 variants and edges connect fragments that overlap (i.e. have some variants in common). 
-The weight of each edge is computed based on the number of shared variants and the number of conflicting alleles 
-(see ```graphs/frag_graph.py```). Fragment graphs are decomposed into connected components prior to phasing
-and represent the main state of the phasing environment (embedded using DGL). Each node is associated with 
-a binary feature indicating whether the node has been selected as part of the solution 
-(additional features are also explored).
-
-The phasing environment state consists of the fragment graph and the node assignments to each haplotype (0: H0 1: H1).
-The action space consists of the set of all graph nodes (i.e. the assignment of a node to a haplotype) 
-and a termination step. MFC score is used as the reward function. 
-
-### Benchmarking
-
-The third-party evaluation script ```calculate_haplotype_statistics.py``` provided by HapCUT2 is used for evaluation
-and benchmarking. The script can be executed as follows:
-
-```python3 third-party/HapCUT2/utilities/calculate_haplotype_statistics.py -v1 /path/to/output -v2 /path/to/ground_truth```
-
-
-#### Setup Python virtual environment (tested using Python 3.10.12) (recommended)
-
-1. Create the virtual environment (in the venv directory): 
-```$> python -m venv env```
-
-2. Activate the environment: 
-```$> source env/bin/activate```
-
-3. Install all the required packages (in the virtual environment): \
-```$> pip --no-cache-dir install -r ../requirements.txt```
-
-
+Two models are currently provided in the ```data/models``` directory: 
+(1) ralphi.long.pt is recommended for ONT inputs and (2) ralphi.short.pt is recommended for Illumina short-read inputs.

@@ -16,12 +16,12 @@ class NestedDict(defaultdict):
     def __call__(self):
         return NestedDict(self.default_factory)
 
-def generate_fragments(config):
-    bam_reader = PhasedInputReader(config.bams, config.reference, None, ignore_read_groups=True,
+def generate_fragments(config, chromosome):
+    bam_reader = PhasedInputReader([config.bam], config.reference, None, ignore_read_groups=True,
                                    mapq_threshold=config.mapq, only_snvs=True, overhang=config.realign_overhang)
     vcf_reader = whatshap.vcf.VcfReader(config.vcf, only_snvs=True)
     assert len(vcf_reader.samples) == 1
-    variant_table = next(vcf_reader.__iter__())
+    variant_table = vcf_reader.fetch(chromosome) #next(vcf_reader.__iter__())
     logging.info("Processing %s", variant_table.chromosome)
     variant_table = select_phaseable_variants(vcf_reader.samples[0], variant_table)
     logging.info("Number of variants loaded: %d", len(variant_table))
@@ -38,18 +38,23 @@ def generate_fragments(config):
         reads = reads.subset(readselect.readselection(reads, config.max_coverage))
     if config.log_reads: write_reads(reads, config.out_dir + "/output_reads.txt")
     logging.info("[FINAL] Kept %d reads covering %d variants", len(reads), len(reads.get_positions()))
-    write_fragments(reads, variant_table.variants, config.out_dir + "/fragments.txt")
+    return write_fragments(reads, variant_table.variants, config.out_dir + "/fragments.txt")
 
 def write_fragments(reads, variants, out_file_name):
     pos2idx = {}
     for v in variants:
         pos2idx[v.position] = v.index
     frags_file = open(out_file_name, "w")
+    fragments = []
     for read in reads:
         blocks = get_fragment_blocks(read, pos2idx)
         block_allele_str = " ".join(str(b[0]) + " " + b[1] for b in blocks)
         block_qual_str = "".join(str(c) if c in string.printable else '!' for b in blocks for c in b[2])
-        print(len(blocks), block_allele_str, block_qual_str, sep=" ", file=frags_file)
+        fragments.append(" ".join([str(len(blocks)), block_allele_str, block_qual_str]))
+        #print(len(blocks), block_allele_str, block_qual_str, sep=" ", file=frags_file)
+
+    return fragments
+    
 
 
 def get_fragment_blocks(read, pos2idx):

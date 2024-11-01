@@ -1,7 +1,4 @@
 import argparse
-import tqdm
-import logging
-from collections import defaultdict
 
 class FragVariantHandle:
     def __init__(self, vcf_idx, allele, qscore=None):
@@ -121,5 +118,12 @@ def parse_frag_file(frags_fname):
         for frag_line in f:
             fragments.append(Fragment.parse_from_file(frag_line))
     # sort fragments to optimize graph construction
+    fragments = sorted(fragments, key=lambda frag: frag.vcf_idx_start)
+    return fragments
+
+def parse_frag_repr(frag_repr):
+    fragments = []
+    for frag_line in frag_repr:
+        fragments.append(Fragment.parse_from_file(frag_line))
     fragments = sorted(fragments, key=lambda frag: frag.vcf_idx_start)
     return fragments

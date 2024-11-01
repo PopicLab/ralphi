@@ -21,6 +21,107 @@ STATS_LOG_COLS_VALIDATE = ['Descriptor', 'Episode', 'SumOfCuts', 'SumOfRewards',
                            'Flat Count', 'Phased Count', 'AN50', 'N50']
 
 
+SHARED_DEFAULTS = {
+    'logging_level': "INFO",
+    'n_procs': 1,
+    'num_cores_torch': 4,
+    'device': "cpu",
+    'debug': True,
+    'seed': 1234,
+    'project_name': "ralphi",
+    'run_name': "dual",
+    'log_wandb': False,
+}
+
+MODEL_DEFAULTS = {
+    'node_features_dim': 3,
+    'hidden_dim': [264],
+    'layer_type': "gcn",
+    'embedding_vars': {'attention_layer': [[0]]},
+    'features': ["dual", "between"],
+    'fragment_norm': False,
+    'weight_norm': False,
+    'clip': False,
+    'clip_node': False,
+    'advantage': "nstep",
+    'normalization': False,
+    'flip': False
+}
+
+SHARED_DATA_DEFAULTS = {
+    'mapq': 20,
+    'no_filter': False,
+    'chr_names': None,
+    'compress': True,
+    'approximate_betweenness': True,
+    'num_pivots': 10,
+    "min_highmapq_ratio": 0,
+    'supp_distance_th': 1000000,
+    'read_overlap_th': 100,
+}
+
+DATA_DEFAULTS_SHORT = {
+    'mbq': 13,
+    "realign_overhang": None,
+    'filter_bad_reads': False,
+    'enable_read_selection': False,
+    "max_snp_coverage": float('inf'),
+    'require_hiqh_mapq': False,
+    "min_coverage_to_filter": float('inf'),
+    'enable_strand_filter': False,
+}
+
+
+DATA_DEFAULTS_LONG = {
+    "mbq": 0,
+    "realign_overhang": 10,
+    'filter_bad_reads': True,
+    'max_discordance': 0.1,
+    'enable_read_selection': True,
+    'max_coverage': 15,
+    "max_snp_coverage": 200,
+    'require_hiqh_mapq': True,
+    "min_coverage_to_filter": 8,
+    "min_coverage_strand": 10,
+    'enable_strand_filter': True,
+}
+
+PHASE_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
+PHASE_DEFAULTS.update({
+    'max_graph_size': float('inf'),
+    'skip_singleton_graphs': False,
+    'skip_trivial_graphs': False,
+    'test_mode': True,
+    'load_components': False,
+    'store_components': False,
+    'store_indexes': False,
+    'log_reads': False,
+})
+
+TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS}
+TRAIN_DEFAULTS.update({
+    'test_mode': False,
+    'gamma': 0.98,
+    'lr': 0.00003,
+    'epochs': 1,
+    'drop_chr20': True,
+    'min_graph_size': 1,
+    'max_graph_size': 5000,
+    'skip_singleton_graphs': True,
+    'skip_trivial_graphs': True,
+    'num_cores_validation': 8,
+    'max_episodes': None, # maximum number of episodes to run
+    'interval_validate': 500,  # number of episodes between model validation runs
+    'panel_validation_frags': None,  # fragment files for validation
+    'panel_validation_vcfs': None,  # VCF files for validation
+    'render_view': "weighted_view",
+    'load_components': True,
+    'store_components': True,
+    'store_indexes': True,
+    'pretrained_model': None,
+})
+
+
 class Config:
     def __init__(self, config_file):
         self.config_file = config_file
@@ -32,36 +133,13 @@ class Config:
         Path(self.log_dir).mkdir(parents=True, exist_ok=True)
         Path(self.out_dir).mkdir(parents=True, exist_ok=True)
 
-        # ...shared training and testing configs...
+        # logging
+        logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.getLevelName(self.logging_level),
+                            handlers=[logging.FileHandler(self.log_dir + '/main.log', mode='w'),
+                                      logging.StreamHandler(sys.stdout)])
 
-    def set_defaults(self):
-        default_values = {
-            'num_cores_torch': 4,  # Number of threads to use for Pytorch
-            'device': "cpu",
-            'compress': True,
-            'normalization': False,
-            'debug': True,
-            'epochs': 1,
-            'node_features_dim': 3,
-            'hidden_dim': [264, 264, 264],
-            'light_logging': True,
-            'id': "vanilla",
-            'fragment_norm': False,
-            'weight_norm': False,
-            'clip': False,
-            'features': ["dual", "between"],
-            'consensus_ambiguous': False,
-            'variants_ambiguous': False,
-            'cut_ambiguous': False,
-            'evidence_threshold': 0,
-            'articulation_split': False,
-            'articulation_stitch': False,
-            'approximate_betweenness': True,
-            'num_pivots': 100,
-            'seed': 1234,
-            'done': True
-        }
-        for k, v, in default_values.items():
+    def set_defaults(self, default_values_dict):
+        for k, v, in default_values_dict.items():
             if not hasattr(self, k):
                 self.__setattr__(k, v)
 
@@ -69,6 +147,23 @@ class Config:
         s = " ===== Config =====\n"
         s += '\n\t'.join("{}: {}".format(k, v) for k, v in self.__dict__.items())
         return s
+
+class PhaseConfig(Config):
+    def __init__(self, config_file, **entries):
+        self.__dict__.update(entries)
+        if self.platform == "illumina":
+            self.set_defaults(DATA_DEFAULTS_SHORT)
+        else:
+            self.set_defaults(DATA_DEFAULTS_LONG)
+        self.set_defaults(PHASE_DEFAULTS)
+        self.__dict__.update(entries)
+        super().__init__(config_file)
+
+        if self.chr_names is None:
+            self.chr_names = ['chr{}'.format(x) for x in range(1, 23)]
+        self.device = torch.device("cpu")
+        self.output_vcf = self.out_dir + "/ralphi.vcf"
+        logging.info(self)
 
 
 class TrainingConfig(Config):
@@ -133,77 +228,6 @@ class TrainingConfig(Config):
         else:
             self.device = torch.device("cpu")
 
-    def set_defaults(self):
-        super().set_defaults()
-        default_values = {
-            'project_name': "dphase_experiments",
-            'run_name': "vanilla",
-            'panel_validation_frags': None,  # Fragment files for validation
-            'panel_validation_vcfs': None,  # VCF files for validation
-            'num_cores_validation': 8,
-            'min_graph_size': 1,  # Minimum size of graphs to use for training
-            'max_graph_size': 1000,  # Maximum size of graphs to use for training
-            'skip_trivial_graphs': True,
-            'skip_singleton_graphs': True,
-            'seed': 12345,  # Random seed
-            'max_episodes': None,  # Maximum number of episodes to run
-            'render_view': "weighted_view",  # Controls how the graph is rendered
-            'interval_validate': 500,  # Number of episodes between model validation runs
-            'log_wandb': False,
-            'ultra_light_mode': False,
-            # caching parameters
-            'load_components': True,
-            'store_components': True,
-            'store_indexes': True,
-            # model parameters
-            'pretrained_model': None,  # path to pretrained model; null or "path/to/model"
-            'gamma': 0.98,
-            'lr': 0.00003,
-            'drop_chr20': True
-        }
-        for k, v, in default_values.items():
-            if not hasattr(self, k):
-                self.__setattr__(k, v)
-
-
-class TestConfig(Config):
-    def __init__(self, config_file, **entries):
-        self.__dict__.update(entries)
-        self.set_defaults()
-        super().__init__(config_file)
-        self.phasing_output_path = self.out_dir + "phasing_output.pickle"
-        self.output_vcf = self.out_dir + "dphase_phased.vcf"
-        if self.max_graph_size == "inf":
-            self.max_graph_size = float('inf')
-        # logging
-        # noinspection PyArgumentList
-        logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
-                            handlers=[logging.FileHandler(self.log_dir + '/main.log', mode='w'),
-                                      logging.StreamHandler(sys.stdout)])
-        logging.info(self)
-
-        if self.device == "cuda" or self.device == "cuda:0" or self.device == "cuda:1":
-            self.device = torch.device(self.device if torch.cuda.is_available() else "cpu")
-        else:
-            self.device = torch.device("cpu")
-
-    def set_defaults(self):
-        super().set_defaults()
-        default_values = {
-            'min_graph_size': 1,
-            'max_graph_size': float('inf'),
-            'skip_singleton_graphs': False,
-            'skip_trivial_graphs': False,
-            # caching parameters
-            'load_components': False,
-            'store_components': False,
-            'save_solution': False,
-            'test_mode': True,
-        }
-        for k, v, in default_values.items():
-            if not hasattr(self, k):
-                self.__setattr__(k, v)
-
 
 class DataConfig(Config):
     def __init__(self, config_file, **entries):
@@ -236,44 +260,7 @@ class FragmentConfig(Config):
                             handlers=[logging.StreamHandler(sys.stdout), file_handler])
         self.set_defaults()
 
-    @staticmethod
-    def get_defaults_short():
-        return {
-            'mapq': 20,
-            'mbq': 13,
-            "realign_overhang": None,
-            'filter_bad_reads': False,
-            'enable_read_selection': False,
-            'no_filter': False,
-            "max_snp_coverage": 20000,
-            'require_hiqh_mapq': False,
-            "min_highmapq_ratio": 0,
-            "min_coverage_to_filter": 1000000,
-            'enable_strand_filter': False,
-            'supp_distance_th': 1000000,
-            'read_overlap_th': None,
-        }
 
-    @staticmethod
-    def get_defaults_ont():
-        return {
-            'mapq': 20,
-            'mbq': 0,
-            "realign_overhang": 10,
-            'filter_bad_reads': True,
-            'max_discordance': 0.1,
-            'enable_read_selection': True,
-            'max_coverage': 15,
-            'no_filter': False,
-            "max_snp_coverage": 200,
-            'require_hiqh_mapq': True,
-            "min_highmapq_ratio": 0,
-            "min_coverage_to_filter": 8,
-            "min_coverage_strand": 10,
-            'enable_strand_filter': True,
-            'supp_distance_th': 1000000,
-            'read_overlap_th': 100,
-        }
 
     @staticmethod
     def get_defaults_hifi():
@@ -289,7 +276,6 @@ class FragmentConfig(Config):
         else:
             print("Unexpected platform: " + self.platform)
             sys.exit(-1)
-        default_values["window_size"] = 1
         default_values['log_reads'] = False
         for k, v, in default_values.items():
             if not hasattr(self, k):
@@ -303,7 +289,7 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
-        return TestConfig(fname, **config)
+        return PhaseConfig(fname, **config)
     elif config_type == CONFIG_TYPE.FRAGS:
         return FragmentConfig(fname, **config)
 

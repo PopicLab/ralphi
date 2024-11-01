@@ -16,19 +16,12 @@ import torch
 from joblib import Parallel, delayed
 
 
-
 def compute_error_rates(solutions, validation_input_vcf, agent, config, genome, group):
     # given any subset of phasing solutions, computes errors rates against ground truth VCF
-    
-    if config.articulation_stitch:
-        var.stitch_fragments(solutions)
 
     idx2var = var.extract_variants(solutions)
     for v in idx2var.values():
         v.assign_haplotype()
-
-    if config.postprocess_ambiguous:
-        idx2var = utils.post_processing.postprocess_ambiguous(env.solutions, idx2var, config.evidence_threshold)
 
     output_vcf = config.validation_output_vcf + "_" + str(group) + ".vcf"
     vcf_writer.write_phased_vcf(validation_input_vcf, idx2var, output_vcf)
@@ -152,18 +145,5 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, config):
     keys = validation_indexing_df.group.unique()
     for group in validation_indexing_df.group.unique():
         log_stats_for_filter(validation_indexing_df[validation_indexing_df["group"] == group], "group: " + str(group))
-
-    # log specific plots to wandb for graph topologies we are interested in    
-    '''articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] > 0]
-    log_stats_for_filter(articulation_df, "Articulation > 0:")
-    articulation_df = validation_indexing_df.loc[validation_indexing_df["articulation_points"] == 0]
-    log_stats_for_filter(articulation_df, "Articulation == 0:")
-    diameter_df = validation_indexing_df.loc[validation_indexing_df["diameter"] <= 5]
-    log_stats_for_filter(diameter_df, "Diameter <= 5:")
-    node_filter_df = validation_indexing_df.loc[(0 <= validation_indexing_df["n_nodes"])
-                                                      & (validation_indexing_df["n_nodes"] <= 100)]
-    log_stats_for_filter(node_filter_df, "0 to 100 nodes:")
-    node_filter_df = validation_indexing_df.loc[(101 <= validation_indexing_df["n_nodes"])]
-    log_stats_for_filter(node_filter_df, "101 plus nodes:")'''
 
     return validation_indexing_df["reward_val"].sum()

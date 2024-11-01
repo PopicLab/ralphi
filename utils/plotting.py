@@ -20,5 +20,5 @@ def plot_weighted_network(nx_graph, node_labels=None, edge_labels=None):
     node_labels = ['yellow' if x == 0.0 else x for x in node_labels]
     nx.draw(nx_graph, with_labels=True, node_color=node_labels, edge_cmap=plt.cm.Blues, pos=pos)
     nx.draw_networkx_edge_labels(nx_graph, pos, edge_labels=edge_labels, font_color='red')
-    # plt.savefig("graph_visualization")
     plt.show()
+

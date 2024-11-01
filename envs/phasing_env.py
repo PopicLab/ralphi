@@ -28,22 +28,15 @@ class State:
         self.H1 = []
         self.best_reward = 0
         self.current_total_reward = 0
-        print("Number of nodes: ", self.frag_graph.n_nodes, ", number of edges: ", self.frag_graph.g.number_of_edges())
-
 
 class PhasingEnv(gym.Env):
-    def __init__(self, config, record_solutions=False, graph_dataset=None, preloaded_graphs=None):
+    def __init__(self, config, record_solutions=False, graph_dataset=None):
         self.features = list(feature for feature_name in config.features
                              for feature in constants.FEATURES_DICT[feature_name])
         super(PhasingEnv, self).__init__()
         self.config = config
-        if preloaded_graphs:
-            preloaded_graphs.set_graph_properties(self.features, config=self.config)
-            preloaded_graphs.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
-            self.state = State(preloaded_graphs, self.features, config.device)
-        else:
-            self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
-            self.state = self.init_state()
+        self.graph_gen = iter(graphs.FragGraphGen(config, graph_dataset=graph_dataset))
+        self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
         # action space consists of the set of nodes we can assign and a termination step
