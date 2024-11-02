@@ -81,77 +81,6 @@ class Embedding(nn.Module):
         return embedding
 
 
-class GAT(Embedding):
-    """
-    Parameters
-    ----------
-    num_heads : list of int
-        Number of heads in Multi-Head Attention for each layer.
-    feat_dropout/attn_dropout : list of float, optional
-        dropout rate on feature resp. attention weights
-        ``dropout[i]`` decides the dropout to be applied on the output of the i-th NF layer.
-        ``len(dropout)`` equals the number of layers.
-        By default, dropout is not applied for all layers.
-    """
-
-    def __init__(self, node_features_dim, hidden_dim, attention_layer=None, n_etypes=2, num_heads=None, activation=None,
-                 feat_dropout=None, attn_dropout=None, residual=None):
-        th.autograd.set_detect_anomaly(True)
-        # GAT layers will multiply output size by num_heads
-        default_num_heads = 3
-        n_layers = len(hidden_dim)
-        default_activation = elu
-        if num_heads is None:
-            num_heads = [default_num_heads] * (n_layers - 1)
-            num_heads += [1]
-        if activation is None:
-            activation = [default_activation] * n_layers
-        if feat_dropout is None:
-            feat_dropout = [0.] * n_layers
-        if attn_dropout is None:
-            attn_dropout = [0.] * n_layers
-        if residual is None:
-            residual = [False] * n_layers
-        hidden_dim = [hidden_dim[i] * num_heads[i] for i in range(len(hidden_dim))]
-        super(GAT, self).__init__(node_features_dim, hidden_dim, attention_layer, n_etypes)
-        node_features_dim = self.node_features_dim
-
-        lengths = [len(self.hidden_dim), len(activation), len(feat_dropout), len(attn_dropout), len(residual)]
-        assert len(set(lengths)) == 1, 'Expect the lengths of self.hidden_dim, activation, ' \
-                                       'feat_dropout, attn_dropout, and residual to be the same, ' \
-                                       'got {}'.format(lengths)
-        i = 0
-        for idx, gnn in enumerate(self.gnn_layers):
-            if isinstance(gnn, Embedding):
-                self.gnn_layers[idx] = GATv2Conv(node_features_dim, self.hidden_dim[i]  # / num_heads[i])
-                                                 , num_heads[i],
-                                                 activation=activation[i],
-                                                 feat_drop=feat_dropout[i], attn_drop=attn_dropout[i],
-                                                 residual=residual[i])
-                node_features_dim = self.hidden_dim[i]
-                i += 1
-
-    def forward(self, g, feats, edge_feat=None, edge_weights=None, etypes=None, attention=False):
-        g = dgl.add_self_loop(g)
-        attention = []
-        embedding = []
-        for gnn in self.gnn_layers:
-            if isinstance(gnn, GatedGraphConv):
-                feats = gnn(g, feats, etypes)
-            else:
-                if attention:
-                    feats, attn = gnn(g, feats, get_attention=True)
-                    attention.append(attn)
-                else:
-                    feats = gnn(g, feats)
-                feats = feats.mean(1)
-            embedding.append(feats)
-        if attention:
-            return embedding, attention
-        else:
-            return embedding
-
-
 class GCNv2(Embedding):
     """
     Parameters
@@ -211,6 +140,7 @@ class GCNv2(Embedding):
             embedding.append(feats)
         return embedding
 
+
 class GCN(Embedding):
     """
     Parameters
@@ -242,43 +172,6 @@ class GCN(Embedding):
                 self.gnn_layers[idx] = GraphConv(node_features_dim, hidden_dim[i], activation=activation[i],
                                                  norm=norm[i], bias=bias[i], weight=True)
                 node_features_dim = self.hidden_dim[i]
-                i += 1
-
-
-class GINE(Embedding):
-    """
-    Parameters
-    ----------
-    apply_func : nn.Module or None
-        The neural network to approximate the features.
-    init_eps : float or None
-        Initial value of epsilon, the influence of the initial embedding.
-    learn_eps : list of bool, optional
-        If true, epsilon will be learnable.
-    """
-
-    def __init__(self, node_features_dim, hidden_dim, attention_layer=None, n_etypes=2, apply_func=None, init_eps=0,
-                 learn_eps=False):
-        super(GINE, self).__init__(node_features_dim, hidden_dim, attention_layer, n_etypes)
-        n_layers = len(self.hidden_dim)
-        default_activation_seq = nn.ELU()
-        if apply_func is None:
-            apply_func = []
-            for i in range(n_layers):
-                apply_func.append(
-                    nn.Sequential(nn.Linear(node_features_dim, self.hidden_dim[i]), nn.BatchNorm1d(self.hidden_dim[i]),
-                                  default_activation_seq,
-                                  nn.Linear(self.hidden_dim[i], self.hidden_dim[i]), default_activation_seq))
-                node_features_dim = self.hidden_dim[i]
-        lengths = [len(self.hidden_dim), len(apply_func)]
-        assert len(set(lengths)) == 1, 'Expect the lengths of self.hidden_dim, ' \
-                                       'and apply_func to be the same, ' \
-                                       'got {}'.format(lengths)
-
-        i = 0
-        for idx, gnn in enumerate(self.gnn_layers):
-            if isinstance(gnn, Embedding):
-                self.gnn_layers[idx] = GINEConv(apply_func[i], init_eps, learn_eps)
                 i += 1
 
 
@@ -324,62 +217,4 @@ class GIN(Embedding):
             if isinstance(gnn, Embedding):
                 self.gnn_layers[idx] = GINConv(apply_func=apply_func[i], aggregator_type=aggregator_type[i],
                                                activation=activation[i], init_eps=init_eps, learn_eps=learn_eps)
-                i += 1
-
-
-class PNA(Embedding):
-    """
-    Parameters
-    ----------
-    aggregator : list of list of aggregators or None
-        The list of aggregators to combine through PNA on every layer.
-        The options are "sum", "mean", "max", "min", "std", "var", "moment3", "moment4", "moment5"
-        The default list is "sum", "mean", "max", "min", "std".
-    scaler : list of list of scalers or None
-        The list of scaler functions to combine with the aggregators on every layer.
-        The options are "identity", "amplification", "attenuation".
-        The default list is "identity", "amplification", "attenuation".
-    delta : list of float, optional
-        Value of the normalization for the amplification and attenuation scalers on every layer.
-        Default is 1.
-    tower : int or none
-        The number of PNA towers. self.node_features_dim and every self.hidden_dim[i] have to be divisible per tower.
-        The default is 4 if 4 is a divisor of self.node_features_dim and every self.hidden_dim[i] and 1 otherwise.
-    """
-
-    def __init__(self, node_features_dim, hidden_dim, attention_layer=None, n_etypes=2, aggregator=None, scaler=None, delta=None,
-                 dropout=None,
-                 residual=None, tower=None,
-                 edge_feat_size=1):
-        default_tower = 4
-        super(PNA, self).__init__(node_features_dim, hidden_dim, attention_layer, n_etypes)
-        n_layers = len(self.hidden_dim)
-        if aggregator is None:
-            aggregator = [["sum", "mean", "max", "min", "std"]] * n_layers
-        if scaler is None:
-            scaler = [["identity", "amplification", "attenuation"]] * n_layers
-        if delta is None:
-            delta = [1.] * n_layers
-        if dropout is None:
-            dropout = [0.] * n_layers
-        if residual is None:
-            residual = [False] * n_layers
-        if tower is None:
-            tower = [default_tower if (node_features_dim % default_tower == 0 and out % default_tower == 0) else 1 for out in
-                     hidden_dim]
-        assert sum([node_features_dim % tower[i] == 0 and hidden_dim[i] % tower[i] == 0 for i in range(n_layers)]) == n_layers, \
-            'Expect tower divides inputs ' \
-            'and every self.hidden_dim[i], got {}'.format([node_features_dim, self.hidden_dim, tower])
-        lengths = [len(self.hidden_dim), len(aggregator), len(scaler), len(delta), len(dropout), len(residual)]
-        assert len(set(lengths)) == 1, 'Expect the lengths of self.hidden_dim, aggregator, ' \
-                                       'scaler, delta, dropout, and residual to be the same, ' \
-                                       'got {}'.format(lengths)
-
-        i = 0
-        for idx, gnn in enumerate(self.gnn_layers):
-            if isinstance(gnn, Embedding):
-                self.gnn_layers[idx] = PNAConv(node_features_dim, self.hidden_dim[i], aggregator[i], scaler[i], delta[i],
-                                               dropout[i],
-                                               tower[i], edge_feat_size, residual[i])
-                node_features_dim = self.hidden_dim[i]
                 i += 1

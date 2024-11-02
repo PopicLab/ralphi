@@ -65,15 +65,15 @@ class FragGraph:
 
     @staticmethod
     def build(fragments, compute_trivial=False, compress=False):
-        logging.info("Input number of fragments: %d" % len(fragments))
+        logging.debug("Input number of fragments: %d" % len(fragments))
         if compress and fragments:
-            logging.info("Compressing identical fragments")
+            logging.debug("Compressing identical fragments")
             fragments = FragGraph.merge_fragments_by_identity(fragments)
-            logging.info("Compressed number of fragments: %d" % len(fragments))
+            logging.debug("Compressed number of fragments: %d" % len(fragments))
         frag_graph = nx.Graph()
-        logging.info("Constructing fragment graph from %d fragments" % len(fragments))
+        logging.debug("Constructing fragment graph from %d fragments" % len(fragments))
 
-        for i, f1 in enumerate(tqdm.tqdm(fragments)):
+        for i, f1 in enumerate(fragments):
             frag_graph.add_node(i)
             for j in range(i + 1, len(fragments)):
                 f2 = fragments[j]
@@ -224,7 +224,7 @@ class FragGraph:
         components = nx.connected_components(self.g)
         logging.debug("Found connected components, now constructing subgraphs...")
         subgraphs = []
-        for component in tqdm.tqdm(components):
+        for component in components:
             subgraph = self.extract_subgraph(component, features, compute_trivial=True)
             if subgraph.trivial and skip_trivial_graphs: continue
             if features and not subgraph.trivial:
@@ -234,7 +234,7 @@ class FragGraph:
 
 
 def load_connected_components(frag_file_fname, features, config):
-    logging.info("Fragment file: %s" % frag_file_fname)
+    logging.debug("Fragment file: %s" % frag_file_fname)
     component_file_fname = frag_file_fname.strip() + ".components"
     if config.load_components and os.path.exists(component_file_fname):
         with open(component_file_fname, 'rb') as f:
@@ -242,8 +242,8 @@ def load_connected_components(frag_file_fname, features, config):
     else:
         fragments = frags.parse_frag_file(frag_file_fname.strip())
         graph = FragGraph.build(fragments, features, compute_trivial=False, compress=config.compress)
-        logging.info("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
-        logging.info("Finding connected components...")
+        logging.debug("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
+        logging.debug("Finding connected components...")
         connected_components = graph.connected_components_subgraphs(
             config, features, skip_trivial_graphs=config.skip_trivial_graphs)
         if config.store_components:
@@ -269,8 +269,8 @@ class FragGraphGen:
         if self.config.test_mode:
             fragments = frags.parse_frag_repr(self.config.fragments)
             graph = FragGraph.build(fragments, compress=self.config.compress)
-            logging.info("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
-            for subgraph in graph.connected_components_subgraphs(self.config, self.features):
+            logging.debug("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
+            for subgraph in tqdm.tqdm(graph.connected_components_subgraphs(self.config, self.features)):
                 logging.debug("Processing subgraph with %d nodes..." % subgraph.n_nodes)
                 yield subgraph
             yield None

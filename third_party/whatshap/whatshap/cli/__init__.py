@@ -203,9 +203,9 @@ class PhasedInputReader:
             read.sort()
         readset.sort()
 
-        logger.info(
-            "Found %d reads covering %d variants", len(readset), len(readset.get_positions())
-        )
+#         logger.info(
+#             "Found %d reads covering %d variants", len(readset), len(readset.get_positions())
+#         )
         return readset, vcf_source_ids
 
 

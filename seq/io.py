@@ -6,7 +6,7 @@ import copy
 import collections
 
 
-def write_phased_vcf(input_vcf, idx2var, output_vcf, chromosome=None):
+def write_phased_vcf(input_vcf, idx2var, output_vcf, chromosome):
     vcf_reader = vcf.Reader(open(input_vcf, 'rb'), strict_whitespace=True)
     assert (len(vcf_reader.samples) == 1), "Only single-sample files are expected"
     input_format_keys = list(vcf_reader.formats.keys())
@@ -19,9 +19,8 @@ def write_phased_vcf(input_vcf, idx2var, output_vcf, chromosome=None):
     vcf_idx = 0
     processed_chr = False
     for record in vcf_reader:
-        if chromosome and record.CHROM != chromosome:
+        if record.CHROM != chromosome:
             if processed_chr: break
-            vcf_idx += 1
             continue
         processed_chr = True
         # update the genotype field

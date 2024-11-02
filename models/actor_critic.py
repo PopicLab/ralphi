@@ -2,7 +2,8 @@ import dgl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.graph_models import GAT, GINE, GIN, PNA, GCN, GCNv2
+from torch.distributions.categorical import Categorical
+from models.graph_models import GIN, GCN, GCNv2
 import time
 import logging
 import engine.config as config
@@ -13,7 +14,7 @@ from torch.nn.utils import spectral_norm
 
 class ActorCriticNet(nn.Module):
     def __init__(self, config):
-        layers_dict = {"gat": GAT, "gine": GINE, "gin": GIN, "pna": PNA, "gcn": GCN, "gcn2": GCNv2}
+        layers_dict = {"gin": GIN, "gcn": GCN, "gcn2": GCNv2}
         super(ActorCriticNet, self).__init__()
         self.policy_graph_hap0 = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
         nn.init.orthogonal_(self.policy_graph_hap0.weight.data)
@@ -23,7 +24,8 @@ class ActorCriticNet(nn.Module):
         nn.init.orthogonal_(self.policy_done.weight.data)
         self.value = spectral_norm(nn.Linear(config.hidden_dim[-1], 1))
         nn.init.orthogonal_(self.value.weight.data)
-        self.layers = layers_dict[config.layer_type](config.node_features_dim, config.hidden_dim, **config.embedding_vars)
+        self.layers = layers_dict[config.layer_type](config.node_features_dim,
+                                                     config.hidden_dim, **config.embedding_vars)
         self.feature_list = list(feature for feature_name in config.features
                              for feature in constants.FEATURES_DICT[feature_name])
 
@@ -37,18 +39,17 @@ class ActorCriticNet(nn.Module):
         - critic's value of the current state
         """
         features = list(genome_graph.ndata[feature] for feature in self.feature_list)
-        h = torch.cat(features, dim=1)
         weights = genome_graph.edata['weight']
-        h = self.layers(genome_graph, h, edge_feat=weights[:, None], edge_weights=weights, etypes=torch.gt(weights,0))[-1]
-
-        genome_graph.ndata['h'] = h
-        mN = dgl.mean_nodes(genome_graph, 'h')
-        v = self.value(mN)
-        pi_hap0 = self.policy_graph_hap0(genome_graph.ndata['h'])
-        pi_hap1 = self.policy_graph_hap1(genome_graph.ndata['h'])
+        graph_emb = torch.cat(features, dim=1)
+        graph_emb = self.layers(genome_graph, graph_emb, edge_feat=weights[:, None],
+                                edge_weights=weights, etypes=torch.gt(weights, 0))[-1]
+        genome_graph.ndata['graph_emb'] = graph_emb
+        nodes_mean = dgl.mean_nodes(genome_graph, 'graph_emb')
+        pi_hap0 = self.policy_graph_hap0(genome_graph.ndata['graph_emb'])
+        pi_hap1 = self.policy_graph_hap1(genome_graph.ndata['graph_emb'])
         pi = torch.cat([pi_hap0, pi_hap1])
-        genome_graph.ndata.pop('h')
-        return pi, v
+        genome_graph.ndata.pop('graph_emb')
+        return pi, self.value(nodes_mean)
 
 
 class DiscreteActorCriticAgent:
@@ -64,22 +65,6 @@ class DiscreteActorCriticAgent:
             for k, v in state.items():
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(self.env.config.device)
-        self.batch_size = 32
-
-    def select_action(self, greedy=False, first=False):
-        if self.env.state.num_nodes < 2:
-            return 0
-        [pi, val] = self.model(self.env.state.g)
-        pi = pi.squeeze()
-        pi[self.env.get_all_invalid_actions()] = -float('Inf')
-        if greedy:
-            greedy_choice = torch.argmax(pi)
-            return greedy_choice.item()
-        pi = F.softmax(pi, dim=0)
-        dist = torch.distributions.categorical.Categorical(pi)
-        action = dist.sample()
-        self.model.actions.append((dist.log_prob(action), val[0]))
-        return action.item()
 
     def run_episode(self, config, test_mode=False, episode_id=None):
         done = False
@@ -114,6 +99,20 @@ class DiscreteActorCriticAgent:
                                                                  str(loss),
                                                                  str(graph_stats),
                                                                  str(runtime)]))
+
+    def select_action(self, greedy=False, first=False):
+        # based on DAC model in:
+        # https://github.com/orrivlin/MinimumVertexCover_DRL/blob/master/discrete_actor_critic.py
+        if self.env.state.num_nodes < 2:
+            return 0
+        [pi, val] = self.model(self.env.state.g)
+        pi = pi.squeeze()
+        pi[self.env.get_all_invalid_actions()] = -float('Inf')
+        if greedy: return torch.argmax(pi).item()
+        dist = Categorical(F.softmax(pi, dim=0))
+        action = dist.sample()
+        self.model.actions.append((dist.log_prob(action), val[0]))
+        return action.item()
 
     def update_model(self, episode_id=None):
         if not self.learning_mode:
