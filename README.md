@@ -33,7 +33,7 @@ The key required and optional YAML parameters for phasing are listed below:
 * ```vcf``` [*required*] path to the VCF variant file (must be compressed and indexed)
 * ```bam``` [*required*] path to the BAM alignment file 
 * ```platform``` [*required*] sequencing platform (options: ```illumina``` or ```ONT```) 
-* ```reference``` [*required*] path to the referene FASTA file
+* ```reference``` [*required*] path to the reference FASTA file
 * ```model_path``` [*required*] path to the pretrained ralphi model (available under )
 * ```chr_names``` [*optional*] list of chromosomes to process: null (all) or a specific list e.g. ["chr1", "chr21"] (default: null)
 * ```n_proc```  [*optional*] number of cores to use for phasing (default: 1)
