@@ -1,0 +1,14 @@
+#### REQUIRED ####
+platform: "ONT"  # sequencing platform (options: ONT or illumina)
+bam: "/path/to/bam"  # path to the BAM alignments file
+vcf: "path/to/vcf"   # path to the VCF variant file (must be compressed and indexed)
+reference: "/path/to/fai"  # path to the reference FASTA file (needed for realignment)
+model: "{RALPHI_ROOT}/data/models/ralphi.v1.long.pt"  # path to the pretrained ralphi model for ONT reads
+#### OPTIONAL ####
+chr_names: null  # list of chromosomes to process: null (all) or a specific list e.g. ["chr1", "chr21"]
+n_procs: 22  # number of cores (used to process chromosomes in parallel)
+num_cores_torch: 8  # number PyTorch threads (used for intraop parallelism)
+enable_read_selection: True  # enables Whatshap read downsampling
+max_coverage: 15  # target coverage for read downsampling 
+mapq: 20  # minimum read mapping quality
+realign_overhang: 10  # realignment window 

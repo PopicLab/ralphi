@@ -1,0 +1,13 @@
+#### REQUIRED ####
+platform: "illumina" # sequencing platform (options: ONT or illumina)
+bam: "/path/to/bam"  # path to the BAM alignments file
+vcf: "path/to/vcf"   # path to the VCF variant file (must be compressed and indexed)
+model: "{RALPHI_ROOT}/data/models/ralphi.v1.short.pt"  # path to the pretrained ralphi model for Illumina reads
+#### OPTIONAL ####
+chr_names: null  # list of chromosomes to process: null (all) or a specific list e.g. ["chr1", "chr21"]
+n_procs: 22  # number of cores (used to process chromosomes in parallel)
+num_cores_torch: 8  # number PyTorch threads (used for intraop parallelism)
+enable_read_selection: False  # disables Whatshap read downsampling
+mapq: 20  # minimum read mapping quality
+mbq: 13   # minimum base quality
+max_isize: 1000  # maximum insert size

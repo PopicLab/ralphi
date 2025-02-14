@@ -60,11 +60,12 @@ SHARED_DATA_DEFAULTS = {
 }
 
 DATA_DEFAULTS_SHORT = {
+    'reference': None,
     'mbq': 13,
     "realign_overhang": None,
     'filter_bad_reads': False,
     'enable_read_selection': False,
-    "max_snp_coverage": float('inf'), #20000
+    "max_snp_coverage": float('inf'),
     'require_hiqh_mapq': False,
     "min_coverage_to_filter": float('inf'),
     'enable_strand_filter': False,
