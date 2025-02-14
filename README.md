@@ -39,7 +39,7 @@ To run: ```$> python engine/phase.py --config </path/to/config>```
 
 ```engine/phase.py``` phases an input VCF file given a pre-trained model and an input BAM file.
 The script accepts as input a YAML file with configuration parameters. The ```config/``` directory provides 
-a sample config file for the ONT platform (```config/ont.yaml``) and the Illumina platform (```config/illumina.yaml```),
+a sample config file for the ONT platform (```config/ont.yaml```) and the Illumina platform (```config/illumina.yaml```),
 which lists the required and key optional parameters.
 
 The key required and optional YAML parameters for phasing are listed below:
@@ -61,7 +61,7 @@ Two models are currently provided in the ```data/models``` directory:
 short-read inputs.
 
 ```ralphi``` will output results in the parent directory of the YAML config file. The results include the phased VCF
-files for each input chromosome (under ```output/```; e.g. ```output/chr1.ralphi.vcf``) and execution logs.
+files for each input chromosome (under ```output/```; e.g. ```output/chr1.ralphi.vcf```) and execution logs.
 
 <a name="workflow"></a>
 #### Recommended workflow 
