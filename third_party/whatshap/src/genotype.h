@@ -5,6 +5,7 @@
 #include<set>
 #include<string>
 #include<algorithm>
+#include <cstdint>'
 
 /**
  * Representation of a genotype of arbitrary ploidy with multi-allelic variants. Genotypes are 

@@ -11,4 +11,6 @@ num_cores_torch: 8  # number PyTorch threads (used for intraop parallelism)
 enable_read_selection: True  # enables Whatshap read downsampling
 max_coverage: 15  # target coverage for read downsampling 
 mapq: 20  # minimum read mapping quality
-realign_overhang: 10  # realignment window 
+realign_overhang: 10  # realignment window
+filter_bad_reads: True  # remove low-quality highly-discordant reads
+

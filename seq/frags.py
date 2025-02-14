@@ -159,7 +159,7 @@ def split_articulation(fragments):
             i = entry.data
             if fragments[i].vcf_idx_start < position:
                 if not incident_frag_idx:
-                    incident_frag_idx = i #entry.data
+                    incident_frag_idx = i
                 else:
                     incident_frag_idx = None
                     break
