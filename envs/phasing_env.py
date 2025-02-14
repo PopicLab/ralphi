@@ -128,6 +128,9 @@ class PhasingEnv(gym.Env):
                 frag.assign_haplotype(node_labels[i])
             self.solutions.append(self.state.frag_graph.fragments)
 
+    def postprocess(self):
+            self.solutions = graphs.connect_components(self.solutions)
+
     def reset(self):
         """
         Reset the environment to an initial state

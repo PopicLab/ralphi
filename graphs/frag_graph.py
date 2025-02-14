@@ -70,6 +70,8 @@ class FragGraph:
             logging.debug("Compressing identical fragments")
             fragments = FragGraph.merge_fragments_by_identity(fragments)
             logging.debug("Compressed number of fragments: %d" % len(fragments))
+        fragments = frags.split_articulation(fragments)
+
         frag_graph = nx.Graph()
         logging.debug("Constructing fragment graph from %d fragments" % len(fragments))
 
@@ -252,6 +254,30 @@ def load_connected_components(frag_file_fname, features, config):
     return connected_components
 
 
+def connect_components(components):
+    def flip_hap(h): return h if h is None else (h + 1) % 2
+    gid2components = {}
+    component_map = {i: i for i in range(len(components))}
+    for cid, frag_list in enumerate(components):
+        for frag in frag_list:
+            if frag.fragment_group_id:
+                gid2components.setdefault(frag.fragment_group_id, []).append((cid, frag))
+    for gid, group in gid2components.items():
+        hap = group[0][1].haplotype
+        cid_g = component_map[group[0][0]]
+        for cid, group_frag in group[1:]:
+            if group_frag.haplotype != hap:
+                for frag in components[cid]:
+                    frag.assign_haplotype(flip_hap(frag.haplotype))
+            components[cid_g].extend(components[cid])
+            components[cid] = []
+            aux = component_map[cid]
+            for idx in component_map:
+                if component_map[idx] == aux:
+                    component_map[idx] = cid_g
+    return [c for c in components if len(c)]
+
+
 class FragGraphGen:
     def __init__(self, config, graph_dataset=None):
         self.config = config
@@ -271,7 +297,6 @@ class FragGraphGen:
             graph = FragGraph.build(fragments, compress=self.config.compress)
             logging.debug("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
             for subgraph in tqdm.tqdm(graph.connected_components_subgraphs(self.config, self.features)):
-                logging.debug("Processing subgraph with %d nodes..." % subgraph.n_nodes)
                 yield subgraph
             yield None
         elif self.graph_dataset is not None:
