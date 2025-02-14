@@ -118,7 +118,7 @@ class Fragment:
 
     def split_at(self, position):
         split_index = next(i for i, variant in enumerate(self.variants) if variant.vcf_idx >= position)
-        return Fragment(self.read_id, variants=self.variants[:split_index], n_copies=self.n_copies),
+        return Fragment(self.read_id, variants=self.variants[:split_index], n_copies=self.n_copies), \
                Fragment(self.read_id, variants=self.variants[split_index:], n_copies=self.n_copies)
 
 

@@ -1,5 +1,6 @@
 from collections import defaultdict 
 import logging
+import operator
 
 class Variant:
     """
@@ -24,15 +25,12 @@ class Variant:
 
     def assign_haplotype(self):
         haplotype_support = {phase_set: self.get_haplotype_support(frag_set) for phase_set, frag_set in self.phase_sets.items()}
-        
-        # Check if all we have equal evidence if there are multiple graphs covering 
+        # Check if we have equal evidence if there are multiple graphs covering
         if len(haplotype_support) > 1 and all(frag_copies == list(haplotype_support.values())[0][2] for _, _, frag_copies in haplotype_support.values()):
             self.h = None
             return
-
         self.phase_set = max(haplotype_support, key=lambda phase_set: haplotype_support[phase_set][2])
         c0, c1, _ = haplotype_support[self.phase_set]
-
         if c0 > c1:
             self.h = 0
         elif c0 < c1:
@@ -42,39 +40,8 @@ class Variant:
 
     def __str__(self):
         return "Variant: vcf_idx={} frag_graph_idx={} depth={}".format(self.vcf_idx, self.phase_set,
-                                                                       len(self.phase_set))
+                                                                       len(self.phase_sets))
 
-def flip_phase(h):
-    if h == None:
-        return h
-    return (h + 1) % 2
-
-def stitch_specific(frag_list, join, lookup_component):
-    first_hap = join[0][1].haplotype
-    first_index = lookup_component[join[0][0]]
-    for comp_index, frag in join[1:]:
-        if frag.haplotype != first_hap:
-            for frag_to_flip in frag_list[lookup_component[comp_index]]:
-                frag_to_flip.assign_haplotype(flip_phase(frag_to_flip.haplotype))
-        frag_list[first_index].extend(frag_list[lookup_component[comp_index]])
-        frag_list[lookup_component[comp_index]] = []
-        lookup_component[comp_index] = first_index
-    return frag_list, lookup_component
-
-
-def stitch_fragments(solutions):
-    logging.info("Stitching fragments...")
-    lookup_stitch = {}
-    lookup_component = {i: i for i in range(len(solutions))}
-    for component_index, frag_list in enumerate(solutions):
-        for frag in frag_list:
-            if frag.fragment_group_id is not None:
-                lookup_stitch.setdefault(frag.fragment_group_id, []).append((component_index, frag))
-    condensed_components = solutions
-    for elem in lookup_stitch:
-        condensed_components, lookup_component = stitch_specific(condensed_components, lookup_stitch[elem], lookup_component)
-    logging.info("Finished stitching fragments...")
-    return condensed_components
 
 def extract_variants(phased_frag_sets):
     idx2variant = {}
@@ -86,3 +53,60 @@ def extract_variants(phased_frag_sets):
                     idx2variant[var.vcf_idx] = Variant(var.vcf_idx)
                 idx2variant[var.vcf_idx].phase_sets[ps].append((var, frag.n_copies))
     return idx2variant
+
+def update_phase_sets(max_phase_set, idx2var):
+    """
+    For variants we do not phase (haplotype "h" field set to 2) we need to update the phase sets of variants downstream in the block
+    since the block is split, and also need to handle the case of multiple unphased variants within a block.
+    """
+    sorted_vars = sorted(idx2var.items(), key=operator.itemgetter(0))
+    change_set = False
+    cur_phase_set = 0
+    for var in sorted_vars:
+        if change_set and var[1].phase_set != cur_phase_set:
+            change_set = False
+            max_phase_set += 1
+        if change_set:
+            if var[1].h is None: max_phase_set += 1
+            else: var[1].phase_set = max_phase_set
+        if var[1].h is None:
+            cur_phase_set = var[1].phase_set
+            change_set = True
+    return dict(sorted_vars), max_phase_set
+
+def split_eq_evidence(graphs, idx2var, max_phase_set=None, reads_num_th=50):
+    if not max_phase_set: max_phase_set = len(graphs)
+    else: max_phase_set = max_phase_set + 1
+    for component in graphs:
+        incident_variants_lookup = defaultdict(dict)
+        vcf_positions = set()
+        for frag_index, frag in enumerate(component):
+            for var in frag.variants:
+                vcf_positions.add(var.vcf_idx)
+                incident_variants_lookup[frag_index][var.vcf_idx] = var
+        vcf_positions = sorted(list(vcf_positions))
+        for vcf_index, position in enumerate(vcf_positions):
+            n_reads_spanning_var = total_evidence_var = n_alleles_same = n_alleles_diff = 0
+            for frag_index, frag in enumerate(component):
+                incident_variants = incident_variants_lookup[frag_index]
+                if min(incident_variants) < position <= max(incident_variants):
+                    n_reads_spanning_var += frag.n_copies
+                    total_evidence_var += frag.n_copies
+                    if (position not in incident_variants) or (position - 1 not in incident_variants): break
+                    if incident_variants[position - 1].allele != incident_variants[position].allele:
+                        n_alleles_diff += frag.n_copies
+                    else:
+                        n_alleles_same += frag.n_copies
+            if (n_alleles_same + n_alleles_diff < total_evidence_var) or (not n_reads_spanning_var)\
+                    or (n_reads_spanning_var > reads_num_th): continue
+            if n_alleles_same == n_alleles_diff and n_alleles_same != 0:
+                for i in vcf_positions[vcf_index:]:
+                    if i in idx2var: idx2var[i].phase_set = max_phase_set
+                max_phase_set = max_phase_set + 1
+
+def postprocess(graphs, idx2var, config):
+    if config.skip_post: return idx2var
+    idx2var, max_phase_set = update_phase_sets(len(graphs), idx2var)
+    split_eq_evidence(graphs, idx2var, max_phase_set)
+    return idx2var
+

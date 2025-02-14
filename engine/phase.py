@@ -12,6 +12,7 @@ import logging
 import numpy as np
 from joblib import Parallel, delayed
 import pickle
+import random
 import tqdm
 
 print("***********************************************")
@@ -20,7 +21,6 @@ print("***********************************************")
 parser = argparse.ArgumentParser(description='Haplotype assembly')
 parser.add_argument('--config', help='YAML config file')
 args = parser.parse_args()
-
 
 def phase(chr_names, config):  # runs phasing on the specified list of chromosomes
     logging.root.setLevel(logging.getLevelName(config.logging_level))
@@ -36,19 +36,21 @@ def phase(chr_names, config):  # runs phasing on the specified list of chromosom
             if env.state.frag_graph.trivial: env.process_error_free_instance()
             else: agent.run_episode(config, test_mode=True)
             env.reset()
+        env.postprocess()
+
         # ------- output the phased VCF
         logging.info("Finished phasing, writing outputs for %s" % chromosome)
         idx2var = var.extract_variants(env.solutions)
         for v in idx2var.values():
             v.assign_haplotype()
-        with open("%s/%s.pkl" % (config.out_dir, chromosome), 'wb') as chr_out:
-             pickle.dump(idx2var, chr_out)
+        idx2var = var.postprocess(env.solutions, idx2var, config)
         vcf_writer.write_phased_vcf(config.vcf, idx2var,
                                     "%s/%s.ralphi.vcf" % (config.out_dir, chromosome), chromosome)
         logging.info("Finished processing %s" % chromosome)
 
 
 config = config_utils.load_config(args.config, config_type=config_utils.CONFIG_TYPE.TEST)
+random.seed(config.seed)
 torch.set_num_threads(config.num_cores_torch)
 logging.info("Running on %d processes" % config.n_procs)
 chr_name_chunks = np.array_split(np.array(config.chr_names), config.n_procs)

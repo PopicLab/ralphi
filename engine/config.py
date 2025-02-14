@@ -57,7 +57,6 @@ SHARED_DATA_DEFAULTS = {
     'num_pivots': 10,
     "min_highmapq_ratio": 0,
     'supp_distance_th': 1000000,
-    'read_overlap_th': 100,
 }
 
 DATA_DEFAULTS_SHORT = {
@@ -65,10 +64,14 @@ DATA_DEFAULTS_SHORT = {
     "realign_overhang": None,
     'filter_bad_reads': False,
     'enable_read_selection': False,
-    "max_snp_coverage": float('inf'),
+    "max_snp_coverage": float('inf'), #20000
     'require_hiqh_mapq': False,
     "min_coverage_to_filter": float('inf'),
     'enable_strand_filter': False,
+    'max_isize': 1000,
+    'max_discordance': 1.0,
+    'skip_post': False,
+    'read_overlap_th': None
 }
 
 
@@ -83,7 +86,9 @@ DATA_DEFAULTS_LONG = {
     'require_hiqh_mapq': True,
     "min_coverage_to_filter": 8,
     "min_coverage_strand": 10,
+    'skip_post': True,
     'enable_strand_filter': True,
+    'read_overlap_th': 100,
 }
 
 PHASE_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
