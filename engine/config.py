@@ -177,8 +177,8 @@ class TrainingConfig(Config):
         self.__dict__.update(entries)
         self.set_defaults()
         super().__init__(config_file)
-        self.model_path = self.out_dir + "/dphase_model_final.pt"
-        self.best_model_path = self.out_dir + "/dphase_model_best.pt"
+        self.model_path = self.out_dir + "/ralphi_model_final.pt"
+        self.best_model_path = self.out_dir + "/ralphi_model_best.pt"
         self.validation_output_vcf = self.out_dir + "/validation_output_vcf.vcf"
 
         # logging
@@ -215,10 +215,10 @@ class TrainingConfig(Config):
 
         # set up performance tracking
         if self.log_wandb:
-            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, config=self, name=self.run_name)
+            wandb.init(project=self.project_name, entity="ralphi", dir=self.log_dir, config=self, name=self.run_name)
         else:
             # automatically results in ignoring all wandb calls
-            wandb.init(project=self.project_name, entity="dphase", dir=self.log_dir, mode="disabled")
+            wandb.init(project=self.project_name, entity="ralphi", dir=self.log_dir, mode="disabled")
 
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
@@ -251,38 +251,6 @@ class DataConfig(Config):
             'ordering_ranges': {},
             'save_indexes_path': None
         }
-        for k, v, in default_values.items():
-            if not hasattr(self, k):
-                self.__setattr__(k, v)
-
-
-class FragmentConfig(Config):
-    def __init__(self, config_file, **entries):
-        self.__dict__.update(entries)
-        super().__init__(config_file)
-        self.log_file_main = self.log_dir + 'fragments_main.log'
-        file_handler = logging.FileHandler(self.log_file_main, mode='w')
-        logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.getLevelName("INFO"),
-                            handlers=[logging.StreamHandler(sys.stdout), file_handler])
-        self.set_defaults()
-
-
-
-    @staticmethod
-    def get_defaults_hifi():
-        return {}
-
-    def set_defaults(self):
-        if self.platform == "ONT":
-            default_values = self.get_defaults_ont()
-        elif self.platform == "hifi":
-            default_values = self.get_defaults_hifi()
-        elif self.platform == "illumina":
-            default_values = self.get_defaults_short()
-        else:
-            print("Unexpected platform: " + self.platform)
-            sys.exit(-1)
-        default_values['log_reads'] = False
         for k, v, in default_values.items():
             if not hasattr(self, k):
                 self.__setattr__(k, v)
