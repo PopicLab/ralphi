@@ -49,6 +49,7 @@ cdef priority_type_ptr _update_score_for_reads(priority_type_ptr former_score, c
 	result.push_back(first_score)
 	result.push_back(second_score)
 	result.push_back(quality)
+	result.push_back(index)
 	return result
 
 
@@ -88,6 +89,7 @@ cdef priority_type_ptr _compute_score_for_read(cpp.ReadSet* readset, int index, 
 	result.push_back(good_score - bad_score)
 	result.push_back(good_score - bad_score)
 	result.push_back(min_quality)
+	result.push_back(index)
 	return result
 
 
