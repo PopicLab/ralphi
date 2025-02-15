@@ -17,7 +17,6 @@ based on the maximum fragment cut (MFC) objective.
 <p align="center">
 <img src="docs/img/ralphi_overview.png" alt="drawing" width="1000"/>
 </p>
-For more information please see the following [preprint](https://www.biorxiv.org/content/).
 
 <a name="install"></a>
 ### Installation
