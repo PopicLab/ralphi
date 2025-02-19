@@ -1,5 +1,4 @@
-import argparse
-from collections import Counter, defaultdict
+from collections import defaultdict
 from copy import deepcopy
 from intervaltree import IntervalTree
 import logging
@@ -7,7 +6,6 @@ import whatshap
 import string
 from whatshap import readselect
 from whatshap.cli import PhasedInputReader
-from whatshap import merge
 
 class FragVariantHandle:
     def __init__(self, vcf_idx, allele, qscore=None):

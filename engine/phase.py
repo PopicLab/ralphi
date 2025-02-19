@@ -11,9 +11,7 @@ from seq.frags import generate_fragments
 import logging
 import numpy as np
 from joblib import Parallel, delayed
-import pickle
 import random
-import tqdm
 
 print("***********************************************")
 print("*  ralphi (%s): haplotype assembly mode *" % engine.__version__)

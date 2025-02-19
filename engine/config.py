@@ -6,12 +6,11 @@ import logging
 import sys
 import os
 import wandb
-import re
 
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
-CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST FRAGS')
+CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_DESIGN')
 
 MAIN_LOG = "MAIN"
 STATS_LOG_TRAIN = "STATS_TRAIN"
@@ -104,7 +103,7 @@ PHASE_DEFAULTS.update({
     'log_reads': False,
 })
 
-TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS}
+TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
 TRAIN_DEFAULTS.update({
     'test_mode': False,
     'gamma': 0.98,
@@ -120,6 +119,7 @@ TRAIN_DEFAULTS.update({
     'interval_validate': 500,  # number of episodes between model validation runs
     'panel_validation_frags': None,  # fragment files for validation
     'panel_validation_vcfs': None,  # VCF files for validation
+    'validate': True,
     'render_view': "weighted_view",
     'load_components': True,
     'store_components': True,
@@ -138,6 +138,9 @@ class Config:
         # setup the experiment directory structure
         Path(self.log_dir).mkdir(parents=True, exist_ok=True)
         Path(self.out_dir).mkdir(parents=True, exist_ok=True)
+
+        if self.chr_names is None:
+            self.chr_names = ['chr{}'.format(x) for x in range(1, 23)]
 
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.getLevelName(self.logging_level),
@@ -165,8 +168,6 @@ class PhaseConfig(Config):
         self.__dict__.update(entries)
         super().__init__(config_file)
 
-        if self.chr_names is None:
-            self.chr_names = ['chr{}'.format(x) for x in range(1, 23)]
         self.device = torch.device("cpu")
         self.output_vcf = self.out_dir + "/ralphi.vcf"
         logging.info(self)
@@ -175,7 +176,12 @@ class PhaseConfig(Config):
 class TrainingConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
-        self.set_defaults()
+        if self.platform == "illumina":
+            self.set_defaults(DATA_DEFAULTS_SHORT)
+        else:
+            self.set_defaults(DATA_DEFAULTS_LONG)
+        self.set_defaults(TRAIN_DEFAULTS)
+
         super().__init__(config_file)
         self.model_path = self.out_dir + "/ralphi_model_final.pt"
         self.best_model_path = self.out_dir + "/ralphi_model_best.pt"
@@ -239,7 +245,8 @@ class DataConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
         self.set_defaults()
-        super().__init__(config_file)
+        if os.path.exists(config_file):
+            super().__init__(config_file)
 
     def set_defaults(self):
         default_values = {
@@ -264,8 +271,5 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
         return PhaseConfig(fname, **config)
-    elif config_type == CONFIG_TYPE.FRAGS:
-        return FragmentConfig(fname, **config)
-
-
-
+    elif config_type == CONFIG_TYPE.DATA_DESIGN:
+        return DataConfig(fname, **config)

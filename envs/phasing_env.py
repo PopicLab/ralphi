@@ -50,7 +50,6 @@ class PhasingEnv(gym.Env):
     def init_state(self):
         g = next(self.graph_gen)
         if g is not None:
-            g.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
             return State(g, self.features, self.config.device)
         else:
             return None
@@ -84,9 +83,6 @@ class PhasingEnv(gym.Env):
         else:
             return max((self.state.current_total_reward - self.state.best_reward) /
                        self.state.frag_graph.graph_properties["total_num_frag"], 0)
-
-    def is_termination_action(self, action):
-        return action == self.state.num_nodes
 
     def is_out_of_moves(self):
         return len(self.state.H0) + len(self.state.H1) >= self.state.num_nodes
@@ -170,12 +166,6 @@ class PhasingEnv(gym.Env):
             edge_indices = zip(edges_src, edges_dst)
             edge_weights = dict(zip(edge_indices, edge_weights))
             vis.plot_weighted_network(self.state.g.to_networkx(), node_labels, edge_weights)
-
-    def get_all_valid_actions(self):
-        return (self.state.assigned == 0.).nonzero()
-
-    def get_all_non_neighbour_actions(self):
-        return (self.state.explorable == 0.).nonzero()
 
     def get_all_invalid_actions(self):
         return (self.state.assigned == 1.).nonzero()
