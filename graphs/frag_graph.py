@@ -14,7 +14,6 @@ import tqdm
 import pandas as pd
 
 from models import constants
-import wandb
 import numpy as np
 
 
@@ -99,13 +98,13 @@ class FragGraph:
                 # if there is more nodes than num_pivots, use "num_pivots" pivots for betweenness approximation
                 k = config.num_pivots
             self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=config.seed)
-        self.set_node_features(features)
 
-    def log_graph_properties(self, episode_id):
-        for key, value in self.graph_properties.items():
-            if isinstance(value, set) or isinstance(value, list) or isinstance(value, dict):
-                continue
-            wandb.log({"Episode": episode_id, "Training: " + key: value})
+        if 'n_edges' in features and "n_edges" not in self.graph_properties:
+            self.graph_properties["n_edges"] = self.g.number_of_edges()
+
+        if 'density' in features and "density" not in self.graph_properties:
+            self.graph_properties["density"] = nx.density(self.g)
+        self.set_node_features(features)
 
     def set_node_features(self, features):
         for node in self.g.nodes:
@@ -170,7 +169,7 @@ class FragGraph:
                 pruned_edges[v].append(u)
         return g, pruned_edges
 
-    def extract_subgraph(self, connected_component, features, compute_trivial=False):
+    def extract_subgraph(self, connected_component, compute_trivial=False):
         subg = self.g.subgraph(connected_component)
         subg_frags = [self.fragments[node] for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
@@ -185,21 +184,12 @@ class FragGraph:
         logging.debug("Found connected components, now constructing subgraphs...")
         subgraphs = []
         for component in components:
-            subgraph = self.extract_subgraph(component, features, compute_trivial=True)
+            subgraph = self.extract_subgraph(component, compute_trivial=True)
             if subgraph.trivial and skip_trivial_graphs: continue
             if features and not subgraph.trivial:
                 subgraph.set_graph_properties(features, config=config)
             subgraphs.append(subgraph)
         return subgraphs
-
-
-def load_connected_components(frag_file_fname):
-    logging.debug("Fragment file: %s" % frag_file_fname)
-    component_file_fname = frag_file_fname.strip() + ".components"
-    with open(component_file_fname, 'rb') as f:
-        connected_components = pickle.load(f)
-    return connected_components
-
 
 def connect_components(components):
     def flip_hap(h): return h if h is None else (h + 1) % 2
@@ -235,9 +225,6 @@ class FragGraphGen:
     def is_invalid_subgraph(self, subgraph):
         return subgraph.n_nodes < 2 and self.config.skip_singleton_graphs
 
-    def is_not_in_size_range(self, subgraph):
-        return not (self.config.min_graph_size <= subgraph.n_nodes <= self.config.max_graph_size)
-
     def __iter__(self):
         if self.config.test_mode:
             fragments = frags.parse_frag_repr(self.config.fragments)
@@ -250,8 +237,6 @@ class FragGraphGen:
             for _ in range(self.config.epochs):
                 for index, component_row in self.graph_dataset.iterrows():
                     with open(component_row.component_path, 'rb') as f:
-                        if not (self.config.min_graph_size <= component_row["n_nodes"] <= self.config.max_graph_size):
-                            continue
                         subgraph = pickle.load(f)
                         if self.is_invalid_subgraph(subgraph): continue
                         logging.debug("Processing subgraph with %d nodes..." % subgraph.n_nodes)
@@ -266,46 +251,54 @@ class GraphDataset:
         self.features = list(
             feature for feature_name in config.features for feature in constants.FEATURES_DICT[feature_name])
         self.ordering_config = ordering_config
+        # Used when the training and validation sets have to be built from the same dataset
         self.combined_graph_indexes = []
+        self.recompute = False
         self.validation_mode = validation_mode
         if not validation_mode:
             self.panel = config.panel
-            self.vcf_panel = None
+            self.vcf_panel = config.vcf_panel
         else:
             self.panel = config.panel_validation
             self.vcf_panel = config.panel_validation_vcfs
-        self.column_names = None
+        if ordering_config:
+            selection_features = [feature for group in ordering_config.ordering_ranges for feature in
+                                  ordering_config.ordering_ranges[group]["rules"] if feature not in self.features + ['n_nodes']]
+            selection_features += [feature for feature in ordering_config.global_ranges if feature not in
+                                                                                            self.features + ['n_nodes']]
+            selection_features = list(set(selection_features))
+            if selection_features:
+                self.features += selection_features
+                self.recompute = True
         self.generate_indices()
 
     def extract_examples(self, df, condition, lower_bound, upper_bound):
         return df[(df[condition] >= lower_bound) & (df[condition] <= upper_bound)]
 
-    def global_filter(self, df):
-        for filter_condition in self.ordering_config.global_ranges:
+    def global_filter(self, df, ordering_config):
+        for filter_condition in ordering_config.global_ranges:
             df = self.extract_examples(df, filter_condition,
-                                       self.ordering_config.global_ranges[filter_condition]["min"],
-                                       self.ordering_config.global_ranges[filter_condition]["max"])
+                                       ordering_config.global_ranges[filter_condition]["min"],
+                                       ordering_config.global_ranges[filter_condition]["max"])
         return df
 
     def round_robin_chunkify(self, df):
         size_ordered = df.sort_values(by=['n_nodes'], ascending=True)
         chunks = []
-        for i in range(self.config.num_cores_validation):
-            chunks.append(size_ordered.iloc[i:: self.config.num_cores_validation, :])
+        for i in range(self.config.n_procs):
+            chunks.append(size_ordered.iloc[i:: self.config.n_procs, :])
         return chunks
 
-    def dataset_nested_design(self, df):
+    def dataset_nested_design(self, df, ordering_config):
         # parses the nested data_ordering_[train,validation].yaml, which allows arbitrary specifications
         # of training/validation set design for any combination of features as long as they are in the indexing df
-
-        df = self.global_filter(df)
+        df = self.global_filter(df, ordering_config)
 
         df_combined = []
-
-        for group in self.ordering_config.ordering_ranges:
-            group_dict = self.ordering_config.ordering_ranges[group]
+        for group in ordering_config.ordering_ranges:
+            group_dict = ordering_config.ordering_ranges[group]
             subsampled_df = df.copy()
-            num_samples = self.ordering_config.num_samples_per_category_default
+            num_samples = ordering_config.num_samples_per_category_default
             if "num_samples" in group_dict:
                 num_samples = group_dict["num_samples"]
             for rule in group_dict["rules"]:
@@ -317,83 +310,91 @@ class GraphDataset:
                     buckets = subsampled_df[rule].quantile(quantiles)
                     subsampled_df = self.extract_examples(subsampled_df, rule, buckets[rule_dict["quantiles"][0]],
                                                           buckets[rule_dict["quantiles"][1]]) 
-            subsampled_df = subsampled_df.sample(n=min(num_samples, subsampled_df.shape[0]), random_state=self.ordering_config.seed)
+            subsampled_df = subsampled_df.sample(n=min(num_samples, subsampled_df.shape[0]), random_state=ordering_config.seed)
             subsampled_df["group"] = group
             df_combined.append(subsampled_df)
 
-        if len(df_combined) == 0:
-            df_single_epoch = df
-            if "group" not in df_single_epoch:
-                df_single_epoch["group"] = "original"
-        else:
-            df_single_epoch = pd.concat(df_combined)
-        if self.ordering_config.shuffle:
-            df_single_epoch = df_single_epoch.sample(frac=1, random_state=self.ordering_config.seed)
+        if df_combined:
+            df = pd.concat(df_combined)
+        if ordering_config.shuffle:
+            df = df.sample(frac=1, random_state=ordering_config.seed)
 
-        if self.ordering_config.drop_redundant:
-            df_single_epoch.drop_duplicates(inplace=True)
+        if ordering_config.drop_redundant:
+            df.drop_duplicates(inplace=True)
 
-        final_df = df_single_epoch
+        df.to_pickle(ordering_config.save_indexes_path)
 
-        if self.validation_mode:
-            final_df = self.round_robin_chunkify(final_df)
-
-        if self.ordering_config.save_indexes_path is not None:
-            final_df.to_pickle(self.ordering_config.save_indexes_path)
-
-        return final_df
+        return df
 
     def load_indices(self):
-        if os.path.exists(self.panel.strip() + ".index_per_graph"):
-            graph_dataset = pd.read_pickle(self.panel.strip() + ".index_per_graph")
-        else:
-            graph_dataset = pd.DataFrame(self.combined_graph_indexes, columns=self.column_names)
-            graph_dataset.to_pickle(self.panel.strip() + ".index_per_graph")
+        path_panel = self.panel.strip() + ".index_per_graph"
+        if self.combined_graph_indexes:
+            graph_dataset = pd.DataFrame(self.combined_graph_indexes)
+            graph_dataset["group"] = "overall"
+            graph_dataset.to_pickle(path_panel)
+        elif os.path.exists(path_panel):
+            graph_dataset = pd.read_pickle(path_panel)
         logging.info("graph dataset... %s" % graph_dataset.describe())
-        if self.ordering_config:
-            graph_dataset = self.dataset_nested_design(graph_dataset)
+
+        if self.ordering_config is not None:
+            graph_dataset = self.dataset_nested_design(graph_dataset, self.ordering_config)
+
+        if self.validation_mode:
+            graph_dataset = self.round_robin_chunkify(graph_dataset)
         return graph_dataset
 
-    def generate_graphs(self, panel, vcf_panel, config):
-        for i in range(len(panel)):
+    def generate_graphs(self, chunk):
+        # Get the path of the parent folder of the panel file
+        config = deepcopy(self.config)
+        logging.root.setLevel(logging.getLevelName(config.logging_level))
+        panel_parent = '/'.join(self.panel.strip().split("/")[:-1])
+        combined_graph_indexes = []
+        for i in range(len(chunk)):
             # precompute graphs and get their feature distributions
-            config.vcf = vcf_panel[i]
-            config.bam = panel[i]
-            connected_components = []
-            for chromosome in config.chr_names:
-                if chromosome == 'chr22' and config.drop_chr20: continue
-                fragments = frags.generate_fragments(config, chromosome)
-                graph = FragGraph.build(fragments, compress=self.config.compress)
-                connected_components += graph.connected_components_subgraphs(config, self.features,
-                                                                             skip_trivial_graphs=self.config.skip_trivial_graphs)
+            config.bam = chunk[i]['panel']
+            config.vcf = chunk[i]['vcf_panel']
+            chromosome = chunk[i]['chromosome']
+            if chromosome == 'chr20' and config.drop_chr20: continue
+            logging.info("Building graphs for %s %s" % (config.bam, chromosome))
+            fragments = frags.generate_fragments(config, chromosome)
+            fragments = frags.parse_frag_repr(fragments)
+            graph = FragGraph.build(fragments, compress=self.config.compress)
+            connected_components = graph.connected_components_subgraphs(config, self.features,
+                                                                         skip_trivial_graphs=self.config.skip_trivial_graphs)
             for component_index, component in enumerate(connected_components):
-                component_path = panel[i].strip() + ".components" + "_" + str(component_index)
+                component_path = panel_parent + "/" + config.bam.split('/')[-1] + "_" + chromosome + "_" + str(component_index)
                 if not os.path.exists(component_path):
                     with open(component_path, 'wb') as f:
                         pickle.dump(component, f)
-
-                rem_list = ['neg_connectivity', 'compo', 'pos_paths']
+                rem_list = ['betweenness']
                 metrics = dict([(key, val) for key, val in component.graph_properties.items() if key not in rem_list])
-                component_index = [component_path, component_index] + list(metrics.values())
-                if not self.column_names:
-                    self.column_names = ["component_path", "index"] + list(metrics.keys())
-                self.combined_graph_indexes.append(component_index)
+                metrics['component_path'] = component_path
+                metrics['index'] = component_index
+                if 'n_nodes' not in metrics:
+                    metrics['n_nodes'] = component.n_nodes
+                combined_graph_indexes.append(metrics)
+            logging.info("Finished building graphs for %s %s" % (config.bam, chromosome))
+        return combined_graph_indexes
 
     def generate_indices(self):
         """
         generate dataframe containing path of each graph (saved as a FragGraph object),
          as well as pre-computed statistics about the graph such as connectivity, size, density etc.
         """
-        if os.path.exists(self.panel.strip() + ".index_per_graph"):
+        if os.path.exists(self.panel.strip() + ".index_per_graph") and not self.recompute:
             return
         assert os.path.exists(self.panel) and os.path.exists(self.vcf_panel)
         panel = open(self.panel, 'r').readlines()
         vcf_panel = open(self.vcf_panel, 'r').readlines()
         assert len(panel) == len(vcf_panel)
-        bam_name_chunks = np.array_split(np.array(panel), self.config.n_procs)
-        vcf_name_chunks = np.array_split(np.array(vcf_panel), self.config.n_procs)
-        Parallel(n_jobs=self.config.n_procs)(
-            delayed(self.generate_graphs)(bam_name_chunks[i], vcf_name_chunks[i], deepcopy(self.config)) for i in range(self.config.n_procs))
+        chunks = np.array([{'panel': panel[i].strip(), 'vcf_panel': vcf_panel[i].strip(), 'chromosome': self.config.chr_names[j]}
+                            for j in range(len(self.config.chr_names)) for i in range(len(panel))])
+        chunks = np.array_split(chunks, self.config.n_procs)
+        logging.info("Running on %d processes" % self.config.n_procs)
+        logging.info("Chromosomes/process partition: " + str([np.array2string(chk) for chk in chunks]))
+        output = Parallel(n_jobs=self.config.n_procs)(
+            delayed(self.generate_graphs)(chunks[i]) for i in range(self.config.n_procs))
+        self.combined_graph_indexes = list(itertools.chain.from_iterable(output))
 
 
 def eval_assignment_helper(assignments, node2hap):

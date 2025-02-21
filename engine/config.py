@@ -56,6 +56,7 @@ SHARED_DATA_DEFAULTS = {
     'num_pivots': 10,
     "min_highmapq_ratio": 0,
     'supp_distance_th': 1000000,
+    'log_reads': False,
 }
 
 DATA_DEFAULTS_SHORT = {
@@ -100,7 +101,6 @@ PHASE_DEFAULTS.update({
     'load_components': False,
     'store_components': False,
     'store_indexes': False,
-    'log_reads': False,
 })
 
 TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
@@ -114,10 +114,11 @@ TRAIN_DEFAULTS.update({
     'max_graph_size': 5000,
     'skip_singleton_graphs': True,
     'skip_trivial_graphs': True,
-    'num_cores_validation': 8,
+    'n_procs': 8,
     'max_episodes': None, # maximum number of episodes to run
     'interval_validate': 500,  # number of episodes between model validation runs
-    'panel_validation_frags': None,  # fragment files for validation
+    'vcf_panel': None,
+    'panel_validation': None,  # fragment files for validation
     'panel_validation_vcfs': None,  # VCF files for validation
     'validate': True,
     'render_view': "weighted_view",
@@ -125,6 +126,7 @@ TRAIN_DEFAULTS.update({
     'store_components': True,
     'store_indexes': True,
     'pretrained_model': None,
+    'partition': 20,
 })
 
 
@@ -187,35 +189,6 @@ class TrainingConfig(Config):
         self.best_model_path = self.out_dir + "/ralphi_model_best.pt"
         self.validation_output_vcf = self.out_dir + "/validation_output_vcf.vcf"
 
-        # logging
-        # main log file
-        self.log_file_main = self.log_dir + 'main.log'
-        file_handler = logging.FileHandler(self.log_file_main, mode='w')
-        file_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
-        stream_handler = logging.StreamHandler(sys.stdout)
-        stream_handler.setFormatter(file_handler.formatter)
-        logger_main = logging.getLogger(MAIN_LOG)
-        logger_main.setLevel(level=logging.INFO)
-        logger_main.addHandler(file_handler)
-        logger_main.addHandler(stream_handler)
-        # training stats log file
-        self.log_file_stats_train = self.log_dir + 'train_episodes_stats.csv'
-        file_handler = logging.FileHandler(self.log_file_stats_train, mode='w')
-        file_handler.setFormatter(logging.Formatter('%(message)s'))
-        logger_stats_train = logging.getLogger(STATS_LOG_TRAIN)
-        logger_stats_train.setLevel(level=logging.INFO)
-        logger_stats_train.addHandler(file_handler)
-        logger_stats_train.info(",".join(STATS_LOG_COLS_TRAIN))
-        # validation stats log file
-        self.log_file_stats_validate = self.log_dir + 'validate_episodes_stats.csv'
-        file_handler = logging.FileHandler(self.log_file_stats_validate, mode='w')
-        file_handler.setFormatter(logging.Formatter('%(message)s'))
-        logger_stats_validate = logging.getLogger(STATS_LOG_VALIDATE)
-        logger_stats_validate.setLevel(level=logging.INFO)
-        logger_stats_validate.addHandler(file_handler)
-        logger_stats_validate.info(",".join(STATS_LOG_COLS_VALIDATE))
-        logger_main.info(self)
-
         for f in os.listdir(self.out_dir):
             os.remove(os.path.join(self.out_dir, f))
 
@@ -230,9 +203,10 @@ class TrainingConfig(Config):
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
                             handlers=[logging.FileHandler(self.log_dir + '/training.log', mode='w'),
                                       logging.StreamHandler(sys.stdout)])
+        logging.info(self)
 
         # enforce light logging if using multithreading validation
-        if self.num_cores_validation > 1:
+        if self.n_procs > 1:
             self.light_logging = True
 
         if self.device == "cuda" or self.device == "cuda:0" or self.device == "cuda:1":
@@ -245,8 +219,7 @@ class DataConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
         self.set_defaults()
-        if os.path.exists(config_file):
-            super().__init__(config_file)
+        self.save_indexes_path = config_file.strip().split('.yaml')[0] + '.index_per_graph'
 
     def set_defaults(self):
         default_values = {
@@ -256,7 +229,6 @@ class DataConfig(Config):
             'drop_redundant': False,
             'global_ranges': {},
             'ordering_ranges': {},
-            'save_indexes_path': None
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
@@ -265,6 +237,7 @@ class DataConfig(Config):
 
 def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     # Load a YAML configuration file
+    if not os.path.exists(fname): return None
     with open(fname) as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
     if config_type == CONFIG_TYPE.TRAIN:
