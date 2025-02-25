@@ -9,15 +9,15 @@ if __name__ == '__main__':
     # ------ CLI ------
     parser = argparse.ArgumentParser(description='Train haplotype phasing')
     parser.add_argument('--config', help='Training configuration YAML')
-    parser.add_argument('--training_ordering_config', help='Training configuration YAML')
-    parser.add_argument('--validation_ordering_config', help='Training configuration YAML')
+    parser.add_argument('--training_config', help='Training configuration YAML')
+    parser.add_argument('--validation_config', help='Training configuration YAML')
     args = parser.parse_args()
     # -----------------
 
     # Load the config
     config = config_utils.load_config(args.config)
-    training_config = config_utils.load_config(args.training_ordering_config, config_type=config_utils.CONFIG_TYPE.DATA_DESIGN)
-    validation_config = config_utils.load_config(args.validation_ordering_config, config_type=config_utils.CONFIG_TYPE.DATA_DESIGN)
+    training_config = config_utils.load_config(args.training_config, config_type=config_utils.CONFIG_TYPE.DATA_DESIGN)
+    validation_config = config_utils.load_config(args.validation_config, config_type=config_utils.CONFIG_TYPE.DATA_DESIGN)
 
     random.seed(config.seed)
     graph_dataset = graphs.frag_graph.GraphDataset(config)

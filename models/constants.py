@@ -40,7 +40,7 @@ FEATURES_DICT = {
     'compression_factor': [
         'compression_factor'
     ],
-    'articulation_points': [
+    'n_articulation_points': [
         'articulation_points'
     ]
 }

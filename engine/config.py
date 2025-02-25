@@ -119,8 +119,7 @@ TRAIN_DEFAULTS.update({
     'interval_validate': 500,  # number of episodes between model validation runs
     'vcf_panel': None,
     'panel_validation': None,  # fragment files for validation
-    'panel_validation_vcfs': None,  # VCF files for validation
-    'validate': True,
+    'vcf_panel_validation': None,  # VCF files for validation
     'render_view': "weighted_view",
     'load_components': True,
     'store_components': True,

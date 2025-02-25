@@ -62,6 +62,82 @@ short-read inputs.
 ```ralphi``` will output results in the parent directory of the YAML config file. The results include the phased VCF
 files for each input chromosome (under ```output/```; e.g. ```output/chr1.ralphi.vcf```) and execution logs.
 
+#### Training
+
+Trained models are available under ```data/models```.
+For users wanting to train their own model or fine-tune the provided models, they can run:
+```$> python engine/train.py --config </path/to/config>```
+The parameters are similar to the ones for phase.py with the following differences:
+
+* ```panel``` [*required*] text file containing the paths to the bam files to use for training. Graphs and index dataframe
+will be saved in the parent folder of this text file.
+* ```vcf_panel``` [*required*] text file containing the paths to the vcf files to use with the corresponding bam files
+of the ```panel``` file.
+* ```panel_validation``` [*optional*] text file containing the paths to the bam files to use for validation. Graphs and index dataframe
+will be saved in the parent folder of this text file. If not provided, there will be no validation.
+* ```vcf_panel_validation``` [*optional*] text file containing the paths to the vcf files to use with the corresponding bam files
+of the ```panel_validation``` file. If not provided, there will be no validation.
+* ```pretrained_model``` [*optional*] path to the pretrained ```ralphi``` model to fine-tune.
+* ```gamma``` [*optional*] discount factor to be used for the computation of the loss function (default: 0.98)
+* ```lr``` [*optional*] learning rate (default: $3e^{-5}$)
+* ```epochs``` [*optional*] number of epochs to run (default: 1)
+* ```drop_chr20``` [*optional*] whether to hold out the chromosome 20 for training and validation or not (default: True)
+
+The second time a ```panel``` file is used for training, the cached graph will be used and no graph generation will be necessary.
+
+#### Preprocessing
+
+Can be used to build a refined training and validation sets using filtering rules stated in dedicated yaml files.
+To run:
+```$> python engine/preprocess.py --config </path/to/config> --config_training </path/to/config> --config_validation </path/to/config>```
+```config``` is a training config as defined in the previous section.
+```config_training``` and ```config_validation``` are optional. If neither is provided, ```preprocess.py``` will cache
+all the graphs for training and validation. Otherwise, they will be used to filter the graphs obtained from the 
+bam files listed in ```panel```. If ```config_validation``` is provided, a validation set will be built first and then
+the training set will be constructed using the remaining graphs.
+
+The syntax for the ```config_training``` and ```config_validation``` yaml relies on set of rules.
+A rule involves a graph property and constraints on this property. The currently available graph properties are
+```n_nodes```, ```n_edges```, ```max_weight```, ```min_weight```, ```diameter```, ```n_articulation_points```,
+```density```, ```n_variants```, ```compression_factor```.
+While the currently available constraints are ```min```, ```max``` and ```quantiles```. 
+An example is provided below:
+```yaml
+# YAML TRAINING CONFIG FILE
+shuffle: False
+seed: 1234
+num_samples_per_category_default: 2000
+
+global_ranges:
+  n_nodes:
+    min: 10
+    max: 5000
+    
+ordering_ranges:
+  group_1:
+    num_samples: 500
+    rules:
+      n_nodes: 
+        max: 100
+      n_edges:
+        quantiles: [0.5, 0.8]
+  group_2:
+    rules:
+      density:
+        min: 0.1
+        max: 0.5
+```
+
+The rules within the ```global_ranges``` field will be used to filter out graphs.
+From the remaining graphs, ```ordering_ranges``` is used to define groups of graphs. Each group has a name, a set of rules
+and optionally a number of graphs to select ```num_samples```.
+We enforce the different groups to be disjoint. Thus, the order of the group might be of importance as the 
+graphs selected in ```group_1``` will not be available for ```group_2```.
+If  ```num_samples``` is not provided for a group, ```num_samples_per_category_default``` will be used (default: 1000).
+```shuffle``` states if the graphs from the different groups should be shuffled together or if curriculum learning
+should be used.
+
+
 <a name="workflow"></a>
 #### Recommended workflow 
 

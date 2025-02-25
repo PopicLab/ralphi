@@ -295,11 +295,11 @@ class GraphDataset:
             self.vcf_panel = config.vcf_panel
         else:
             self.panel = config.panel_validation
-            self.vcf_panel = config.panel_validation_vcfs
+            self.vcf_panel = config.vcf_panel_validation
         if ordering_config:
-            selection_features = [feature for group in ordering_config.ordering_ranges for feature in
-                                  ordering_config.ordering_ranges[group]["rules"] if feature not in self.features + ['n_nodes']]
-            selection_features += [feature for feature in ordering_config.global_ranges if feature not in
+            selection_features = [constants.FEATURES_DICT[feature] for group in ordering_config.ordering_ranges for feature in
+                                  ordering_config.ordering_ranges[group]["rules"] if constants.FEATURES_DICT[feature] not in self.features + ['n_nodes']]
+            selection_features += [constants.FEATURES_DICT[feature] for feature in ordering_config.global_ranges if constants.FEATURES_DICT[feature] not in
                                                                                             self.features + ['n_nodes']]
             selection_features = list(set(selection_features))
             if selection_features:
