@@ -40,7 +40,7 @@ if __name__ == '__main__':
         agent.model.load_state_dict(torch.load(config.pretrained_model))
 
     # Run the training
-    best_validation_reward = 0
+    best_validation_reward = None
     best_validation_reward_id = 0
     model_checkpoint_id = 0
     episode_id = 0
@@ -50,20 +50,21 @@ if __name__ == '__main__':
             continue
         if config.max_episodes is not None and episode_id >= config.max_episodes:
             break
+        reward = None
         if episode_id % config.interval_validate == 0:
             torch.save(agent.model.state_dict(), "%s/ralphi_model_%d.pt" % (config.out_dir, model_checkpoint_id))
             if config.panel_validation:
                 reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, config)
                 model_checkpoint_id += 1
-                if reward > best_validation_reward:
+                if best_validation_reward is None or reward > best_validation_reward:
                     best_validation_reward = reward
                     best_validation_reward_id = model_checkpoint_id
                     torch.save(agent.model.state_dict(), config.best_model_path)
         episode_reward = agent.run_episode(episode_id=episode_id)
         episode_id += 1
         agent.env = env_train
-        if episode_id % 1000 == 0:
-            logging.info('Finished Episode %s obtained at validation step %s' % (episode_id, best_validation_reward_id))
+        if episode_id % (10 * config.interval_validate) == 0:
+            logging.info('Finished Episode %s, obtained a reward of %s at validation step %s' % (episode_id, reward, model_checkpoint_id))
             logging.info('Best validation reward obtained is %d at validation step %d' % (best_validation_reward, best_validation_reward_id))
         agent.env.reset()
 

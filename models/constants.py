@@ -14,5 +14,33 @@ FEATURES_DICT = {
     ],
     'between': [
         'betweenness'
+    ],
+
+    'min_weight': [
+        'min_weight'
+    ],
+    'max_weight': [
+        'max_weight'
+    ],
+    'n_edges': [
+        'n_edges'
+    ],
+    'n_nodes': [
+        'n_nodes'
+    ],
+    'density': [
+        'density'
+    ],
+    'diameter': [
+        'diameter'
+    ],
+    'n_variants': [
+        'n_variants'
+    ],
+    'compression_factor': [
+        'compression_factor'
+    ],
+    'articulation_points': [
+        'articulation_points'
     ]
 }

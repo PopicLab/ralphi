@@ -226,7 +226,6 @@ class DataConfig(Config):
             'shuffle': True,
             'seed': 1234,  # Random seed
             'num_samples_per_category_default': 1000,
-            'drop_redundant': False,
             'global_ranges': {},
             'ordering_ranges': {},
         }
@@ -237,7 +236,7 @@ class DataConfig(Config):
 
 def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     # Load a YAML configuration file
-    if not os.path.exists(fname): return None
+    if fname is None: return None
     with open(fname) as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
     if config_type == CONFIG_TYPE.TRAIN:

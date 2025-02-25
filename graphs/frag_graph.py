@@ -91,6 +91,13 @@ class FragGraph:
                 if weight != 0: frag_graph.add_edge(i, j, weight=weight)
         return FragGraph(frag_graph, fragments, compute_trivial=compute_trivial)
 
+    def get_variants_set(self):
+        vcf_positions = set()
+        for frag in self.fragments:
+            for var in frag.variants:
+                vcf_positions.add(var.vcf_idx)
+        return len(vcf_positions)
+
     def set_graph_properties(self, features, config=None):
         if 'betweenness' in features and "betweenness" not in self.graph_properties:
             k = None
@@ -102,8 +109,36 @@ class FragGraph:
         if 'n_edges' in features and "n_edges" not in self.graph_properties:
             self.graph_properties["n_edges"] = self.g.number_of_edges()
 
+        if 'n_nodes' in features and "n_nodes" not in self.graph_properties:
+            self.graph_properties["n_nodes"] = self.g.number_of_nodes()
+
         if 'density' in features and "density" not in self.graph_properties:
             self.graph_properties["density"] = nx.density(self.g)
+
+        if 'min_weight' in features and "min_weight" not in self.graph_properties:
+            edge_labels = nx.get_edge_attributes(self.g, "weight")
+            self.graph_properties["min_weight"] = min(edge_labels.values())
+
+        if 'max_weight' in features and "max_weight" not in self.graph_properties:
+            edge_labels = nx.get_edge_attributes(self.g, "weight")
+            self.graph_properties["max_weight"] = max(edge_labels.values())
+
+        if 'density' in features and "density" not in self.graph_properties:
+            self.graph_properties["density"] = nx.density(self.g)
+
+        if 'articulation_points' in features and "articulation_points" not in self.graph_properties:
+            self.graph_properties["articulation_points"] = len(list(nx.articulation_points(self.g)))
+
+        if 'diameter' in features and "diameter" not in self.graph_properties:
+            self.graph_properties["diameter"] = nx.diameter(self.g)
+
+        if 'n_variants' in features and "n_variants" not in self.graph_properties:
+            self.graph_properties['n_variants'] = self.get_variants_set()
+
+        if 'compression_factor' in features and "compression_factor" not in self.graph_properties:
+            total_n_frags = sum([frag.n_copies for frag in self.fragments])
+            self.graph_properties['compression_factor'] = 1 - self.g.number_of_nodes() / total_n_frags
+
         self.set_node_features(features)
 
     def set_node_features(self, features):
@@ -293,11 +328,12 @@ class GraphDataset:
         # parses the nested data_ordering_[train,validation].yaml, which allows arbitrary specifications
         # of training/validation set design for any combination of features as long as they are in the indexing df
         df = self.global_filter(df, ordering_config)
-
+        global_df = df.copy()
         df_combined = []
         for group in ordering_config.ordering_ranges:
             group_dict = ordering_config.ordering_ranges[group]
             subsampled_df = df.copy()
+            aux_buckets = global_df.copy()
             num_samples = ordering_config.num_samples_per_category_default
             if "num_samples" in group_dict:
                 num_samples = group_dict["num_samples"]
@@ -305,12 +341,16 @@ class GraphDataset:
                 rule_dict = group_dict["rules"][rule]
                 if ("min" in rule_dict) and ("max" in rule_dict):
                     subsampled_df = self.extract_examples(subsampled_df, rule, rule_dict["min"], rule_dict["max"])
+                    aux_buckets = self.extract_examples(aux_buckets, rule, rule_dict["min"], rule_dict["max"])
                 elif "quantiles" in rule_dict:
                     quantiles = rule_dict["quantiles"]
-                    buckets = subsampled_df[rule].quantile(quantiles)
+                    buckets = aux_buckets[rule].quantile(quantiles)
                     subsampled_df = self.extract_examples(subsampled_df, rule, buckets[rule_dict["quantiles"][0]],
-                                                          buckets[rule_dict["quantiles"][1]]) 
+                                                          buckets[rule_dict["quantiles"][1]])
+                    aux_buckets = self.extract_examples(aux_buckets, rule, buckets[rule_dict["quantiles"][0]],
+                                                          buckets[rule_dict["quantiles"][1]])
             subsampled_df = subsampled_df.sample(n=min(num_samples, subsampled_df.shape[0]), random_state=ordering_config.seed)
+            df = df[~df.component_path.isin(subsampled_df.component_path)]
             subsampled_df["group"] = group
             df_combined.append(subsampled_df)
 
@@ -318,9 +358,6 @@ class GraphDataset:
             df = pd.concat(df_combined)
         if ordering_config.shuffle:
             df = df.sample(frac=1, random_state=ordering_config.seed)
-
-        if ordering_config.drop_redundant:
-            df.drop_duplicates(inplace=True)
 
         df.to_pickle(ordering_config.save_indexes_path)
 
@@ -369,6 +406,7 @@ class GraphDataset:
                 rem_list = ['betweenness']
                 metrics = dict([(key, val) for key, val in component.graph_properties.items() if key not in rem_list])
                 metrics['component_path'] = component_path
+                metrics['chromosome'] = chromosome
                 metrics['index'] = component_index
                 if 'n_nodes' not in metrics:
                     metrics['n_nodes'] = component.n_nodes
