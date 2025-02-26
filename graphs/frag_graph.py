@@ -310,13 +310,6 @@ class GraphDataset:
     def extract_examples(self, df, condition, lower_bound, upper_bound):
         return df[(df[condition] >= lower_bound) & (df[condition] <= upper_bound)]
 
-    def global_filter(self, df, ordering_config):
-        for filter_condition in ordering_config.global_ranges:
-            df = self.extract_examples(df, filter_condition,
-                                       ordering_config.global_ranges[filter_condition]["min"],
-                                       ordering_config.global_ranges[filter_condition]["max"])
-        return df
-
     def round_robin_chunkify(self, df):
         size_ordered = df.sort_values(by=['n_nodes'], ascending=True)
         chunks = []
@@ -324,31 +317,42 @@ class GraphDataset:
             chunks.append(size_ordered.iloc[i:: self.config.n_procs, :])
         return chunks
 
+    def apply_rules(self, df, global_df, rules):
+        subsampled_df = df.copy()
+        aux_buckets = global_df.copy()
+        for rule in rules:
+            rule_dict = rules[rule]
+            if ("min" in rule_dict) or ("max" in rule_dict):
+                min_val = 0
+                max_val = 500000
+                if "min" in rule_dict:
+                    min_val = rule_dict["min"]
+                if "max" in rule_dict:
+                    max_val = rule_dict["max"]
+                subsampled_df = self.extract_examples(subsampled_df, rule, min_val, max_val)
+                aux_buckets = self.extract_examples(aux_buckets, rule, min_val, max_val)
+            elif "quantiles" in rule_dict:
+                quantiles = rule_dict["quantiles"]
+                buckets = aux_buckets[rule].quantile(quantiles)
+                subsampled_df = self.extract_examples(subsampled_df, rule, buckets[rule_dict["quantiles"][0]],
+                                                      buckets[rule_dict["quantiles"][1]])
+                aux_buckets = self.extract_examples(aux_buckets, rule, buckets[rule_dict["quantiles"][0]],
+                                                    buckets[rule_dict["quantiles"][1]])
+        return subsampled_df
+
     def dataset_nested_design(self, df, ordering_config):
         # parses the nested data_ordering_[train,validation].yaml, which allows arbitrary specifications
         # of training/validation set design for any combination of features as long as they are in the indexing df
-        df = self.global_filter(df, ordering_config)
+        df = self.apply_rules(df, df, ordering_config.global_ranges)
+
         global_df = df.copy()
         df_combined = []
         for group in ordering_config.ordering_ranges:
             group_dict = ordering_config.ordering_ranges[group]
-            subsampled_df = df.copy()
-            aux_buckets = global_df.copy()
+            subsampled_df = self.apply_rules(df, global_df, group_dict["rules"])
             num_samples = ordering_config.num_samples_per_category_default
             if "num_samples" in group_dict:
                 num_samples = group_dict["num_samples"]
-            for rule in group_dict["rules"]:
-                rule_dict = group_dict["rules"][rule]
-                if ("min" in rule_dict) and ("max" in rule_dict):
-                    subsampled_df = self.extract_examples(subsampled_df, rule, rule_dict["min"], rule_dict["max"])
-                    aux_buckets = self.extract_examples(aux_buckets, rule, rule_dict["min"], rule_dict["max"])
-                elif "quantiles" in rule_dict:
-                    quantiles = rule_dict["quantiles"]
-                    buckets = aux_buckets[rule].quantile(quantiles)
-                    subsampled_df = self.extract_examples(subsampled_df, rule, buckets[rule_dict["quantiles"][0]],
-                                                          buckets[rule_dict["quantiles"][1]])
-                    aux_buckets = self.extract_examples(aux_buckets, rule, buckets[rule_dict["quantiles"][0]],
-                                                          buckets[rule_dict["quantiles"][1]])
             subsampled_df = subsampled_df.sample(n=min(num_samples, subsampled_df.shape[0]), random_state=ordering_config.seed)
             df = df[~df.component_path.isin(subsampled_df.component_path)]
             subsampled_df["group"] = group
