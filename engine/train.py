@@ -27,20 +27,16 @@ if __name__ == '__main__':
     torch.set_num_threads(config.num_cores_torch)
     graph_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False)
     training_dataset = graph_dataset.load_indices()
-
     if config.panel_validation:
         validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
-
 
     # Setup the agent and the training environment
     env_train = envs.PhasingEnv(config, graph_dataset=training_dataset)
     agent = agents.DiscreteActorCriticAgent(env_train)
-
     if config.pretrained_model is not None:
         agent.model.load_state_dict(torch.load(config.pretrained_model))
-
     # Run the training
-    best_validation_reward = None
+    best_validation_reward = 0
     best_validation_reward_id = 0
     model_checkpoint_id = 0
     episode_id = 0
@@ -56,7 +52,7 @@ if __name__ == '__main__':
             if config.panel_validation:
                 reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, config)
                 model_checkpoint_id += 1
-                if best_validation_reward is None or reward > best_validation_reward:
+                if reward > best_validation_reward:
                     best_validation_reward = reward
                     best_validation_reward_id = model_checkpoint_id
                     torch.save(agent.model.state_dict(), config.best_model_path)

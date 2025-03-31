@@ -72,7 +72,7 @@ DATA_DEFAULTS_SHORT = {
     'max_isize': 1000,
     'max_discordance': 1.0,
     'skip_post': False,
-    'read_overlap_th': None
+    'read_overlap_th': None,
 }
 
 
@@ -166,7 +166,6 @@ class PhaseConfig(Config):
         else:
             self.set_defaults(DATA_DEFAULTS_LONG)
         self.set_defaults(PHASE_DEFAULTS)
-        self.__dict__.update(entries)
         super().__init__(config_file)
 
         self.device = torch.device("cpu")
@@ -182,7 +181,6 @@ class TrainingConfig(Config):
         else:
             self.set_defaults(DATA_DEFAULTS_LONG)
         self.set_defaults(TRAIN_DEFAULTS)
-
         super().__init__(config_file)
         self.model_path = self.out_dir + "/ralphi_model_final.pt"
         self.best_model_path = self.out_dir + "/ralphi_model_best.pt"
