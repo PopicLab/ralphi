@@ -23,7 +23,6 @@ class State:
         self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features)
         self.g = self.g.to(device) 
         self.assigned = torch.zeros(self.num_nodes * 2)
-        self.explorable = torch.zeros(self.num_nodes * 2)
         self.H0 = []
         self.H1 = []
         self.best_reward = 0
@@ -39,10 +38,6 @@ class PhasingEnv(gym.Env):
         self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
-        # action space consists of the set of nodes we can assign and a termination step
-        self.num_actions = self.state.num_nodes * 2
-        self.action_space = spaces.Discrete(self.num_actions)
-        self.observation_space = {}
         # other bookkeeping
         self.record = record_solutions
         self.solutions = []

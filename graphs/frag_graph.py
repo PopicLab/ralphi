@@ -297,10 +297,15 @@ class GraphDataset:
             self.panel = config.panel_validation
             self.vcf_panel = config.vcf_panel_validation
         if ordering_config:
+            path_panel = self.panel.strip() + ".index_per_graph"
+            computed_features = []
+            if os.path.exists(path_panel):
+                graph_dataset = pd.read_pickle(path_panel)
+                computed_features = graph_dataset.columns.tolist()
             selection_features = [feature for group in ordering_config.ordering_ranges for feature_name in
-                                  ordering_config.ordering_ranges[group]["rules"] for feature in constants.FEATURES_DICT[feature_name] if feature not in self.features + ['n_nodes']]
+                                  ordering_config.ordering_ranges[group]["rules"] for feature in constants.FEATURES_DICT[feature_name] if feature not in computed_features]
             selection_features += [feature for feature_name in ordering_config.global_ranges for feature in
-                                   constants.FEATURES_DICT[feature_name] if feature not in self.features + ['n_nodes']]
+                                   constants.FEATURES_DICT[feature_name] if feature not in computed_features]
             selection_features = list(set(selection_features))
             if selection_features:
                 self.features += selection_features
@@ -375,6 +380,13 @@ class GraphDataset:
             graph_dataset.to_pickle(path_panel)
         elif os.path.exists(path_panel):
             graph_dataset = pd.read_pickle(path_panel)
+        else:
+            panels = open(self.panel, 'r').readlines()
+            datasets = []
+            for panel in panels:
+                path_panel = panel.strip() + ".index_per_graph"
+                datasets.append(pd.read_pickle(path_panel))
+            graph_dataset = pd.concat(datasets)
         logging.info("graph dataset... %s" % graph_dataset.describe())
 
         if self.ordering_config is not None:
@@ -425,8 +437,11 @@ class GraphDataset:
         """
         if os.path.exists(self.panel.strip() + ".index_per_graph") and not self.recompute:
             return
-        assert os.path.exists(self.panel) and os.path.exists(self.vcf_panel)
+        assert os.path.exists(self.panel)
         panel = open(self.panel, 'r').readlines()
+        # Check if the panel combines different panels
+        if all([os.path.exists(line.strip() + ".index_per_graph") for line in panel]): return
+        assert os.path.exists(self.vcf_panel)
         vcf_panel = open(self.vcf_panel, 'r').readlines()
         assert len(panel) == len(vcf_panel)
         chunks = np.array([{'panel': panel[i].strip(), 'vcf_panel': vcf_panel[i].strip(), 'chromosome': self.config.chr_names[j]}

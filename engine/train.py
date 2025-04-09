@@ -43,6 +43,7 @@ if __name__ == '__main__':
 
     while agent.env.has_state():
         if not (config.min_graph_size <= agent.env.state.num_nodes <= config.max_graph_size):
+            agent.env.reset()
             continue
         if config.max_episodes is not None and episode_id >= config.max_episodes:
             break

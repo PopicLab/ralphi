@@ -197,9 +197,6 @@ class TrainingConfig(Config):
             wandb.init(project=self.project_name, entity="ralphi", dir=self.log_dir, mode="disabled")
 
         # logging
-        logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
-                            handlers=[logging.FileHandler(self.log_dir + '/training.log', mode='w'),
-                                      logging.StreamHandler(sys.stdout)])
         logging.info(self)
 
         # enforce light logging if using multithreading validation

@@ -1,6 +1,4 @@
 from copy import deepcopy
-from operator import index
-
 import pandas as pd
 import wandb
 import logging
