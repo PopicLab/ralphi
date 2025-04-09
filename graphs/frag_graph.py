@@ -384,9 +384,10 @@ class GraphDataset:
             panels = open(self.panel, 'r').readlines()
             datasets = []
             for panel in panels:
-                path_panel = panel.strip() + ".index_per_graph"
-                datasets.append(pd.read_pickle(path_panel))
+                path_sub_panel = panel.strip() + ".index_per_graph"
+                datasets.append(pd.read_pickle(path_sub_panel))
             graph_dataset = pd.concat(datasets)
+            graph_dataset.to_pickle(path_panel)
         logging.info("graph dataset... %s" % graph_dataset.describe())
 
         if self.ordering_config is not None:
