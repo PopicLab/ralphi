@@ -292,10 +292,8 @@ class GraphDataset:
         self.validation_mode = validation_mode
         if not validation_mode:
             self.panel = config.panel
-            self.vcf_panel = config.vcf_panel
         else:
             self.panel = config.panel_validation
-            self.vcf_panel = config.vcf_panel_validation
         if ordering_config:
             path_panel = self.panel.strip() + ".index_per_graph"
             computed_features = []
@@ -442,10 +440,7 @@ class GraphDataset:
         panel = open(self.panel, 'r').readlines()
         # Check if the panel combines different panels
         if all([os.path.exists(line.strip() + ".index_per_graph") for line in panel]): return
-        assert os.path.exists(self.vcf_panel)
-        vcf_panel = open(self.vcf_panel, 'r').readlines()
-        assert len(panel) == len(vcf_panel)
-        chunks = np.array([{'panel': panel[i].strip(), 'vcf_panel': vcf_panel[i].strip(), 'chromosome': self.config.chr_names[j]}
+        chunks = np.array([{'panel': panel[i].strip().split()[0], 'vcf_panel': panel[i].strip().split()[1], 'chromosome': self.config.chr_names[j]}
                             for j in range(len(self.config.chr_names)) for i in range(len(panel))])
         chunks = np.array_split(chunks, self.config.n_procs)
         logging.info("Running on %d processes" % self.config.n_procs)

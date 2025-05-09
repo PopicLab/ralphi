@@ -69,27 +69,25 @@ For users wanting to train their own model or fine-tune the provided models, the
 ```$> python engine/train.py --config </path/to/config>```
 The parameters are similar to the ones for phase.py with the following differences:
 
-* ```panel``` [*required*] text file containing the paths to the bam files to use for training. Graphs and index dataframe
-will be saved in the parent folder of this text file.
-* ```vcf_panel``` [*required*] text file containing the paths to the vcf files to use with the corresponding bam files
-of the ```panel``` file.
-* ```panel_validation``` [*optional*] text file containing the paths to the bam files to use for validation. Graphs and index dataframe
+* ```panel``` [*required*] text file containing the paths to the BAM and VCF files to use for training. The BAM and its
+corresponding VCF file have to be on the same line of the panel file, one pair per line.
+Graphs and index dataframe will be saved in the parent folder of this text file.
+* ```panel_validation``` [*optional*] text file containing the paths to the BAM and VCF files to use for validation. Graphs and index dataframe
 will be saved in the parent folder of this text file. If not provided, there will be no validation.
-* ```vcf_panel_validation``` [*optional*] text file containing the paths to the vcf files to use with the corresponding bam files
-of the ```panel_validation``` file. If not provided, there will be no validation.
-* ```pretrained_model``` [*optional*] path to the pretrained ```ralphi``` model to fine-tune.
+* ```pretrained_model``` [*optional*] path to the pretrained ```ralphi``` model to fine-tune. If not provided, a new mode
+will be initialized.
 * ```gamma``` [*optional*] discount factor to be used for the computation of the loss function (default: 0.98)
 * ```lr``` [*optional*] learning rate (default: $3e^{-5}$)
 * ```epochs``` [*optional*] number of epochs to run (default: 1)
-* ```drop_chr20``` [*optional*] whether to hold out the chromosome 20 for training and validation or not (default: True)
+* ```drop_chr20``` [*optional*] whether to hold out the chromosome 20 from training and validation or not (default: True)
 
 The second time a ```panel``` file is used for training, the cached graph will be used and no graph generation will be necessary.
 
-#### Preprocessing
+#### Training Dataset Design
 
 Can be used to build a refined training and validation sets using filtering rules stated in dedicated yaml files.
 To run:
-```$> python engine/preprocess.py --config </path/to/config> --config_training </path/to/config> --config_validation </path/to/config>```
+```$> python engine/design_dataset.py --config </path/to/config> --config_training </path/to/config> --config_validation </path/to/config>```
 ```config``` is a training config as defined in the previous section.
 ```config_training``` and ```config_validation``` are optional. If neither is provided, ```preprocess.py``` will cache
 all the graphs for training and validation. Otherwise, they will be used to filter the graphs obtained from the 

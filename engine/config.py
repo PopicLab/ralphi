@@ -117,9 +117,7 @@ TRAIN_DEFAULTS.update({
     'n_procs': 8,
     'max_episodes': None, # maximum number of episodes to run
     'interval_validate': 500,  # number of episodes between model validation runs
-    'vcf_panel': None,
     'panel_validation': None,  # fragment files for validation
-    'vcf_panel_validation': None,  # VCF files for validation
     'render_view': "weighted_view",
     'load_components': True,
     'store_components': True,
