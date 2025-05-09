@@ -291,10 +291,11 @@ class GraphDataset:
         self.recompute = False
         self.validation_mode = validation_mode
         if not validation_mode:
-            self.panel = config.panel
+            self.panel = config.panel_train
         else:
-            self.panel = config.panel_validation
+            self.panel = config.panel_validate
         if ordering_config:
+            # Determine the features to compute to perform the data filtering and ordering
             path_panel = self.panel.strip() + ".index_per_graph"
             computed_features = []
             if os.path.exists(path_panel):
@@ -403,10 +404,10 @@ class GraphDataset:
         combined_graph_indexes = []
         for i in range(len(chunk)):
             # precompute graphs and get their feature distributions
-            config.bam = chunk[i]['panel']
-            config.vcf = chunk[i]['vcf_panel']
+            config.bam = chunk[i]['bam_path']
+            config.vcf = chunk[i]['vcf_path']
             chromosome = chunk[i]['chromosome']
-            if chromosome == 'chr20' and config.drop_chr20: continue
+            if config.drop_chr and chromosome in config.drop_chr: continue
             logging.info("Building graphs for %s %s" % (config.bam, chromosome))
             fragments = frags.generate_fragments(config, chromosome)
             fragments = frags.parse_frag_repr(fragments)
@@ -440,7 +441,7 @@ class GraphDataset:
         panel = open(self.panel, 'r').readlines()
         # Check if the panel combines different panels
         if all([os.path.exists(line.strip() + ".index_per_graph") for line in panel]): return
-        chunks = np.array([{'panel': panel[i].strip().split()[0], 'vcf_panel': panel[i].strip().split()[1], 'chromosome': self.config.chr_names[j]}
+        chunks = np.array([{'bam_path': panel[i].strip().split()[0], 'vcf_path': panel[i].strip().split()[1], 'chromosome': self.config.chr_names[j]}
                             for j in range(len(self.config.chr_names)) for i in range(len(panel))])
         chunks = np.array_split(chunks, self.config.n_procs)
         logging.info("Running on %d processes" % self.config.n_procs)

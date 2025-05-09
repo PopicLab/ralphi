@@ -67,21 +67,29 @@ files for each input chromosome (under ```output/```; e.g. ```output/chr1.ralphi
 Trained models are available under ```data/models```.
 For users wanting to train their own model or fine-tune the provided models, they can run:
 ```$> python engine/train.py --config </path/to/config>```
-The parameters are similar to the ones for phase.py with the following differences:
+The key parameters are:
 
-* ```panel``` [*required*] text file containing the paths to the BAM and VCF files to use for training. The BAM and its
+* ```panel_train``` [*required*] text file containing the paths to the BAM and VCF files to use for training. The BAM and its
 corresponding VCF file have to be on the same line of the panel file, one pair per line.
 Graphs and index dataframe will be saved in the parent folder of this text file.
-* ```panel_validation``` [*optional*] text file containing the paths to the BAM and VCF files to use for validation. Graphs and index dataframe
-will be saved in the parent folder of this text file. If not provided, there will be no validation.
+* ```panel_validate``` [*required*] text file containing the paths to the BAM and VCF files to use for validation. Graphs and index dataframe
+will be saved in the parent folder of this text file.
+* ```platform``` [*required*] sequencing platform (options: ```illumina``` or ```ONT```)
+* ```reference``` [*required* only for ONT] path to the reference FASTA file used for local realignment
+* ```chr_names``` [*optional*] list of chromosomes to process: null (all) or a specific list e.g. ["chr1", "chr21"] (default: null)
+* ```n_proc```  [*optional*] number of cores to use for training (default: 1)
+* ```enable_read_selection```  [*optional*] enables Whatshap-based read downsampling (default: true for ONT)
+* ```max_coverage```  [*optional*] target coverage for read downsampling (default: 15)
+* ```mapq```  [*optional*] minimum alignment mapping quality, reads below this threshold will be removed (default: 20)
+* ```filter_bad_reads```  [*optional*] remove low-quality highly-discordant reads (default: true for ONT)
 * ```pretrained_model``` [*optional*] path to the pretrained ```ralphi``` model to fine-tune. If not provided, a new mode
 will be initialized.
 * ```gamma``` [*optional*] discount factor to be used for the computation of the loss function (default: 0.98)
 * ```lr``` [*optional*] learning rate (default: $3e^{-5}$)
 * ```epochs``` [*optional*] number of epochs to run (default: 1)
-* ```drop_chr20``` [*optional*] whether to hold out the chromosome 20 from training and validation or not (default: True)
+* ```drop_chr``` [*optional*] list of strings representing chromosomes to hold out from training and validation or not (default: ['chr20'])
 
-The second time a ```panel``` file is used for training, the cached graph will be used and no graph generation will be necessary.
+The second time a ```panel_train``` file is used for training, the cached graph will be used and no graph generation will be necessary.
 
 #### Training Dataset Design
 
@@ -91,7 +99,7 @@ To run:
 ```config``` is a training config as defined in the previous section.
 ```config_training``` and ```config_validation``` are optional. If neither is provided, ```preprocess.py``` will cache
 all the graphs for training and validation. Otherwise, they will be used to filter the graphs obtained from the 
-bam files listed in ```panel```. If ```config_validation``` is provided, a validation set will be built first and then
+bam files listed in ```panel_train```. If ```config_validation``` is provided, a validation set will be built first and then
 the training set will be constructed using the remaining graphs.
 
 The syntax for the ```config_training``` and ```config_validation``` yaml relies on set of rules.

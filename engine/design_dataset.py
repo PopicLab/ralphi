@@ -7,10 +7,10 @@ import engine.config as config_utils
 
 if __name__ == '__main__':
     # ------ CLI ------
-    parser = argparse.ArgumentParser(description='Train haplotype phasing')
-    parser.add_argument('--config', help='Training configuration YAML')
+    parser = argparse.ArgumentParser(description='Filter and order set of graphs to design training and validation datasets.')
+    parser.add_argument('--config', help='Dataset configuration YAML')
     parser.add_argument('--training_config', help='Training configuration YAML')
-    parser.add_argument('--validation_config', help='Training configuration YAML')
+    parser.add_argument('--validation_config', help='Validation configuration YAML')
     args = parser.parse_args()
     # -----------------
 

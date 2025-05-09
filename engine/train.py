@@ -1,5 +1,7 @@
 import argparse
 import logging
+import os.path
+
 import torch
 import random
 import dgl
@@ -19,7 +21,8 @@ if __name__ == '__main__':
     # -----------------
     # Load the config
     config = config_utils.load_config(args.config)
-
+    if not config.panel_train or not config.panel_validate:
+        raise FileNotFoundError('Panel files for training and validation are required.')
     torch.manual_seed(config.seed)
     random.seed(config.seed)
     dgl.seed(config.seed)
@@ -27,8 +30,7 @@ if __name__ == '__main__':
     torch.set_num_threads(config.num_cores_torch)
     graph_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False)
     training_dataset = graph_dataset.load_indices()
-    if config.panel_validation:
-        validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
+    validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
 
     # Setup the agent and the training environment
     env_train = envs.PhasingEnv(config, graph_dataset=training_dataset)
@@ -50,7 +52,7 @@ if __name__ == '__main__':
         reward = None
         if episode_id % config.interval_validate == 0:
             torch.save(agent.model.state_dict(), "%s/ralphi_model_%d.pt" % (config.out_dir, model_checkpoint_id))
-            if config.panel_validation:
+            if config.panel_validate:
                 reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, config)
                 model_checkpoint_id += 1
                 if reward > best_validation_reward:

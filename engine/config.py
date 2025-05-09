@@ -109,7 +109,7 @@ TRAIN_DEFAULTS.update({
     'gamma': 0.98,
     'lr': 0.00003,
     'epochs': 1,
-    'drop_chr20': True,
+    'drop_chr': ['chr20'],
     'min_graph_size': 1,
     'max_graph_size': 5000,
     'skip_singleton_graphs': True,
@@ -117,7 +117,7 @@ TRAIN_DEFAULTS.update({
     'n_procs': 8,
     'max_episodes': None, # maximum number of episodes to run
     'interval_validate': 500,  # number of episodes between model validation runs
-    'panel_validation': None,  # fragment files for validation
+    'panel_validate': None,  # fragment files for validation
     'render_view': "weighted_view",
     'load_components': True,
     'store_components': True,
