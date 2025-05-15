@@ -68,7 +68,6 @@ class FragGraph:
             fragments = FragGraph.merge_fragments_by_identity(fragments)
             logging.debug("Compressed number of fragments: %d" % len(fragments))
         fragments = frags.split_articulation(fragments)
-
         frag_graph = nx.Graph()
         logging.debug("Constructing fragment graph from %d fragments" % len(fragments))
 
@@ -99,45 +98,38 @@ class FragGraph:
         return len(vcf_positions)
 
     def set_graph_properties(self, features, config=None):
-        if 'betweenness' in features and "betweenness" not in self.graph_properties:
-            k = None
-            if config.approximate_betweenness and (config.num_pivots < self.n_nodes):
-                # if there is more nodes than num_pivots, use "num_pivots" pivots for betweenness approximation
-                k = config.num_pivots
-            self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=config.seed)
+        for feature in features:
+            if feature in self.graph_properties: continue
 
-        if 'n_edges' in features and "n_edges" not in self.graph_properties:
-            self.graph_properties["n_edges"] = self.g.number_of_edges()
-
-        if 'n_nodes' in features and "n_nodes" not in self.graph_properties:
-            self.graph_properties["n_nodes"] = self.g.number_of_nodes()
-
-        if 'density' in features and "density" not in self.graph_properties:
-            self.graph_properties["density"] = nx.density(self.g)
-
-        if 'min_weight' in features and "min_weight" not in self.graph_properties:
-            edge_labels = nx.get_edge_attributes(self.g, "weight")
-            self.graph_properties["min_weight"] = min(edge_labels.values())
-
-        if 'max_weight' in features and "max_weight" not in self.graph_properties:
-            edge_labels = nx.get_edge_attributes(self.g, "weight")
-            self.graph_properties["max_weight"] = max(edge_labels.values())
-
-        if 'density' in features and "density" not in self.graph_properties:
-            self.graph_properties["density"] = nx.density(self.g)
-
-        if 'articulation_points' in features and "articulation_points" not in self.graph_properties:
-            self.graph_properties["articulation_points"] = len(list(nx.articulation_points(self.g)))
-
-        if 'diameter' in features and "diameter" not in self.graph_properties:
-            self.graph_properties["diameter"] = nx.diameter(self.g)
-
-        if 'n_variants' in features and "n_variants" not in self.graph_properties:
-            self.graph_properties['n_variants'] = self.get_variants_set()
-
-        if 'compression_factor' in features and "compression_factor" not in self.graph_properties:
-            total_n_frags = sum([frag.n_copies for frag in self.fragments])
-            self.graph_properties['compression_factor'] = 1 - self.g.number_of_nodes() / total_n_frags
+            if feature == 'betweenness':
+                k = None
+                if config.approximate_betweenness and (config.num_pivots < self.n_nodes):
+                    # if there is more nodes than num_pivots, use "num_pivots" pivots for betweenness approximation
+                    k = config.num_pivots
+                self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=config.seed)
+            elif feature == "n_edges":
+                self.graph_properties["n_edges"] = self.g.number_of_edges()
+            elif feature == "n_nodes":
+                self.graph_properties["n_nodes"] = self.g.number_of_nodes()
+            elif feature == "density":
+                self.graph_properties["density"] = nx.density(self.g)
+            elif feature == "min_weight":
+                edge_labels = nx.get_edge_attributes(self.g, "weight")
+                self.graph_properties["min_weight"] = min(edge_labels.values())
+            elif feature == "max_weight":
+                edge_labels = nx.get_edge_attributes(self.g, "weight")
+                self.graph_properties["max_weight"] = max(edge_labels.values())
+            elif feature == "articulation_points":
+                self.graph_properties["articulation_points"] = len(list(nx.articulation_points(self.g)))
+            elif feature == "diameter":
+                self.graph_properties["diameter"] = nx.diameter(self.g)
+            elif feature == "n_variants":
+                self.graph_properties['n_variants'] = self.get_variants_set()
+            elif feature == "compression_factor":
+                total_n_frags = sum([frag.n_copies for frag in self.fragments])
+                self.graph_properties['compression_factor'] = 1 - self.g.number_of_nodes() / total_n_frags
+            else:
+                raise ValueError(f'Feature {feature} not defined, please use one of {list(constants.FEATURES_DICT.keys())}.')
 
         self.set_node_features(features)
 
@@ -290,9 +282,8 @@ class GraphDataset:
         self.combined_graph_indexes = []
         self.recompute = False
         self.validation_mode = validation_mode
-        if not validation_mode:
-            self.panel = config.panel_train
-        else:
+        self.panel = config.panel_train
+        if validation_mode:
             self.panel = config.panel_validate
         if ordering_config:
             # Determine the features to compute to perform the data filtering and ordering
@@ -374,12 +365,15 @@ class GraphDataset:
     def load_indices(self):
         path_panel = self.panel.strip() + ".index_per_graph"
         if self.combined_graph_indexes:
+            # Newly constructed dataset
             graph_dataset = pd.DataFrame(self.combined_graph_indexes)
             graph_dataset["group"] = "overall"
             graph_dataset.to_pickle(path_panel)
         elif os.path.exists(path_panel):
+            # Loading dataset
             graph_dataset = pd.read_pickle(path_panel)
         else:
+            # panel contains a list of paths to datasets to merge in a single dataframe.
             panels = open(self.panel, 'r').readlines()
             datasets = []
             for panel in panels:
@@ -390,9 +384,11 @@ class GraphDataset:
         logging.info("graph dataset... %s" % graph_dataset.describe())
 
         if self.ordering_config is not None:
+            # Apply the filters specified by the ordering_config
             graph_dataset = self.dataset_nested_design(graph_dataset, self.ordering_config)
 
         if self.validation_mode:
+            # If it is a validation dataset, creates subsets of graphs for my parallelization purposes
             graph_dataset = self.round_robin_chunkify(graph_dataset)
         return graph_dataset
 
@@ -410,7 +406,7 @@ class GraphDataset:
             if config.drop_chr and chromosome in config.drop_chr: continue
             logging.info("Building graphs for %s %s" % (config.bam, chromosome))
             fragments = frags.generate_fragments(config, chromosome)
-            fragments = frags.parse_frag_repr(fragments)
+            fragments = frags.parse_frag_repr(fragments, log_reads=config.log_reads)
             graph = FragGraph.build(fragments, compress=self.config.compress)
             connected_components = graph.connected_components_subgraphs(config, self.features,
                                                                          skip_trivial_graphs=self.config.skip_trivial_graphs)

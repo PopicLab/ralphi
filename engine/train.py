@@ -1,7 +1,5 @@
 import argparse
 import logging
-import os.path
-
 import torch
 import random
 import dgl
@@ -28,8 +26,7 @@ if __name__ == '__main__':
     dgl.seed(config.seed)
     torch.set_default_tensor_type(torch.DoubleTensor)
     torch.set_num_threads(config.num_cores_torch)
-    graph_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False)
-    training_dataset = graph_dataset.load_indices()
+    training_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False).load_indices()
     validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
 
     # Setup the agent and the training environment
@@ -52,13 +49,12 @@ if __name__ == '__main__':
         reward = None
         if episode_id % config.interval_validate == 0:
             torch.save(agent.model.state_dict(), "%s/ralphi_model_%d.pt" % (config.out_dir, model_checkpoint_id))
-            if config.panel_validate:
-                reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, config)
-                model_checkpoint_id += 1
-                if reward > best_validation_reward:
-                    best_validation_reward = reward
-                    best_validation_reward_id = model_checkpoint_id
-                    torch.save(agent.model.state_dict(), config.best_model_path)
+            reward = engine.validate.validate(model_checkpoint_id, episode_id, validation_dataset, config)
+            model_checkpoint_id += 1
+            if reward > best_validation_reward:
+                best_validation_reward = reward
+                best_validation_reward_id = model_checkpoint_id
+                torch.save(agent.model.state_dict(), config.best_model_path)
         episode_reward = agent.run_episode(episode_id=episode_id)
         episode_id += 1
         agent.env = env_train

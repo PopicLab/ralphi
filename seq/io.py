@@ -1,8 +1,6 @@
 import vcf.filters
 import vcf
-import argparse
 from vcf.parser import Reader, Writer, _Format
-import copy
 import collections
 
 
