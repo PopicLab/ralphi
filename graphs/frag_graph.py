@@ -100,7 +100,7 @@ class FragGraph:
     def set_graph_properties(self, features, config=None):
         for feature in features:
             if feature in self.graph_properties: continue
-
+            if feature in ['cut_member_hap0', 'cut_member_hap1']: continue
             if feature == 'betweenness':
                 k = None
                 if config.approximate_betweenness and (config.num_pivots < self.n_nodes):
