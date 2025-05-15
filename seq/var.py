@@ -43,15 +43,16 @@ class Variant:
                                                                        len(self.phase_sets))
 
 
-def extract_variants(phased_frag_sets):
+def extract_variants(phased_frag_sets, chr):
     idx2variant = {}
     for ps, fragments in enumerate(phased_frag_sets):
         for frag in fragments:
             for var in frag.variants:
-                if var.vcf_idx not in idx2variant:
+                vcf_idx = str(var.vcf_idx) + chr
+                if vcf_idx not in idx2variant:
                     # first time we've seen this variant
-                    idx2variant[var.vcf_idx] = Variant(var.vcf_idx)
-                idx2variant[var.vcf_idx].phase_sets[ps].append((var, frag.n_copies))
+                    idx2variant[vcf_idx] = Variant(var.vcf_idx)
+                idx2variant[vcf_idx].phase_sets[ps].append((var, frag.n_copies))
     return idx2variant
 
 def update_phase_sets(max_phase_set, idx2var):
