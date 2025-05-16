@@ -1,6 +1,10 @@
+from copy import deepcopy
+
+from jsonschema.benchmarks import subcomponents
+
 import seq.frags as frags
 import networkx as nx
-import engine.config as config_utils
+import time
 import pickle
 import random
 import os
@@ -17,7 +21,6 @@ import warnings
 from models import constants
 from seq.utils import extract_vcf_for_variants, construct_vcf_idx_to_record_dict
 import wandb
-import numpy as np
 
 
 class FragGraph:
@@ -70,7 +73,6 @@ class FragGraph:
             logging.debug("Compressing identical fragments")
             fragments = FragGraph.merge_fragments_by_identity(fragments)
             logging.debug("Compressed number of fragments: %d" % len(fragments))
-        fragments = frags.split_articulation(fragments)
 
         frag_graph = nx.Graph()
         logging.debug("Constructing fragment graph from %d fragments" % len(fragments))
@@ -212,7 +214,7 @@ class FragGraph:
                 pruned_edges[v].append(u)
         return g, pruned_edges
 
-    def extract_subgraph(self, connected_component, features, compute_trivial=False):
+    def extract_subgraph(self, connected_component, compute_trivial=False):
         subg = self.g.subgraph(connected_component)
         subg_frags = [self.fragments[node] for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
@@ -222,8 +224,33 @@ class FragGraph:
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
         return FragGraph(subg_relabeled, subg_frags, node_id2hap_id, compute_trivial)
 
+
+    def get_biconnected_subgraphs(self):
+        init_bic = time.time()
+        # TODO(enzo): implement Tarjan's algorithm to get directly the articulation nodes, and the potential connected components at the same time.
+        bic_components = list(nx.biconnected_components(self.g)) # O(V+E) with Tarjan's algorithm
+        print('COMPUTE bic compo', time.time() - init_bic)
+        # If there is a single biconnected component, there is no articulation point.
+        if len(bic_components) == 1: return bic_components
+        articulations = []
+        init_arti = time.time()
+        for bic_idx1, bic_component1 in enumerate(bic_components):
+            for bic_idx2, bic_component2 in bic_components[bic_idx1:]:
+                arti = list(set(bic_component1) & set(bic_component2)) # There can be only one node at the intersection if any
+                if not arti: continue
+                arti = arti[0]
+                if arti not in articulations:
+                    articulations.append(arti)
+                    # This node will be duplicated when taking the subgraphs, keeps its id for stitching
+                    self.fragments[arti].fragment_group_id = arti
+                self.fragments[arti].number_duplicated += 1
+        print('Find articulation points', time.time() - init_arti)
+        print('NUMBER ARTICULATIONS', len(articulations))
+        return bic_components
+
+
     def connected_components_subgraphs(self, config=None, features=None, skip_trivial_graphs=False):
-        components = nx.connected_components(self.g)
+        components = self.get_biconnected_subgraphs()
         logging.debug("Found connected components, now constructing subgraphs...")
         subgraphs = []
         for component in components:
