@@ -224,6 +224,67 @@ class FragGraph:
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
         return FragGraph(subg_relabeled, subg_frags, node_id2hap_id, compute_trivial)
 
+    def tarjan_algorithm(self):
+        articulation_points = set()
+        visited = set()
+        # When the nodes have been discovered
+        disc = {}
+        # Records the index of the earliest discovered node, represents biconnected components
+        bic = {}
+        parent = {}
+        number_explored = 0
+        connected_components = []
+
+        for start in self.g.nodes():
+            # We might have disconnected components so it is necessary to try other nodes.
+            if start in visited:
+                continue
+            # New connected component
+            connected_components.append([])
+            stack = [(start, None, self.g.neighbors(start))]
+            disc[start] = bic[start] = number_explored
+            number_explored += 1
+            visited.add(start)
+            parent[start] = None
+            children = 0
+            # Iterative DFS
+            while stack:
+                current, prev, neighbors = stack[-1]
+                try:
+                    neighbor = next(neighbors)
+                    if neighbor not in visited:
+                        # neighbor is connected to the current start
+                        connected_components[-1].append(neighbor)
+                        visited.add(neighbor)
+                        parent[neighbor] = current
+                        disc[neighbor] = bic[neighbor] = number_explored
+                        number_explored += 1
+                        stack.append((neighbor, current, self.g.neighbors(neighbor)))
+                        if parent[current] is None:
+                            children += 1
+                    elif neighbor != prev:
+                        # If current has been connected to a node discovered before it, they are in the same bic
+                        bic[current] = min(bic[current], disc[neighbor])
+                except StopIteration:
+                    stack.pop()
+                    if parent[current] is not None:
+                        # It is not a start node
+                        # If current connected to a node discovered before its parent, the parent is in the same bic
+                        bic[parent[current]] = min(bic[parent[current]], bic[current])
+                        if bic[current] >= disc[parent[current]]:
+                            # The parent wasn't reach over this section of the DFS, it is an articulation point
+                            articulation_points.add(parent[current])
+                    else:
+                        if children > 1:
+                            # Start has neighbors only connected through start
+                            articulation_points.add(current)
+        biconnected_components = {}
+        for arti in articulation_points:
+            # Get the articulation points and the biconnected components they connect.
+            biconnected_components[arti] = set()
+            for neighbor in self.g.neighbors(arti):
+                biconnected_components[arti].add(bic[neighbor])
+        return biconnected_components, connected_components
 
     def get_biconnected_subgraphs(self):
         init_bic = time.time()
