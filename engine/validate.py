@@ -19,7 +19,7 @@ def validation_task(sub_df, config, model_path):
     while agent.env.has_state():
         sum_of_rewards = 0
         sum_of_cuts = 0
-        reward_val = agent.run_episode(test_mode=True)
+        reward_val = agent.run_episode(config, test_mode=True)
         sum_of_rewards += reward_val
         cut_val = agent.env.get_cut_value()
         sum_of_cuts += cut_val
