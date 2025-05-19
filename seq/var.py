@@ -1,4 +1,5 @@
 from collections import defaultdict 
+import logging
 import operator
 
 class Variant:
@@ -108,4 +109,3 @@ def postprocess(graphs, idx2var, config):
     idx2var, max_phase_set = update_phase_sets(len(graphs), idx2var)
     split_eq_evidence(graphs, idx2var, max_phase_set)
     return idx2var
-

@@ -4,6 +4,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions.categorical import Categorical
 from models.graph_models import GIN, GCN, GCNv2
+import time
+import logging
+import engine.config as config
 import models.constants as constants
 import wandb
 from torch.nn.utils import spectral_norm
@@ -63,11 +66,13 @@ class DiscreteActorCriticAgent:
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(self.env.config.device)
 
-    def run_episode(self, test_mode=False, episode_id=None):
+    def run_episode(self, config, test_mode=False, episode_id=None):
         done = False
         episode_reward = 0
+        first = True
         while not done:
-            action = self.select_action(test_mode)
+            action = self.select_action(test_mode, first=first)
+            first = False
             _, reward, done = self.env.step(action)
             episode_reward += reward
             if not test_mode: self.model.rewards.append(reward)
@@ -78,7 +83,24 @@ class DiscreteActorCriticAgent:
             wandb.log({"Episode": episode_id, "Training Cut Size": cut_size})
         return episode_reward
 
-    def select_action(self, greedy=False):
+    def log_episode_stats(self, episode_id, reward, loss, runtime):
+        self.env.state.frag_graph.log_graph_properties(episode_id)
+        graph_stats = []
+        logging.getLogger(config.MAIN_LOG).info("Episode: %d. Reward: %d, ActorLoss: %d, CriticLoss: %d, TotalLoss: %d,"
+                                                " CutSize: %d, Runtime: %d" %
+                                                (episode_id, reward,
+                                                 loss[constants.LossTypes.actor_loss],
+                                                 loss[constants.LossTypes.critic_loss],
+                                                 loss[constants.LossTypes.total_loss],
+                                                 self.env.get_cut_value(),
+                                                 runtime))
+        logging.getLogger(config.STATS_LOG_TRAIN).info(",".join([str(episode_id), str(reward),
+                                                                 str(self.env.get_cut_value()),
+                                                                 str(loss),
+                                                                 str(graph_stats),
+                                                                 str(runtime)]))
+
+    def select_action(self, greedy=False, first=False):
         # based on DAC model in:
         # https://github.com/orrivlin/MinimumVertexCover_DRL/blob/master/discrete_actor_critic.py
         if self.env.state.num_nodes < 2:

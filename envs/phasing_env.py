@@ -23,6 +23,7 @@ class State:
         self.g = dgl.from_networkx(frag_graph.g.to_directed(), edge_attrs=edge_attrs, node_attrs=features)
         self.g = self.g.to(device) 
         self.assigned = torch.zeros(self.num_nodes * 2)
+        self.explorable = torch.zeros(self.num_nodes * 2)
         self.H0 = []
         self.H1 = []
         self.best_reward = 0
@@ -38,6 +39,10 @@ class PhasingEnv(gym.Env):
         self.state = self.init_state()
         if not self.has_state():
             raise ValueError("Environment state was not initialized: no valid input graphs")
+        # action space consists of the set of nodes we can assign and a termination step
+        self.num_actions = self.state.num_nodes * 2
+        self.action_space = spaces.Discrete(self.num_actions)
+        self.observation_space = {}
         # other bookkeeping
         self.record = record_solutions
         self.solutions = []
@@ -45,6 +50,7 @@ class PhasingEnv(gym.Env):
     def init_state(self):
         g = next(self.graph_gen)
         if g is not None:
+            g.normalize_edges(self.config.weight_norm, self.config.fragment_norm)
             return State(g, self.features, self.config.device)
         else:
             return None
@@ -78,6 +84,9 @@ class PhasingEnv(gym.Env):
         else:
             return max((self.state.current_total_reward - self.state.best_reward) /
                        self.state.frag_graph.graph_properties["total_num_frag"], 0)
+
+    def is_termination_action(self, action):
+        return action == self.state.num_nodes
 
     def is_out_of_moves(self):
         return len(self.state.H0) + len(self.state.H1) >= self.state.num_nodes
@@ -140,6 +149,12 @@ class PhasingEnv(gym.Env):
             else: raise RuntimeError("Fragment wasn't assigned to any cluster")
         self.solutions.append(self.state.frag_graph.fragments)
 
+    def get_solutions(self):
+        node_labels = self.state.g.ndata['cut_member_hap0'][:, 0].cpu().numpy().tolist()
+        for i, frag in enumerate(self.state.frag_graph.fragments):
+            frag.assign_haplotype(node_labels[i])
+        return self.state.frag_graph.fragments
+
     def get_cut_value(self):
         return self.state.current_total_reward
 
@@ -155,6 +170,12 @@ class PhasingEnv(gym.Env):
             edge_indices = zip(edges_src, edges_dst)
             edge_weights = dict(zip(edge_indices, edge_weights))
             vis.plot_weighted_network(self.state.g.to_networkx(), node_labels, edge_weights)
+
+    def get_all_valid_actions(self):
+        return (self.state.assigned == 0.).nonzero()
+
+    def get_all_non_neighbour_actions(self):
+        return (self.state.explorable == 0.).nonzero()
 
     def get_all_invalid_actions(self):
         return (self.state.assigned == 1.).nonzero()

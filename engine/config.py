@@ -124,6 +124,8 @@ TRAIN_DEFAULTS.update({
     'store_indexes': True,
     'pretrained_model': None,
     'partition': 20,
+    'dataset_metrics': ['min_weight', 'max_weight', 'n_edges', 'density', 'n_articulation_points',
+                                'diameter', 'n_variants', 'compression_factor'],
 })
 
 

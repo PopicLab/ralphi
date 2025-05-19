@@ -1,7 +1,7 @@
 import argparse
 import logging
 
-import graphs.frag_graph
+import graphs.graph_dataset
 import random
 import engine.config as config_utils
 
@@ -20,11 +20,11 @@ if __name__ == '__main__':
     validation_config = config_utils.load_config(args.validation_config, config_type=config_utils.CONFIG_TYPE.DATA_DESIGN)
 
     random.seed(config.seed)
-    graph_dataset = graphs.frag_graph.GraphDataset(config)
+    graph_dataset = graphs.graph_dataset.GraphDataset(config)
     global_df = graph_dataset.load_indices()
     logging.info('Overall the dataset contains %d graphs' % global_df.shape[0])
     if validation_config is not None:
-        validation_df = graphs.frag_graph.GraphDataset(config, validation_config).load_indices()
+        validation_df = graphs.graph_dataset.GraphDataset(config, validation_config).load_indices()
         logging.info('Validation dataset number of graphs %d' % validation_df.shape[0])
         # Remove the validation graphs from the pool of graphs available for training
         global_df = global_df[~global_df.component_path.isin(validation_df.component_path)]

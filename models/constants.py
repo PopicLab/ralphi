@@ -15,32 +15,8 @@ FEATURES_DICT = {
     'between': [
         'betweenness'
     ],
-
-    'min_weight': [
-        'min_weight'
-    ],
-    'max_weight': [
-        'max_weight'
-    ],
-    'n_edges': [
-        'n_edges'
-    ],
-    'n_nodes': [
-        'n_nodes'
-    ],
-    'density': [
-        'density'
-    ],
-    'diameter': [
-        'diameter'
-    ],
-    'n_variants': [
-        'n_variants'
-    ],
-    'compression_factor': [
-        'compression_factor'
-    ],
-    'n_articulation_points': [
-        'articulation_points'
-    ]
 }
+
+DATASET_FEATURES = ['min_weight', 'max_weight', 'n_edges', 'density', 'n_articulation_points',
+                                'diameter', 'n_variants', 'compression_factor']
+

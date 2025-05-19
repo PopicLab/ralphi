@@ -4,7 +4,7 @@ import torch
 import random
 import dgl
 
-import graphs.frag_graph
+import graphs.graph_dataset
 import models.actor_critic as agents
 import envs.phasing_env as envs
 import engine.config as config_utils
@@ -26,8 +26,8 @@ if __name__ == '__main__':
     dgl.seed(config.seed)
     torch.set_default_tensor_type(torch.DoubleTensor)
     torch.set_num_threads(config.num_cores_torch)
-    training_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=False).load_indices()
-    validation_dataset = graphs.frag_graph.GraphDataset(config, validation_mode=True).load_indices()
+    training_dataset = graphs.graph_dataset.GraphDataset(config, validation_mode=False).load_indices()
+    validation_dataset = graphs.graph_dataset.GraphDataset(config, validation_mode=True).load_indices()
 
     # Setup the agent and the training environment
     env_train = envs.PhasingEnv(config, graph_dataset=training_dataset)
@@ -55,7 +55,7 @@ if __name__ == '__main__':
                 best_validation_reward = reward
                 best_validation_reward_id = model_checkpoint_id
                 torch.save(agent.model.state_dict(), config.best_model_path)
-        episode_reward = agent.run_episode(episode_id=episode_id)
+        episode_reward = agent.run_episode(config, episode_id=episode_id)
         episode_id += 1
         agent.env = env_train
         if episode_id % (10 * config.interval_validate) == 0:

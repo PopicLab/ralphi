@@ -1,4 +1,5 @@
-from collections import defaultdict
+import argparse
+from collections import Counter, defaultdict
 from copy import deepcopy
 from intervaltree import IntervalTree
 import logging
@@ -6,6 +7,7 @@ import whatshap
 import string
 from whatshap import readselect
 from whatshap.cli import PhasedInputReader
+from whatshap import merge
 
 class FragVariantHandle:
     def __init__(self, vcf_idx, allele, qscore=None):
@@ -44,7 +46,7 @@ class Block:
 
 
 class Fragment:
-    def __init__(self, read_name=None, blocks=None, variants=None, n_copies=1):
+    def __init__(self, read_name, blocks=None, variants=None, n_copies=1):
         self.read_id = read_name
         self.n_copies = n_copies  # number of copies of this fragment
         self.n_variants = 0
@@ -95,7 +97,7 @@ class Fragment:
             var.haplotype = h
 
     @staticmethod
-    def parse_from_file(frag_line, log_reads):
+    def parse_from_file(frag_line):
         fields = frag_line.split()
         n_blocks = int(fields[0])
         field_idx = 1
@@ -112,10 +114,7 @@ class Fragment:
             for variant in block.variants:
                 variant.qscore = convert_qscore(qscores[qscore_idx])
                 qscore_idx += 1
-        read_name = None
-        if log_reads:
-            read_name = fields[-1]
-        return Fragment(read_name=read_name, blocks=blocks)
+        return Fragment(fields[1], blocks=blocks)
 
     def split_at(self, position):
         split_index = next(i for i, variant in enumerate(self.variants) if variant.vcf_idx >= position)
@@ -127,10 +126,19 @@ def convert_qscore(qscore):
     return 10 ** ((ord(qscore) - 33) / (-10))
 
 
-def parse_frag_repr(frag_repr, log_reads=False):
+def parse_frag_file(frags_fname):
+    fragments = []
+    with open(frags_fname, 'r') as f:
+        for frag_line in f:
+            fragments.append(Fragment.parse_from_file(frag_line))
+    # sort fragments to optimize graph construction
+    fragments = sorted(fragments, key=lambda frag: frag.vcf_idx_start)
+    return fragments
+
+def parse_frag_repr(frag_repr):
     fragments = []
     for frag_line in frag_repr:
-        fragments.append(Fragment.parse_from_file(frag_line, log_reads))
+        fragments.append(Fragment.parse_from_file(frag_line))
     fragments = sorted(fragments, key=lambda frag: frag.vcf_idx_start)
     return fragments
 
@@ -204,7 +212,7 @@ def generate_fragments(config, chromosome):
     logging.debug("Number of reads loaded: %d", len(reads))
     if config.log_reads: write_reads(reads, config.out_dir + "/input_reads.txt")
     if not config.no_filter:
-        reads = select_variants(reads, config)
+        reads = select_variants(reads, config, variant_table)
     # keep only reads that cover at least two variants and have a sufficiently high MAPQ
     reads = reads.subset([i for i, read in enumerate(reads) if len(read) >= 2 and read.mapqs[0] >= config.mapq])
     logging.debug("Number of reads covering two variants : %d", len(reads))
@@ -213,9 +221,9 @@ def generate_fragments(config, chromosome):
         reads = reads.subset(readselect.readselection(reads, config.max_coverage))
     if config.log_reads: write_reads(reads, config.out_dir + "/output_reads.txt")
     logging.info("Selected %d reads covering %d variants in %s", len(reads), len(reads.get_positions()), chromosome)
-    return assemble_fragments(reads, variant_table.variants, config.log_reads)
+    return assemble_fragments(reads, variant_table.variants)
 
-def assemble_fragments(reads, variants, log_reads=False):
+def assemble_fragments(reads, variants):
     pos2idx = {}
     for v in variants:
         pos2idx[v.position] = v.index
@@ -224,10 +232,7 @@ def assemble_fragments(reads, variants, log_reads=False):
         blocks = get_fragment_blocks(read, pos2idx)
         block_allele_str = " ".join(str(b[0]) + " " + b[1] for b in blocks)
         block_qual_str = "".join(str(c) if c in string.printable else '!' for b in blocks for c in b[2])
-        read_name = ""
-        if log_reads:
-            read_name = read.name
-        fragments.append(" ".join([str(len(blocks)), block_allele_str, block_qual_str, read_name]))
+        fragments.append(" ".join([str(len(blocks)), block_allele_str, block_qual_str]))
     return fragments
 
 
@@ -255,31 +260,7 @@ def get_fragment_blocks(read, pos2idx):
         blocks.append((current_block_idx, current_block_alleles, current_block_quals))
     return blocks
 
-def write_reads(reads, output_fname):
-    with open(output_fname, "w") as reads_file:
-        for read in reads:
-            if len(read):
-                fields = [
-                    read.name,
-                    read.strand,
-                    str(len(read)),
-                    str(read.mapqs[0]),
-                    str(read[0].position + 1),
-                    str(read[-1].position + 1),
-                    ",".join(str(variant.position + 1) for variant in read),
-                    ",".join(str(variant.allele) for variant in read),
-                    ",".join(str(variant.quality) for variant in read),
-                ]
-            else:
-                fields = [
-                    read.name,
-                    read.strand,
-                    len(read),
-                    read.mapqs[0]
-                ]
-            reads_file.write("\t".join(fields) + "\n")
-
-def select_variants(reads, config):
+def select_variants(reads, config, variant_table):
     pos2alleles = NestedDict(NestedDict(NestedDict(int)))
     pos2coverage = NestedDict(NestedDict(int))
     pos2strands = defaultdict(set)

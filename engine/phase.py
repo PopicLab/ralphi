@@ -11,7 +11,9 @@ from seq.frags import generate_fragments
 import logging
 import numpy as np
 from joblib import Parallel, delayed
+import pickle
 import random
+import tqdm
 
 print("***********************************************")
 print("*  ralphi (%s): haplotype assembly mode *" % engine.__version__)
@@ -32,7 +34,7 @@ def phase(chr_names, config):  # runs phasing on the specified list of chromosom
         # -------- run ralphi on all the connected components of the fragment graph
         while env.has_state():
             if env.state.frag_graph.trivial: env.process_error_free_instance()
-            else: agent.run_episode(test_mode=True)
+            else: agent.run_episode(config, test_mode=True)
             env.reset()
         env.postprocess()
 
