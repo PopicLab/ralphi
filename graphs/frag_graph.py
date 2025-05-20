@@ -1,10 +1,5 @@
-from copy import deepcopy
-
-from jsonschema.benchmarks import subcomponents
-
 import seq.frags as frags
 import networkx as nx
-import time
 import pickle
 import random
 import os
@@ -216,6 +211,7 @@ class FragGraph:
 
     def extract_subgraph(self, connected_component, compute_trivial=False):
         subg = self.g.subgraph(connected_component)
+        #nx.write_gml(subg, 'subgraph.gml')
         subg_frags = [self.fragments[node] for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
         node_id2hap_id = None
@@ -224,23 +220,33 @@ class FragGraph:
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
         return FragGraph(subg_relabeled, subg_frags, node_id2hap_id, compute_trivial)
 
-    def tarjan_algorithm(self):
+    def get_component(self, p, edge_stack, current):
+        component = []
+        while edge_stack:
+            # Get the biconnected component
+            e = edge_stack.pop()
+            component += e
+            if (p is not None) and (p in e) and (current in e):
+                # Got back to the articulation
+                break
+        return list(set(component))
+
+    def tarjan_algorithm(self): # O(V+E)
         articulation_points = set()
         visited = set()
         # When the nodes have been discovered
         disc = {}
-        # Records the index of the earliest discovered node, represents biconnected components
+        # Records the index of the earliest discovered neighbor
         bic = {}
         parent = {}
         number_explored = 0
-        connected_components = []
-
+        edge_stack = []
+        biconnected_components = []
         for start in self.g.nodes():
             # We might have disconnected components so it is necessary to try other nodes.
             if start in visited:
                 continue
             # New connected component
-            connected_components.append([])
             stack = [(start, None, self.g.neighbors(start))]
             disc[start] = bic[start] = number_explored
             number_explored += 1
@@ -254,12 +260,12 @@ class FragGraph:
                     neighbor = next(neighbors)
                     if neighbor not in visited:
                         # neighbor is connected to the current start
-                        connected_components[-1].append(neighbor)
                         visited.add(neighbor)
                         parent[neighbor] = current
                         disc[neighbor] = bic[neighbor] = number_explored
                         number_explored += 1
                         stack.append((neighbor, current, self.g.neighbors(neighbor)))
+                        edge_stack.append([neighbor, current])
                         if parent[current] is None:
                             children += 1
                     elif neighbor != prev:
@@ -267,55 +273,48 @@ class FragGraph:
                         bic[current] = min(bic[current], disc[neighbor])
                 except StopIteration:
                     stack.pop()
-                    if parent[current] is not None:
+                    p = parent[current]
+                    if p is not None and not p == start:
                         # It is not a start node
                         # If current connected to a node discovered before its parent, the parent is in the same bic
-                        bic[parent[current]] = min(bic[parent[current]], bic[current])
-                        if bic[current] >= disc[parent[current]]:
+                        bic[p] = min(bic[p], bic[current])
+                        if bic[current] >= disc[p]:
                             # The parent wasn't reach over this section of the DFS, it is an articulation point
-                            articulation_points.add(parent[current])
+                            articulation_points.add(p)
+                            #print('found articulation point', p, current, bic[current], disc[p], bic[p])
+                            biconnected_components.append(self.get_component(p, edge_stack, current))
                     else:
                         if children > 1:
                             # Start has neighbors only connected through start
-                            articulation_points.add(current)
-        biconnected_components = {}
-        for arti in articulation_points:
-            # Get the articulation points and the biconnected components they connect.
-            biconnected_components[arti] = set()
-            for neighbor in self.g.neighbors(arti):
-                biconnected_components[arti].add(bic[neighbor])
-        return biconnected_components, connected_components
+                            articulation_points.add(start)
+                            if edge_stack:
+                                biconnected_components.append(self.get_component(p, edge_stack, current))
+                            #print('found articulation point start', p, current, bic[current])
+            if edge_stack:
+                biconnected_components.append(self.get_component(None, edge_stack, None))
+        #print('bic', bic, 'disc', disc, 'arti', articulation_points, 'biconnected', biconnected_components)
+        return articulation_points, biconnected_components
 
     def get_biconnected_subgraphs(self):
-        init_bic = time.time()
-        # TODO(enzo): implement Tarjan's algorithm to get directly the articulation nodes, and the potential connected components at the same time.
-        bic_components = list(nx.biconnected_components(self.g)) # O(V+E) with Tarjan's algorithm
-        print('COMPUTE bic compo', time.time() - init_bic)
+        articulation_points, biconnected_components = self.tarjan_algorithm()
         # If there is a single biconnected component, there is no articulation point.
-        if len(bic_components) == 1: return bic_components
-        articulations = []
-        init_arti = time.time()
-        for bic_idx1, bic_component1 in enumerate(bic_components):
-            for bic_idx2, bic_component2 in bic_components[bic_idx1:]:
-                arti = list(set(bic_component1) & set(bic_component2)) # There can be only one node at the intersection if any
-                if not arti: continue
-                arti = arti[0]
-                if arti not in articulations:
-                    articulations.append(arti)
-                    # This node will be duplicated when taking the subgraphs, keeps its id for stitching
-                    self.fragments[arti].fragment_group_id = arti
-                self.fragments[arti].number_duplicated += 1
-        print('Find articulation points', time.time() - init_arti)
-        print('NUMBER ARTICULATIONS', len(articulations))
-        return bic_components
+        if len(biconnected_components) == 1: return biconnected_components
+        for articulation in articulation_points:
+            # This node will be duplicated when taking the subgraphs, keeps its id for stitching
+            self.fragments[articulation].fragment_group_id = articulation
+            self.fragments[articulation].number_duplicated += 1
+        return biconnected_components
 
 
     def connected_components_subgraphs(self, config=None, features=None, skip_trivial_graphs=False):
         components = self.get_biconnected_subgraphs()
         logging.debug("Found connected components, now constructing subgraphs...")
         subgraphs = []
+        #print('COMPONENTS', components)
+        #nx.write_gml(self.g, 'grapoh.gml')
         for component in components:
-            subgraph = self.extract_subgraph(component, features, compute_trivial=True)
+            #print('COMPONENT subgraph', component)
+            subgraph = self.extract_subgraph(component, compute_trivial=True)
             if subgraph.trivial and skip_trivial_graphs: continue
             if features and not subgraph.trivial:
                 subgraph.set_graph_properties(features, config=config)
