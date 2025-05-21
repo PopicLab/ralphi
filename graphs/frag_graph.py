@@ -211,7 +211,6 @@ class FragGraph:
 
     def extract_subgraph(self, connected_component, compute_trivial=False):
         subg = self.g.subgraph(connected_component)
-        #nx.write_gml(subg, 'subgraph.gml')
         subg_frags = [self.fragments[node] for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
         node_id2hap_id = None
@@ -281,7 +280,6 @@ class FragGraph:
                         if bic[current] >= disc[p]:
                             # The parent wasn't reach over this section of the DFS, it is an articulation point
                             articulation_points.add(p)
-                            #print('found articulation point', p, current, bic[current], disc[p], bic[p])
                             biconnected_components.append(self.get_component(p, edge_stack, current))
                     else:
                         if children > 1:
@@ -289,10 +287,8 @@ class FragGraph:
                             articulation_points.add(start)
                             if edge_stack:
                                 biconnected_components.append(self.get_component(p, edge_stack, current))
-                            #print('found articulation point start', p, current, bic[current])
             if edge_stack:
                 biconnected_components.append(self.get_component(None, edge_stack, None))
-        #print('bic', bic, 'disc', disc, 'arti', articulation_points, 'biconnected', biconnected_components)
         return articulation_points, biconnected_components
 
     def get_biconnected_subgraphs(self):
@@ -310,10 +306,8 @@ class FragGraph:
         components = self.get_biconnected_subgraphs()
         logging.debug("Found connected components, now constructing subgraphs...")
         subgraphs = []
-        #print('COMPONENTS', components)
-        #nx.write_gml(self.g, 'grapoh.gml')
+
         for component in components:
-            #print('COMPONENT subgraph', component)
             subgraph = self.extract_subgraph(component, compute_trivial=True)
             if subgraph.trivial and skip_trivial_graphs: continue
             if features and not subgraph.trivial:
