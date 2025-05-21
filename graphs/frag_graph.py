@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import seq.frags as frags
 import networkx as nx
 import pickle
@@ -211,7 +213,8 @@ class FragGraph:
 
     def extract_subgraph(self, connected_component, compute_trivial=False):
         subg = self.g.subgraph(connected_component)
-        subg_frags = [self.fragments[node] for node in subg.nodes]
+        subg_frags = [self.fragments[node] if not self.fragments[node] else
+                      deepcopy(self.fragments[node]) for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
         node_id2hap_id = None
         if self.node_id2hap_id is not None:
@@ -343,10 +346,12 @@ def connect_components(components):
         for frag in frag_list:
             if frag.fragment_group_id:
                 gid2components.setdefault(frag.fragment_group_id, []).append((cid, frag))
+
     for gid, group in gid2components.items():
         hap = group[0][1].haplotype
         cid_g = component_map[group[0][0]]
         for cid, group_frag in group[1:]:
+            cid = component_map[cid]
             if group_frag.haplotype != hap:
                 for frag in components[cid]:
                     frag.assign_haplotype(flip_hap(frag.haplotype))
