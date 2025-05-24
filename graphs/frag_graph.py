@@ -213,7 +213,7 @@ class FragGraph:
 
     def extract_subgraph(self, connected_component, compute_trivial=False):
         subg = self.g.subgraph(connected_component)
-        subg_frags = [self.fragments[node] if not self.fragments[node] else
+        subg_frags = [self.fragments[node] if not self.fragments[node].fragment_group_id else
                       deepcopy(self.fragments[node]) for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
         node_id2hap_id = None
@@ -234,7 +234,7 @@ class FragGraph:
         return list(set(component))
 
     def tarjan_algorithm(self): # O(V+E)
-        articulation_points = set()
+        articulation_points = []
         visited = set()
         # When the nodes have been discovered
         disc = {}
@@ -248,6 +248,7 @@ class FragGraph:
             # We might have disconnected components so it is necessary to try other nodes.
             if start in visited:
                 continue
+            singleton = True
             # New connected component
             stack = [(start, None, self.g.neighbors(start))]
             disc[start] = bic[start] = number_explored
@@ -263,6 +264,7 @@ class FragGraph:
                     if neighbor not in visited:
                         # neighbor is connected to the current start
                         visited.add(neighbor)
+                        singleton = False
                         parent[neighbor] = current
                         disc[neighbor] = bic[neighbor] = number_explored
                         number_explored += 1
@@ -282,22 +284,23 @@ class FragGraph:
                         bic[p] = min(bic[p], bic[current])
                         if bic[current] >= disc[p]:
                             # The parent wasn't reach over this section of the DFS, it is an articulation point
-                            articulation_points.add(p)
+                            articulation_points.append(p)
                             biconnected_components.append(self.get_component(p, edge_stack, current))
                     else:
                         if children > 1:
                             # Start has neighbors only connected through start
-                            articulation_points.add(start)
+                            articulation_points.append(start)
                             if edge_stack:
                                 biconnected_components.append(self.get_component(p, edge_stack, current))
             if edge_stack:
                 biconnected_components.append(self.get_component(None, edge_stack, None))
+            if singleton:
+                # start is a singleton and is its own component
+                biconnected_components.append([start])
         return articulation_points, biconnected_components
 
     def get_biconnected_subgraphs(self):
         articulation_points, biconnected_components = self.tarjan_algorithm()
-        # If there is a single biconnected component, there is no articulation point.
-        if len(biconnected_components) == 1: return biconnected_components
         for articulation in articulation_points:
             # This node will be duplicated when taking the subgraphs, keeps its id for stitching
             self.fragments[articulation].fragment_group_id = articulation
