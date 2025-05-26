@@ -35,8 +35,7 @@ class GraphDataset:
                 computed_features = graph_dataset.columns.tolist()
             selection_features = [feature for group in ordering_config.ordering_ranges for feature in
                                   ordering_config.ordering_ranges[group]["rules"] if feature not in computed_features]
-            selection_features += [feature for feature_name in ordering_config.global_ranges for feature in
-                                   constants.FEATURES_DICT[feature_name] if feature not in computed_features]
+            selection_features += [feature for feature in ordering_config.global_ranges if feature not in computed_features]
             selection_features = list(set(selection_features))
             if selection_features:
                 self.features += selection_features
