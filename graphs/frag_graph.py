@@ -234,77 +234,21 @@ class FragGraph:
         return list(set(component))
 
     def tarjan_algorithm(self): # O(V+E)
-        articulation_points = []
-        visited = set()
-        # When the nodes have been discovered
-        disc = {}
-        # Records the index of the earliest discovered neighbor
-        bic = {}
-        parent = {}
-        number_explored = 0
-        edge_stack = []
-        biconnected_components = []
-        for start in self.g.nodes():
-            # We might have disconnected components so it is necessary to try other nodes.
-            if start in visited:
-                continue
-            singleton = True
-            # New connected component
-            stack = [(start, None, self.g.neighbors(start))]
-            disc[start] = bic[start] = number_explored
-            number_explored += 1
-            visited.add(start)
-            parent[start] = None
-            children = 0
-            # Iterative DFS
-            while stack:
-                current, prev, neighbors = stack[-1]
-                try:
-                    neighbor = next(neighbors)
-                    if neighbor not in visited:
-                        # neighbor is connected to the current start
-                        visited.add(neighbor)
-                        singleton = False
-                        parent[neighbor] = current
-                        disc[neighbor] = bic[neighbor] = number_explored
-                        number_explored += 1
-                        stack.append((neighbor, current, self.g.neighbors(neighbor)))
-                        edge_stack.append([neighbor, current])
-                        if parent[current] is None:
-                            children += 1
-                    elif neighbor != prev:
-                        # If current has been connected to a node discovered before it, they are in the same bic
-                        bic[current] = min(bic[current], disc[neighbor])
-                except StopIteration:
-                    stack.pop()
-                    p = parent[current]
-                    if p is not None and not p == start:
-                        # It is not a start node
-                        # If current connected to a node discovered before its parent, the parent is in the same bic
-                        bic[p] = min(bic[p], bic[current])
-                        if bic[current] >= disc[p]:
-                            # The parent wasn't reach over this section of the DFS, it is an articulation point
-                            articulation_points.append(p)
-                            biconnected_components.append(self.get_component(p, edge_stack, current))
-                    else:
-                        if children > 1:
-                            # Start has neighbors only connected through start
-                            articulation_points.append(start)
-                            if edge_stack:
-                                biconnected_components.append(self.get_component(p, edge_stack, current))
-            if edge_stack:
-                biconnected_components.append(self.get_component(None, edge_stack, None))
-            if singleton:
-                # start is a singleton and is its own component
-                biconnected_components.append([start])
-        return articulation_points, biconnected_components
+        biconnected_components = list(nx.biconnected_components(self.g))
+        for singleton in nx.isolates(self.g):
+            biconnected_components.append({singleton})
+        return list(nx.articulation_points(self.g)), biconnected_components
 
     def get_biconnected_subgraphs(self):
         articulation_points, biconnected_components = self.tarjan_algorithm()
         for articulation in articulation_points:
             # This node will be duplicated when taking the subgraphs, keeps its id for stitching
+            count = 0
+            for bic in biconnected_components:
+                if articulation in bic:
+                    count += 1
             self.fragments[articulation].fragment_group_id = articulation
-            self.fragments[articulation].number_duplicated += 1
+            self.fragments[articulation].number_duplicated = count
         return biconnected_components
 
 
