@@ -16,11 +16,11 @@ class Variant:
     def get_haplotype_support(self, frag_set):
         c0 = 0
         c1 = 0
-        for v, n_copies in frag_set:
+        for v, n_copies, n_duplicates in frag_set:
             if (v.haplotype == 0 and v.allele == '0') or (v.haplotype == 1 and v.allele == '1'):
-                c0 += n_copies
+                c0 += n_copies / n_duplicates
             elif (v.haplotype == 0 and v.allele == '1') or (v.haplotype == 1 and v.allele == '0'):
-                c1 += n_copies
+                c1 += n_copies / n_duplicates
         return c0, c1, c0 + c1
 
     def assign_haplotype(self):
@@ -51,7 +51,7 @@ def extract_variants(phased_frag_sets):
                 if var.vcf_idx not in idx2variant:
                     # first time we've seen this variant
                     idx2variant[var.vcf_idx] = Variant(var.vcf_idx)
-                idx2variant[var.vcf_idx].phase_sets[ps].append((var, frag.n_copies))
+                idx2variant[var.vcf_idx].phase_sets[ps].append((var, frag.n_copies, frag.number_duplicated))
     return idx2variant
 
 def update_phase_sets(max_phase_set, idx2var):
