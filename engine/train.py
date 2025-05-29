@@ -26,8 +26,8 @@ if __name__ == '__main__':
     dgl.seed(config.seed)
     torch.set_default_tensor_type(torch.DoubleTensor)
     torch.set_num_threads(config.num_cores_torch)
-    training_dataset = graphs.graph_dataset.GraphDataset(config, validation_mode=False).load_indices()
-    validation_dataset = graphs.graph_dataset.GraphDataset(config, validation_mode=True).load_indices()
+    training_dataset = graphs.graph_dataset.GraphDataset(config, validation_mode=False).load_dataframe()
+    validation_dataset = graphs.graph_dataset.GraphDataset(config, validation_mode=True).load_dataframe()
 
     # Setup the agent and the training environment
     env_train = envs.PhasingEnv(config, graph_dataset=training_dataset)
@@ -41,9 +41,6 @@ if __name__ == '__main__':
     episode_id = 0
 
     while agent.env.has_state():
-        if not (config.min_graph_size <= agent.env.state.num_nodes <= config.max_graph_size):
-            agent.env.reset()
-            continue
         if config.max_episodes is not None and episode_id >= config.max_episodes:
             break
         reward = None

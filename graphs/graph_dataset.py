@@ -40,7 +40,7 @@ class GraphDataset:
             if selection_features:
                 self.features += selection_features
                 self.recompute = True
-        self.generate_indices()
+        self.generate_dataframe()
 
     def extract_examples(self, df, condition, lower_bound, upper_bound):
         return df[(df[condition] >= lower_bound) & (df[condition] <= upper_bound)]
@@ -102,7 +102,7 @@ class GraphDataset:
 
         return df
 
-    def load_indices(self):
+    def load_dataframe(self):
         path_panel = self.panel.strip() + ".index_per_graph"
         if self.combined_graph_indexes:
             # Newly constructed dataset
@@ -193,7 +193,7 @@ class GraphDataset:
             logging.info("Finished building graphs for %s %s" % (config.bam, chromosome))
         return combined_graph_indexes
 
-    def generate_indices(self):
+    def generate_dataframe(self):
         """
         generate dataframe containing path of each graph (saved as a FragGraph object),
          as well as pre-computed statistics about the graph such as connectivity, size, density etc.

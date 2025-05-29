@@ -21,10 +21,10 @@ if __name__ == '__main__':
 
     random.seed(config.seed)
     graph_dataset = graphs.graph_dataset.GraphDataset(config)
-    global_df = graph_dataset.load_indices()
+    global_df = graph_dataset.load_dataframe()
     logging.info('Overall the dataset contains %d graphs' % global_df.shape[0])
     if validation_config is not None:
-        validation_df = graphs.graph_dataset.GraphDataset(config, validation_config).load_indices()
+        validation_df = graphs.graph_dataset.GraphDataset(config, validation_config).load_dataframe()
         logging.info('Validation dataset number of graphs %d' % validation_df.shape[0])
         # Remove the validation graphs from the pool of graphs available for training
         global_df = global_df[~global_df.component_path.isin(validation_df.component_path)]

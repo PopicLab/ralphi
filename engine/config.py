@@ -124,8 +124,6 @@ TRAIN_DEFAULTS.update({
     'store_indexes': True,
     'pretrained_model': None,
     'partition': 20,
-    'dataset_metrics': ['min_weight', 'max_weight', 'n_edges', 'density', 'n_articulation_points',
-                                'diameter', 'n_variants', 'compression_factor'],
 })
 
 
@@ -166,8 +164,11 @@ class PhaseConfig(Config):
         else:
             self.set_defaults(DATA_DEFAULTS_LONG)
         self.set_defaults(PHASE_DEFAULTS)
+        self.__dict__.update(entries)
         super().__init__(config_file)
 
+        if self.chr_names is None:
+            self.chr_names = ['chr{}'.format(x) for x in range(1, 23)]
         self.device = torch.device("cpu")
         self.output_vcf = self.out_dir + "/ralphi.vcf"
         logging.info(self)
@@ -213,11 +214,14 @@ class DataConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
         self.set_defaults()
-        self.save_indexes_path = config_file.strip().split('.yaml')[0] + '.index_per_graph'
+        if os.path.exists(config_file):
+            self.save_indexes_path = config_file.strip().split('.yaml')[0] + '.index_per_graph'
+        else:
+            self.save_indexes_path = config_file + '.index_per_graph'
 
     def set_defaults(self):
         default_values = {
-            'shuffle': True,
+            'shuffle': False,
             'seed': 1234,  # Random seed
             'num_samples_per_category_default': 1000,
             'global_ranges': {},

@@ -1,6 +1,7 @@
 import seq.frags as frags
 import networkx as nx
 import pickle
+import os
 from collections import defaultdict
 import itertools
 from itertools import product
@@ -8,8 +9,10 @@ import operator
 from networkx.algorithms import bipartite
 import logging
 import tqdm
+import warnings
 
 from models import constants
+from seq.utils import extract_vcf_for_variants, construct_vcf_idx_to_record_dict
 
 
 class FragGraph:
@@ -91,6 +94,29 @@ class FragGraph:
             for var in frag.variants:
                 vcf_positions.add(var.vcf_idx)
         return len(vcf_positions)
+
+    def construct_vcf_for_frag_graph(self, input_vcf, output_vcf, vcf_dict):
+        vcf_positions, _ = self.get_variants_set()
+        node_mapping = {j: i for (i, j) in enumerate(sorted(vcf_positions))}
+
+        for frag in self.fragments:
+            frag.vcf_idx_start = node_mapping[frag.vcf_idx_start]
+            frag.vcf_idx_end = node_mapping[frag.vcf_idx_end]
+            for var in frag.variants:
+                var.vcf_idx = node_mapping[var.vcf_idx]
+
+        if os.path.exists(output_vcf + ".vcf"):
+            warnings.warn(output_vcf + ".vcf" + ' already exists!')
+            return
+
+        extract_vcf_for_variants(vcf_positions, input_vcf, output_vcf + ".vcf", vcf_dict)
+
+        # also store graph
+        if not os.path.exists(output_vcf):
+            with open(output_vcf, 'wb') as f:
+                pickle.dump(self, f)
+        else:
+            warnings.warn(output_vcf + ' already exists!')
 
     def set_graph_properties(self, features, config=None):
         for feature in features:
@@ -236,6 +262,9 @@ class FragGraphGen:
     def is_invalid_subgraph(self, subgraph):
         return subgraph.n_nodes < 2 and self.config.skip_singleton_graphs
 
+    def is_not_in_size_range(self, subgraph):
+        return not (self.config.min_graph_size <= subgraph.n_nodes <= self.config.max_graph_size)
+
     def __iter__(self):
         if self.config.test_mode:
             fragments = frags.parse_frag_repr(self.config.fragments)
@@ -249,12 +278,25 @@ class FragGraphGen:
                 for index, component_row in self.graph_dataset.iterrows():
                     with open(component_row.component_path, 'rb') as f:
                         subgraph = pickle.load(f)
+                        if self.is_not_in_size_range(subgraph): continue
                         if self.is_invalid_subgraph(subgraph): continue
                         logging.debug("Processing subgraph with %d nodes..." % subgraph.n_nodes)
                         if self.features: 
                             subgraph.set_graph_properties(self.features, config=self.config)
                         yield subgraph
             yield None
+
+
+def generate_rand_frag_graph(h_length=30, n_frags=40):
+    h1 = seq.generate_rand_haplotype(h_length)
+    h2 = seq.get_complement_haplotype(h1)
+    h1_frags = seq.get_n_random_substrings_normal_dist(h1, n_frags)
+    h2_frags = seq.get_n_random_substrings_normal_dist(h2, n_frags)
+    fragments = h1_frags + h2_frags
+    frag_graph = FragGraph.build(fragments)
+    node_id2hap_id = {i: 0 if i < n_frags else 1 for i in range(len(fragments))}
+    frag_graph.set_ground_truth_assignment(node_id2hap_id)
+    return frag_graph
 
 
 def eval_assignment_helper(assignments, node2hap):
