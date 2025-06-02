@@ -4,7 +4,7 @@ import torch
 import random
 import dgl
 
-import graphs.graph_dataset
+from graphs.graph_dataset import GraphDataset
 import models.actor_critic as agents
 import envs.phasing_env as envs
 import engine.config as config_utils
@@ -19,21 +19,25 @@ if __name__ == '__main__':
     # -----------------
     # Load the config
     config = config_utils.load_config(args.config)
-    if not config.panel_train or not config.panel_validate:
-        raise FileNotFoundError('Panel files for training and validation are required.')
+    if not config.panel_dataset_train or not config.panel_dataset_validate:
+        raise FileNotFoundError('Datasets files for training and validation are required. '
+                                'Please use design_dataset.py to generate them.')
     torch.manual_seed(config.seed)
     random.seed(config.seed)
     dgl.seed(config.seed)
     torch.set_default_tensor_type(torch.DoubleTensor)
     torch.set_num_threads(config.num_cores_torch)
-    training_dataset = graphs.graph_dataset.GraphDataset(config, validation_mode=False).load_dataframe()
-    validation_dataset = graphs.graph_dataset.GraphDataset(config, validation_mode=True).load_dataframe()
+    # Load Datasets
+    training_dataset = GraphDataset.load_dataframe(config.panel_dataset_train)
+    validation_dataset = GraphDataset.load_dataframe(config.panel_dataset_validate)
+    validation_dataset = GraphDataset.round_robin(config.n_procs, validation_dataset)
 
     # Setup the agent and the training environment
     env_train = envs.PhasingEnv(config, graph_dataset=training_dataset)
     agent = agents.DiscreteActorCriticAgent(env_train)
     if config.pretrained_model is not None:
         agent.model.load_state_dict(torch.load(config.pretrained_model))
+
     # Run the training
     best_validation_reward = 0
     best_validation_reward_id = 0

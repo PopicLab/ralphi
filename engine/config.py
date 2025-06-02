@@ -10,7 +10,7 @@ import wandb
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
-CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_DESIGN')
+CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_DESIGN DATA_FILTER')
 
 MAIN_LOG = "MAIN"
 STATS_LOG_TRAIN = "STATS_TRAIN"
@@ -103,27 +103,28 @@ PHASE_DEFAULTS.update({
     'store_indexes': False,
 })
 
+DATA_DESIGN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
+DATA_DESIGN_DEFAULTS.update({
+    'test_mode': False,
+    'drop_chr': ['chr20'],
+    'skip_singleton_graphs': True,
+    'skip_trivial_graphs': True,
+})
+
 TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
 TRAIN_DEFAULTS.update({
     'test_mode': False,
     'gamma': 0.98,
     'lr': 0.00003,
     'epochs': 1,
-    'drop_chr': ['chr20'],
-    'min_graph_size': 1,
-    'max_graph_size': 5000,
-    'skip_singleton_graphs': True,
-    'skip_trivial_graphs': True,
     'n_procs': 8,
     'max_episodes': None, # maximum number of episodes to run
     'interval_validate': 500,  # number of episodes between model validation runs
-    'panel_validate': None,  # fragment files for validation
     'render_view': "weighted_view",
     'load_components': True,
     'store_components': True,
     'store_indexes': True,
     'pretrained_model': None,
-    'partition': 20,
 })
 
 
@@ -177,10 +178,6 @@ class PhaseConfig(Config):
 class TrainingConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
-        if self.platform == "illumina":
-            self.set_defaults(DATA_DEFAULTS_SHORT)
-        else:
-            self.set_defaults(DATA_DEFAULTS_LONG)
         self.set_defaults(TRAIN_DEFAULTS)
         super().__init__(config_file)
         self.model_path = self.out_dir + "/ralphi_model_final.pt"
@@ -213,19 +210,40 @@ class TrainingConfig(Config):
 class DataConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
+        if self.platform == "illumina":
+            self.set_defaults(DATA_DEFAULTS_SHORT)
+        else:
+            self.set_defaults(DATA_DEFAULTS_LONG)
+        self.set_defaults(DATA_DESIGN_DEFAULTS)
+        super().__init__(config_file)
+
+        for f in os.listdir(self.out_dir):
+            os.remove(os.path.join(self.out_dir, f))
+
+        if 'filter_config' not in self.__dict__:
+            self.__setattr__('filter_config', str(Path(config_file).parent.resolve()) + '/filter_config')
+
+        # logging
+        logging.info(self)
+
+
+class FilterConfig(Config):
+    def __init__(self, config_file, **entries):
+        self.__dict__.update(entries)
         self.set_defaults()
         if os.path.exists(config_file):
-            self.save_indexes_path = config_file.strip().split('.yaml')[0] + '.index_per_graph'
+            self.save_indexes_path = config_file.strip().split('.yaml')[0]
         else:
-            self.save_indexes_path = config_file + '.index_per_graph'
+            self.save_indexes_path = config_file
 
     def set_defaults(self):
         default_values = {
             'shuffle': False,
             'seed': 1234,  # Random seed
-            'num_samples_per_category_default': 1000,
-            'global_ranges': {},
-            'ordering_ranges': {},
+            'num_samples_per_category_default_train': None,
+            'num_samples_per_category_default_validate': 200,
+            'global_filters': {},
+            'filter_categories': {'global': {'filters': {'n_nodes': {'min': None, 'max': None}}}},
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
@@ -235,11 +253,16 @@ class DataConfig(Config):
 def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     # Load a YAML configuration file
     if fname is None: return None
-    with open(fname) as file:
-        config = yaml.load(file, Loader=yaml.FullLoader)
+    try:
+        with open(fname) as file:
+            config = yaml.load(file, Loader=yaml.FullLoader)
+    except:
+        config = {}
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
         return PhaseConfig(fname, **config)
     elif config_type == CONFIG_TYPE.DATA_DESIGN:
         return DataConfig(fname, **config)
+    elif config_type == CONFIG_TYPE.DATA_FILTER:
+        return FilterConfig(fname, **config)

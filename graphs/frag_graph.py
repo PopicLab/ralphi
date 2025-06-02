@@ -259,12 +259,6 @@ class FragGraphGen:
                              for feature in constants.FEATURES_DICT[feature_name])
         self.graph_dataset = graph_dataset
 
-    def is_invalid_subgraph(self, subgraph):
-        return subgraph.n_nodes < 2 and self.config.skip_singleton_graphs
-
-    def is_not_in_size_range(self, subgraph):
-        return not (self.config.min_graph_size <= subgraph.n_nodes <= self.config.max_graph_size)
-
     def __iter__(self):
         if self.config.test_mode:
             fragments = frags.parse_frag_repr(self.config.fragments)
@@ -278,8 +272,6 @@ class FragGraphGen:
                 for index, component_row in self.graph_dataset.iterrows():
                     with open(component_row.component_path, 'rb') as f:
                         subgraph = pickle.load(f)
-                        if self.is_not_in_size_range(subgraph): continue
-                        if self.is_invalid_subgraph(subgraph): continue
                         logging.debug("Processing subgraph with %d nodes..." % subgraph.n_nodes)
                         if self.features: 
                             subgraph.set_graph_properties(self.features, config=self.config)
