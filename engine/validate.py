@@ -37,23 +37,24 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, config):
     # benchmark the current model against a held out set of fragment graphs (validation panel)
     logging.info("running validation with model number: %d, at episode: %d" % (model_checkpoint_id, episode_id))
     model_path = "%s/ralphi_model_%d.pt" % (config.out_dir, model_checkpoint_id)
-    validation_component_stats = Parallel(n_jobs=config.n_procs)(delayed(validation_task)(sub_df, config,
-                                                                    model_path) for sub_df in validation_dataset)
+    validation_component_stats = Parallel(n_jobs=config.n_procs)(delayed(validation_task)(validation_chunk, config,
+                                                                    model_path) for validation_chunk in validation_dataset)
 
-    validation_indexing_df = pd.concat(validation_component_stats)
-    validation_indexing_df.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))
-    def log_stats_for_filter(validation_filtered_df):
+    validation_performance = pd.concat(validation_component_stats)
+    validation_performance.to_pickle("%s/validation_index_for_model_%d.pickle" % (config.out_dir, model_checkpoint_id))
+    def log_stats_by_filter(validation_performance):
         metrics_of_interest = ["reward_val", "cut_val"]
         def log_wandb(df, group):
             for metric in metrics_of_interest:
                 wandb.log({"Episode": episode_id, "Validation_" + metric + "_" + group: df[metric].sum()})
             wandb.log({"Episode": episode_id, "Validation_number_examples_" + group: len(df)})
-        log_wandb(validation_filtered_df, "overall")
-        groups = validation_filtered_df['group'].unique()
+        log_wandb(validation_performance, "overall")
+        groups = validation_performance['group'].unique()
         for group in groups:
-            df_group = validation_filtered_df[validation_filtered_df['group'] == group]
+            df_group = validation_performance[validation_performance['group'] == group]
             log_wandb(df_group, group)
 
     # stats for entire validation set
-    log_stats_for_filter(validation_indexing_df)
-    return validation_indexing_df["reward_val"].sum()
+    if config.log_wandb:
+        log_stats_by_filter(validation_performance)
+    return validation_performance["reward_val"].sum()

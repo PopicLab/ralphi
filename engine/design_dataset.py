@@ -18,4 +18,4 @@ if __name__ == '__main__':
     random.seed(config.seed)
     graph_dataset = graphs.graph_dataset.GraphDataset(config)
 
-    graphs.graph_dataset.GraphDataset(config).generate_dataframe()
+    graphs.graph_dataset.GraphDataset(config).generate_training_validation_datasets()

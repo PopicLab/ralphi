@@ -28,7 +28,7 @@ SHARED_DEFAULTS = {
     'debug': True,
     'seed': 1234,
     'project_name': "ralphi",
-    'run_name': "dual",
+    'run_name': "ralphi",
     'log_wandb': False,
 }
 
@@ -122,7 +122,7 @@ TRAIN_DEFAULTS.update({
     'epochs': 1,
     'n_procs': 8,
     'max_episodes': None, # maximum number of episodes to run
-    'interval_validate': 500,  # number of episodes between model validation runs
+    'interval_episodes_to_validation': 500,  # number of episodes between model validation runs
     'render_view': "weighted_view",
     'load_components': True,
     'store_components': True,

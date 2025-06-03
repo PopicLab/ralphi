@@ -14,9 +14,5 @@ FEATURES_DICT = {
     ],
     'between': [
         'betweenness'
-    ],
+    ]
 }
-
-DATASET_FEATURES = ['min_weight', 'max_weight', 'n_edges', 'density', 'n_articulation_points',
-                                'diameter', 'n_variants', 'compression_factor']
-

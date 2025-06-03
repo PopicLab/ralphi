@@ -1,0 +1,22 @@
+# YAML FILTER CONFIG FILE
+shuffle: False
+
+global_filters:
+  n_nodes:
+    min: 10
+    max: 5000
+
+filter_categories:
+  category_1:
+    num_samples_train_category: 500
+    filters:
+      n_nodes:
+        max: 100
+      n_edges:
+        quantiles: [0.5, 0.8]
+  category_2:
+    num_samples_validate_category: 50
+    filters:
+      density:
+        min: 0.1
+        max: 0.5
