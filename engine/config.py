@@ -109,6 +109,9 @@ DATA_DESIGN_DEFAULTS.update({
     'drop_chr': ['chr20'],
     'skip_singleton_graphs': True,
     'skip_trivial_graphs': True,
+    'num_samples_train': None,
+    'num_samples_validate': 200,
+    'filter_config': None,
 })
 
 TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
@@ -220,9 +223,6 @@ class DataConfig(Config):
         for f in os.listdir(self.out_dir):
             os.remove(os.path.join(self.out_dir, f))
 
-        if 'filter_config' not in self.__dict__:
-            self.__setattr__('filter_config', str(Path(config_file).parent.resolve()) + '/filter_config')
-
         # logging
         logging.info(self)
 
@@ -231,17 +231,11 @@ class FilterConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
         self.set_defaults()
-        if os.path.exists(config_file):
-            self.save_indexes_path = config_file.strip().split('.yaml')[0]
-        else:
-            self.save_indexes_path = config_file
+
 
     def set_defaults(self):
         default_values = {
             'shuffle': False,
-            'seed': 1234,  # Random seed
-            'num_samples_per_category_default_train': None,
-            'num_samples_per_category_default_validate': 200,
             'global_filters': {},
             'filter_categories': {'global': {'filters': {'n_nodes': {'min': None, 'max': None}}}},
         }
@@ -253,11 +247,8 @@ class FilterConfig(Config):
 def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     # Load a YAML configuration file
     if fname is None: return None
-    try:
-        with open(fname) as file:
-            config = yaml.load(file, Loader=yaml.FullLoader)
-    except:
-        config = {}
+    with open(fname) as file:
+        config = yaml.load(file, Loader=yaml.FullLoader)
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:

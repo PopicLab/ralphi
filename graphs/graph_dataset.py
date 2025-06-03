@@ -1,17 +1,18 @@
+import itertools
+import logging
 import os
+import pickle
+import shutil
+from copy import deepcopy
+import networkx as nx
 import numpy as np
 import pandas as pd
-import logging
-from joblib import Parallel, delayed
-from copy import deepcopy
-import pickle
-import itertools
-import networkx as nx
-import engine.config as config_utils
 import yaml
+from joblib import Parallel, delayed
 
-from models import constants
+import engine.config as config_utils
 from graphs.frag_graph import FragGraph
+from models import constants
 from seq import frags
 
 
@@ -22,17 +23,20 @@ class GraphDataset:
             feature for feature_name in config.features for feature in constants.FEATURES_DICT[feature_name])
 
         self.panel = config.panel
+        shutil.copyfile(config.panel, config.experiment_dir + '/panel.txt')
 
-        self.filter_config = config_utils.load_config(config.filter_config,
-                                                      config_type=config_utils.CONFIG_TYPE.DATA_FILTER)
-        # Copy the filter used in the local folder
-        with open(config.experiment_dir + '/filters.yaml', 'w') as outfile:
-            yaml.dump(self.filter_config, outfile, default_flow_style=False)
+        filter_metrics = []
+        if config.filter_config:
+            self.filter_config = config_utils.load_config(config.filter_config,
+                                                          config_type=config_utils.CONFIG_TYPE.DATA_FILTER)
+            # Copy the filter used in the local folder
+            with open(config.experiment_dir + '/filters.yaml', 'w') as outfile:
+                yaml.safe_dump(self.filter_config.__dict__, outfile, default_flow_style=False)
 
-        # Determine the features to compute to perform the data filtering and ordering
-        filter_metrics = [feature for group in self.filter_config.filter_categories for feature in
-                          self.filter_config.filter_categories[group]["filters"]]
-        filter_metrics += [feature for feature in self.filter_config.global_filters]
+            # Determine the features to compute to perform the data filtering and ordering
+            filter_metrics = [feature for group in self.filter_config.filter_categories for feature in
+                              self.filter_config.filter_categories[group]["filters"]]
+            filter_metrics += [feature for feature in self.filter_config.global_filters]
         self.filter_metrics = list(set(filter_metrics))
 
     @staticmethod
@@ -86,35 +90,31 @@ class GraphDataset:
         for group in self.filter_config.filter_categories:
             group_dict = self.filter_config.filter_categories[group]
             subsampled_df = self.filter_dataset(df, global_df, group_dict["filters"])
-            num_samples_train = self.filter_config.num_samples_per_category_default_train
+            logging.info("Selected %d graphs for group %s." % (subsampled_df.shape[0], group))
+            num_samples_train = self.config.num_samples_train
             if "num_samples_train" in group_dict:
                 num_samples_train = group_dict["num_samples_train"]
-            num_samples_validate = self.filter_config.num_samples_per_category_default_validate
+            num_samples_validate = self.config.num_samples_validate
             if "num_samples_validate" in group_dict:
                 num_samples_validate = group_dict["num_samples_validate"]
-
             # Select the validation graphs and remove them from the available graphs
-            val_graphs = subsampled_df.sample(n=min(num_samples_validate, subsampled_df.shape[0]), random_state=self.filter_config.seed)
-            subsampled_df = subsampled_df[~subsampled_df.component_path.isin(val_graphs.component_path)]
+            val_graphs, subsampled_df = self.sample_datasets(subsampled_df, num_samples_validate, 'validation', group+' ')
             df = df[~df.component_path.isin(val_graphs.component_path)]
             val_graphs["group"] = group
             validation_df.append(val_graphs)
 
             # Select the training graphs from the remain graphs, if num_samples_train is None, all remaining selected graphs are kept for training
-            if num_samples_train:
-                subsampled_df = subsampled_df.sample(n=min(num_samples_train, subsampled_df.shape[0]), random_state=self.filter_config.seed)
+            train_graphs, _ = self.sample_datasets(subsampled_df, num_samples_train, 'train', group+' ')
 
-            df = df[~df.component_path.isin(subsampled_df.component_path)]
-            subsampled_df["group"] = group
-            training_df.append(subsampled_df)
+            df = df[~df.component_path.isin(train_graphs.component_path)]
+            train_graphs["group"] = group
+            training_df.append(train_graphs)
 
         training_df = pd.concat(training_df)
         if self.filter_config.shuffle:
             training_df = training_df.sample(frac=1, random_state=self.config.seed)
-        training_df.to_pickle(self.filter_config.save_indexes_path + '_train.index_per_graph')
 
         validation_df = pd.concat(validation_df)
-        validation_df.to_pickle(self.filter_config.save_indexes_path + '_validate.index_per_graph')
 
         return training_df, validation_df
 
@@ -168,7 +168,7 @@ class GraphDataset:
         # Get the path of the parent folder of the panel file
         config = deepcopy(self.config)
         logging.root.setLevel(logging.getLevelName(config.logging_level))
-        panel_parent = '/'.join(self.panel.strip().split("/")[:-1])
+        frag_folder = self.config.out_dir
         combined_graph_indexes = []
         for i in range(len(chunk)):
             # precompute graphs and get their feature distributions
@@ -184,7 +184,7 @@ class GraphDataset:
                                                                         skip_trivial_graphs=self.config.skip_trivial_graphs)
             for component_index, component in enumerate(connected_components):
                 if self.is_invalid_subgraph(component): continue
-                component_path = panel_parent + "/" + config.bam.split('/')[-1] + "_" + chromosome + "_" + str(component_index)
+                component_path = frag_folder + "/" + config.bam.split('/')[-1] + "_" + chromosome + "_" + str(component_index)
                 with open(component_path, 'wb') as f:
                     pickle.dump(component, f)
                 metrics = self.compute_dataset_metrics(component)
@@ -196,6 +196,17 @@ class GraphDataset:
                 combined_graph_indexes.append(metrics)
             logging.info("Finished building graphs for %s %s" % (config.bam, chromosome))
         return combined_graph_indexes
+
+    def sample_datasets(self, df, num_samples, dataset_type, group=''):
+        if not num_samples:
+            num_samples = df.shape[0]
+        kept_df = df.sample(n=min(num_samples, df.shape[0]), random_state=self.config.seed)
+        subsampled_df = df[~df.component_path.isin(kept_df.component_path)]
+
+        if num_samples > df.shape[0]:
+            logging.info(f'WARNING: {group}not enough graphs to build the {dataset_type} set, kept {df.shape[0]}.')
+        logging.info("%s%s Dataset contains %d graphs." % (group, dataset_type, kept_df.shape[0]))
+        return kept_df, subsampled_df
 
     def generate_dataframe(self):
         """
@@ -214,8 +225,18 @@ class GraphDataset:
         output = Parallel(n_jobs=self.config.n_procs)(
             delayed(self.generate_graphs)(chunks[i]) for i in range(self.config.n_procs))
         combined_graph_indexes = pd.DataFrame(list(itertools.chain.from_iterable(output)))
+        logging.info("Generated %d graphs." % combined_graph_indexes.shape[0])
+
         logging.info("Starting Graph Selection")
-        train, val = self.dataset_nested_design(combined_graph_indexes)
+        if self.config.filter_config is not None:
+            train, val = self.dataset_nested_design(combined_graph_indexes)
+            logging.info("Training Dataset contains %d graphs." % (train.shape[0]))
+            logging.info("Validation Dataset contains %d graphs." % (val.shape[0]))
+        else:
+            val, subsampled_df = self.sample_datasets(combined_graph_indexes, self.config.num_samples_validate, 'validation')
+
+            train, _ = self.sample_datasets(subsampled_df, self.config.num_samples_train, 'train')
+        train.to_pickle(self.config.experiment_dir + '_train.index_per_graph')
+        val.to_pickle(self.config.experiment_dir + '_validate.index_per_graph')
+
         logging.info("Finished Building DataSets")
-        logging.info("Training Dataset contains %d graphs." % train.shape[0])
-        logging.info("Validation Dataset contains %d graphs." % val.shape[0])
