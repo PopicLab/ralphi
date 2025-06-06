@@ -119,18 +119,12 @@ class FragGraph:
             warnings.warn(output_vcf + ' already exists!')
 
     def set_graph_properties(self, features, config=None):
-        for feature in features:
-            if feature in self.graph_properties: continue
-            if feature in ['cut_member_hap0', 'cut_member_hap1']: continue
-            if feature == 'betweenness':
-                k = None
-                if config.approximate_betweenness and (config.num_pivots < self.n_nodes):
-                    # if there is more nodes than num_pivots, use "num_pivots" pivots for betweenness approximation
-                    k = config.num_pivots
-                self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=config.seed)
-            else:
-                raise ValueError(f'Feature {feature} not defined, please use one of {list(constants.FEATURES_DICT.keys())}.')
-
+        if 'betweenness' in features and "betweenness" not in self.graph_properties:
+            k = None
+            if config.approximate_betweenness and (config.num_pivots < self.n_nodes):
+                # if there is more nodes than num_pivots, use "num_pivots" pivots for betweenness approximation
+                k = config.num_pivots
+            self.graph_properties["betweenness"] = nx.betweenness_centrality(self.g, k=k, seed=config.seed)
         self.set_node_features(features)
 
     def set_node_features(self, features):
