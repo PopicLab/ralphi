@@ -62,6 +62,91 @@ short-read inputs.
 ```ralphi``` will output results in the parent directory of the YAML config file. The results include the phased VCF
 files for each input chromosome (under ```output/```; e.g. ```output/chr1.ralphi.vcf```) and execution logs.
 
+#### Training Dataset Generation
+engine/generate_dataset.py is used to generate fragment graph datasets from BAM and VCF files for model training and validation.
+It supports both simple random sampling and fine-grained graph selection via configurable filters.
+
+Usage:
+```$> python engine/generate_dataset.py --config </path/to/config>```
+
+Apart from the fragment and graph generation parameters mentioned earlier, the following configuration keys are available:
+* ```panel``` [*required*] path to a text file listing BAM/VCF file pairs. 
+Each line must contain the path to a BAM file and its corresponding VCF file, separated by whitespace or tab.
+* ```platform``` [*required*] sequencing platform (options: ```illumina``` or ```ONT```).
+* ```reference``` [*required* for ONT only] path to a FASTA file for local realignment.
+* ```filter_config``` [*optional*]: YAML file defining filtering rules to construct training and validation sets.
+If omitted, the pipeline selects ```num_samples_validate``` graphs for validation. The remainder is used for training.
+* ```n_proc```  [*optional*] number of CPU cores for graph generation (default: 1).
+* ```drop_chr``` [*optional*] list of chromosome to exclude (default: ['chr20']).
+* ```num_samples_validate``` [*optional*]: number of graphs for validation (default: 200).
+* ```num_samples_train``` [*optional*]: number of graphs for training. If null, all remaining graphs are used
+(default: null).
+
+##### Graph Filtering
+To customize graph selection, users can provide an optional ```filter_config``` YAML file that defines filtering rules based on graph properties. 
+Supported graph attributes are:
+```n_nodes```, ```n_edges```, ```max_weight```, ```min_weight```, ```diameter```, ```n_articulation_points```, 
+```density```, ```n_variants```, and ```compression_factor```.
+
+Each property supports the following constraint types: ```min```, ```max``` and ```quantiles```. 
+
+Refer to [FILTER CONFIG](docs/filter_config.yaml) for an example.
+
+###### Global Filters
+Defined in the ```global_filters``` section—these filters eliminate graphs before any category selection.
+
+###### Filter Categories
+Defined in the ```filter_categories``` section. 
+
+Each category includes:
+* Name: used to track performance in Weights & Biases .
+* Filters: a set of graph metric-based rules.
+* Optional:
+  * ```num_samples_validate_category``` 
+  * ```num_samples_train_category```.
+
+**Important:** Categories are mutually exclusive and order matters—once graphs are assigned to a category, 
+they are removed from subsequent categories.
+
+Fallback behaviors:
+* If  ```num_samples_validate_category``` is unspecified, ```num_samples_validate``` is used.
+* If  ```num_samples_train_category``` is unspecified, ```num_samples_train``` is used.
+* ```shuffle``` (default: False) determines whether to apply curriculum learning or randomize sample order.
+
+##### Output
+All outputs are saved in the directory of the provided config file:
+* Training and Validation datasets.
+* Copies of the ```filter_config``` (if originally provided) and ```panel```.
+* Cached graphs in an ```output/``` subdirectory.
+
+#### Training
+
+Trained models are available in the ```data/models``` directory.
+
+To train or fine-tune models:
+```$> python engine/train.py --config </path/to/config>```
+
+##### Configuration Keys
+* ```panel_dataset_train``` [*required*] list of paths to training datasets. Multiple paths are concatenated in order.
+* ```panel_dataset_validate``` [*required*] list of paths to validation datasets. Multiple paths are concatenated in order.
+* ```n_proc```  [*optional*] number of CPU cores to use for validation (default: 1)
+* ```pretrained_model``` [*optional*] path to a pretrained ```ralphi``` model for fine-tuning. If omitted, training starts
+from scratch.
+* ```gamma``` [*optional*] discount factor used in the loss function (default: 0.98).
+* ```lr``` [*optional*] learning rate (default: $3e^{-5}$).
+* ```epochs``` [*optional*] number of training epochs (default: 1).
+* ```device``` [*optional*] compute device, ```cpu``` or ```cuda``` for gpu (default: ```cpu```).
+* ```interval_episodes_to_validation``` [*optional*] number of training episodes between validation runs (default: 500).
+* ```log_wandb``` [*optional*] Whether to log training/validation metrics to Weights & Biases  (default: False).
+* ```project_name``` [*optional*] Weights & Biases  project name (default: ralphi).
+* ```run_name``` [*optional*] name for this Weights & Biases run (default: ralphi). 
+
+##### Output
+* Intermediate model snapshots (at each validation checkpoint) in an ```output/``` subdirectory.
+* The model with the highest validation reward in ```output/ralphi_model_best.pt```.
+
+
+
 <a name="workflow"></a>
 #### Recommended workflow 
 
