@@ -62,8 +62,8 @@ short-read inputs.
 ```ralphi``` will output results in the parent directory of the YAML config file. The results include the phased VCF
 files for each input chromosome (under ```output/```; e.g. ```output/chr1.ralphi.vcf```) and execution logs.
 
-#### Training Dataset Design
-engine/design_dataset.py is used to generate fragment graph datasets from BAM and VCF files for model training and validation.
+#### Training Dataset Generation
+engine/generate_dataset.py is used to generate fragment graph datasets from BAM and VCF files for model training and validation.
 It supports both simple random sampling and fine-grained graph selection via configurable filters.
 
 Usage:

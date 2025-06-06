@@ -21,7 +21,7 @@ if __name__ == '__main__':
     config = config_utils.load_config(args.config)
     if not config.panel_dataset_train or not config.panel_dataset_validate:
         raise FileNotFoundError('Datasets files for training and validation are required. '
-                                'Please use design_dataset.py to generate them.')
+                                'Please use generate_dataset.py to generate them.')
     torch.manual_seed(config.seed)
     random.seed(config.seed)
     dgl.seed(config.seed)
