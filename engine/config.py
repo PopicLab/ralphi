@@ -236,8 +236,7 @@ class FilterConfig(Config):
     def set_defaults(self):
         default_values = {
             'shuffle': False,
-            'global_filters': {},
-            'filter_categories': {'global': {'filters': {'n_nodes': {'min': None, 'max': None}}}},
+            'Global': {},
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):

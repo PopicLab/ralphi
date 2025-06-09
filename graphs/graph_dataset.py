@@ -19,6 +19,7 @@ from seq import frags
 class GraphDataset:
     DATASET_FEATURES = ['min_weight', 'max_weight', 'n_edges', 'density', 'n_articulation_points',
                         'diameter', 'n_variants', 'compression_factor']
+    GLOBAL_FIELDS = ['Global', 'shuffle']
 
     def __init__(self, config):
         self.config = config
@@ -28,7 +29,7 @@ class GraphDataset:
         self.panel = config.panel
         shutil.copyfile(config.panel, config.experiment_dir + '/panel.txt')
 
-        filter_metrics = []
+        self.filter_metrics = set()
         if config.filter_config:
             self.filter_config = config_utils.load_config(config.filter_config,
                                                           config_type=config_utils.CONFIG_TYPE.DATA_FILTER)
@@ -37,10 +38,11 @@ class GraphDataset:
                 yaml.safe_dump(self.filter_config.__dict__, outfile, default_flow_style=False)
 
             # Determine the features to compute to perform the data filtering and ordering
-            filter_metrics = [feature for group in self.filter_config.filter_categories for feature in
-                              self.filter_config.filter_categories[group]["filters"]]
-            filter_metrics += [feature for feature in self.filter_config.global_filters]
-        self.filter_metrics = list(set(filter_metrics))
+            for group, filters in vars(self.filter_config).items():
+                if group == 'shuffle': continue
+                for metric in filters:
+                    if metric in ['size_train', 'size_validate']: continue
+                    self.filter_metrics.add(metric)
 
     @staticmethod
     def round_robin_validation(n_procs, dataset):
@@ -54,6 +56,9 @@ class GraphDataset:
     def filter_dataset(dataset, global_dataset, filters):
         def apply_filter(dataset_to_filter, metric, lower_bound, upper_bound):
             if lower_bound:
+                if upper_bound and upper_bound < lower_bound:
+                    logging.info(
+                        f'WARNING: the lower bound {lower_bound} is greater than the upper bound {upper_bound} for {metric}.')
                 dataset_to_filter = dataset_to_filter[dataset_to_filter[metric] >= lower_bound]
             if upper_bound:
                 dataset_to_filter = dataset_to_filter[dataset_to_filter[metric] <= upper_bound]
@@ -61,9 +66,12 @@ class GraphDataset:
 
         filtered_graphs = dataset.copy()
         # Quantiles have to be computed from the original dataset after global filters to be accurate
-        aux_buckets = global_dataset.copy()
         for filter_name, filter_dict in filters.items():
+            if filter_name in ['size_train', 'size_validate']: continue
             if ("min" in filter_dict) or ("max" in filter_dict):
+                if "quantiles" in filter_dict:
+                    logging.info(
+                        f'WARNING: both quantiles and min/max provided {filters}, quantiles will be ignored.')
                 min_val = None
                 max_val = None
                 if "min" in filter_dict:
@@ -71,14 +79,11 @@ class GraphDataset:
                 if "max" in filter_dict:
                     max_val = filter_dict["max"]
                 filtered_graphs = apply_filter(filtered_graphs, filter_name, min_val, max_val)
-                aux_buckets = apply_filter(aux_buckets, filter_name, min_val, max_val)
             elif "quantiles" in filter_dict:
                 quantiles = filter_dict["quantiles"]
-                buckets = aux_buckets[filter_name].quantile(quantiles)
+                buckets = global_dataset[filter_name].quantile(quantiles)
                 filtered_graphs = apply_filter(filtered_graphs, filter_name, buckets[filter_dict["quantiles"][0]],
                                                  buckets[filter_dict["quantiles"][1]])
-                aux_buckets = apply_filter(aux_buckets, filter_name, buckets[filter_dict["quantiles"][0]],
-                                               buckets[filter_dict["quantiles"][1]])
             else:
                 raise(NotImplementedError, 'Please use a filter using min/max or quantiles.')
         return filtered_graphs
@@ -86,20 +91,20 @@ class GraphDataset:
     def dataset_nested_design(self, dataset):
         # parses the nested filter_config.yaml, which allows arbitrary specifications
         # of training/validation set design for any combination of graph metrics
-        dataset = self.filter_dataset(dataset, dataset, self.filter_config.global_filters)
+        dataset = self.filter_dataset(dataset, dataset, self.filter_config.Global)
         training_dataset = []
         validation_dataset = []
         global_dataset = dataset.copy()
-        for group in self.filter_config.filter_categories:
-            group_dict = self.filter_config.filter_categories[group]
-            filtered_dataset = self.filter_dataset(dataset, global_dataset, group_dict["filters"])
+        for group, group_dict in vars(self.filter_config).items():
+            if group in self.GLOBAL_FIELDS: continue
+            filtered_dataset = self.filter_dataset(dataset, global_dataset, group_dict)
             logging.info("Selected %d graphs for group %s." % (filtered_dataset.shape[0], group))
             num_samples_train = self.config.num_samples_train
-            if "num_samples_train_category" in group_dict:
-                num_samples_train = group_dict["num_samples_train_category"]
+            if "size_train" in group_dict:
+                num_samples_train = group_dict["size_train"]
             num_samples_validate = self.config.num_samples_validate
-            if "num_samples_validate_category" in group_dict:
-                num_samples_validate = group_dict["num_samples_validate_category"]
+            if "size_validate" in group_dict:
+                num_samples_validate = group_dict["size_validate"]
             # Select the validation graphs and remove them from the available graphs
             validation_graphs, filtered_dataset = self.sample_datasets(filtered_dataset, num_samples_validate, 'validation', group+' ')
             dataset = dataset[~dataset.component_path.isin(validation_graphs.component_path)]
