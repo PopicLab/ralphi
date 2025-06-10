@@ -99,20 +99,20 @@ class GraphDataset:
             if group in self.GLOBAL_FIELDS: continue
             filtered_dataset = self.filter_dataset(dataset, global_dataset, group_dict)
             logging.info("Selected %d graphs for group %s." % (filtered_dataset.shape[0], group))
-            num_samples_train = self.config.num_samples_train
+            size_train = self.config.size_train
             if "size_train" in group_dict:
-                num_samples_train = group_dict["size_train"]
-            num_samples_validate = self.config.num_samples_validate
+                size_train = group_dict["size_train"]
+            size_validate = self.config.size_validate
             if "size_validate" in group_dict:
-                num_samples_validate = group_dict["size_validate"]
+                size_validate = group_dict["size_validate"]
             # Select the validation graphs and remove them from the available graphs
-            validation_graphs, filtered_dataset = self.sample_datasets(filtered_dataset, num_samples_validate, 'validation', group+' ')
+            validation_graphs, filtered_dataset = self.sample_datasets(filtered_dataset, size_validate, 'validation', group+' ')
             dataset = dataset[~dataset.component_path.isin(validation_graphs.component_path)]
             validation_graphs["group"] = group
             validation_dataset.append(validation_graphs)
 
-            # Select the training graphs from the remain graphs, if num_samples_train is None, all remaining selected graphs are kept for training
-            training_graphs, _ = self.sample_datasets(filtered_dataset, num_samples_train, 'train', group+' ')
+            # Select the training graphs from the remain graphs, if size_train is None, all remaining selected graphs are kept for training
+            training_graphs, _ = self.sample_datasets(filtered_dataset, size_train, 'train', group+' ')
 
             dataset = dataset[~dataset.component_path.isin(training_graphs.component_path)]
             training_graphs["group"] = group
@@ -241,9 +241,9 @@ class GraphDataset:
             logging.info("Training Dataset contains %d graphs." % (training_dataset.shape[0]))
             logging.info("Validation Dataset contains %d graphs." % (validation_dataset.shape[0]))
         else:
-            validation_dataset, remaining_graphs = self.sample_datasets(combined_graph_indexes, self.config.num_samples_validate, 'validation')
+            validation_dataset, remaining_graphs = self.sample_datasets(combined_graph_indexes, self.config.size_validate, 'validation')
             validation_dataset["group"] = 'Global'
-            training_dataset, _ = self.sample_datasets(remaining_graphs, self.config.num_samples_train, 'train')
+            training_dataset, _ = self.sample_datasets(remaining_graphs, self.config.size_train, 'train')
             training_dataset["group"] = 'Global'
         training_dataset.to_pickle(self.config.experiment_dir + '/train.index_per_graph')
         validation_dataset.to_pickle(self.config.experiment_dir + '/validate.index_per_graph')

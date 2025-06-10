@@ -109,8 +109,8 @@ DATA_DESIGN_DEFAULTS.update({
     'drop_chr': ['chr20'],
     'skip_singleton_graphs': True,
     'skip_trivial_graphs': True,
-    'num_samples_train': None,
-    'num_samples_validate': 200,
+    'size_train': None,
+    'size_validate': 200,
     'filter_config': None,
 })
 
