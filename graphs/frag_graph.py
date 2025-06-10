@@ -1,6 +1,7 @@
+from copy import deepcopy
+
 import seq.frags as frags
 import networkx as nx
-import engine.config as config_utils
 import pickle
 import random
 import os
@@ -17,7 +18,6 @@ import warnings
 from models import constants
 from seq.utils import extract_vcf_for_variants, construct_vcf_idx_to_record_dict
 import wandb
-import numpy as np
 
 
 class FragGraph:
@@ -70,7 +70,6 @@ class FragGraph:
             logging.debug("Compressing identical fragments")
             fragments = FragGraph.merge_fragments_by_identity(fragments)
             logging.debug("Compressed number of fragments: %d" % len(fragments))
-        fragments = frags.split_articulation(fragments)
 
         frag_graph = nx.Graph()
         logging.debug("Constructing fragment graph from %d fragments" % len(fragments))
@@ -212,9 +211,10 @@ class FragGraph:
                 pruned_edges[v].append(u)
         return g, pruned_edges
 
-    def extract_subgraph(self, connected_component, features, compute_trivial=False):
+    def extract_subgraph(self, connected_component, compute_trivial=False):
         subg = self.g.subgraph(connected_component)
-        subg_frags = [self.fragments[node] for node in subg.nodes]
+        subg_frags = [self.fragments[node] if not self.fragments[node].fragment_group_id else
+                      deepcopy(self.fragments[node]) for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
         node_id2hap_id = None
         if self.node_id2hap_id is not None:
@@ -222,12 +222,43 @@ class FragGraph:
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
         return FragGraph(subg_relabeled, subg_frags, node_id2hap_id, compute_trivial)
 
+    def get_component(self, p, edge_stack, current):
+        component = []
+        while edge_stack:
+            # Get the biconnected component
+            e = edge_stack.pop()
+            component += e
+            if (p is not None) and (p in e) and (current in e):
+                # Got back to the articulation
+                break
+        return list(set(component))
+
+    def tarjan_algorithm(self): # O(V+E)
+        biconnected_components = list(nx.biconnected_components(self.g))
+        for singleton in nx.isolates(self.g):
+            biconnected_components.append({singleton})
+        return list(nx.articulation_points(self.g)), biconnected_components
+
+    def get_biconnected_subgraphs(self):
+        articulation_points, biconnected_components = self.tarjan_algorithm()
+        for articulation in articulation_points:
+            # This node will be duplicated when taking the subgraphs, keeps its id for stitching
+            count = 0
+            for bic in biconnected_components:
+                if articulation in bic:
+                    count += 1
+            self.fragments[articulation].fragment_group_id = articulation
+            self.fragments[articulation].number_duplicated = count
+        return biconnected_components
+
+
     def connected_components_subgraphs(self, config=None, features=None, skip_trivial_graphs=False):
-        components = nx.connected_components(self.g)
+        components = self.get_biconnected_subgraphs()
         logging.debug("Found connected components, now constructing subgraphs...")
         subgraphs = []
+
         for component in components:
-            subgraph = self.extract_subgraph(component, features, compute_trivial=True)
+            subgraph = self.extract_subgraph(component, compute_trivial=True)
             if subgraph.trivial and skip_trivial_graphs: continue
             if features and not subgraph.trivial:
                 subgraph.set_graph_properties(features, config=config)
@@ -262,10 +293,12 @@ def connect_components(components):
         for frag in frag_list:
             if frag.fragment_group_id:
                 gid2components.setdefault(frag.fragment_group_id, []).append((cid, frag))
+
     for gid, group in gid2components.items():
         hap = group[0][1].haplotype
         cid_g = component_map[group[0][0]]
         for cid, group_frag in group[1:]:
+            cid = component_map[cid]
             if group_frag.haplotype != hap:
                 for frag in components[cid]:
                     frag.assign_haplotype(flip_hap(frag.haplotype))
