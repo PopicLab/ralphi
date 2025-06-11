@@ -134,7 +134,7 @@ All outputs will be written to the directory of the provided config file, includ
 
 <a name="train"></a>
 #### Training
-```engine/train.py``` can be used to train or fine-tune a ```ralphi``` model.
+```train.py``` can be used to train or fine-tune a ```ralphi``` model.
 
 Usage:
 ```$> python engine/train.py --config </path/to/config>```
