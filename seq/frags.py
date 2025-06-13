@@ -72,6 +72,7 @@ class Fragment:
         self.true_haplotype = None
         self.vcf_positions = None
         self.fragment_group_id = None
+        self.number_duplicated = 1
 
     def __eq__(self, fragment):
         return (self.vcf_idx_start, self.vcf_idx_end, self.n_variants, self.variants) == (
@@ -116,11 +117,6 @@ class Fragment:
                 qscore_idx += 1
         return Fragment(fields[1], blocks=blocks)
 
-    def split_at(self, position):
-        split_index = next(i for i, variant in enumerate(self.variants) if variant.vcf_idx >= position)
-        return Fragment(self.read_id, variants=self.variants[:split_index], n_copies=self.n_copies), \
-               Fragment(self.read_id, variants=self.variants[split_index:], n_copies=self.n_copies)
-
 
 def convert_qscore(qscore):
     return 10 ** ((ord(qscore) - 33) / (-10))
@@ -141,50 +137,6 @@ def parse_frag_repr(frag_repr):
         fragments.append(Fragment.parse_from_file(frag_line))
     fragments = sorted(fragments, key=lambda frag: frag.vcf_idx_start)
     return fragments
-
-
-def split_articulation(fragments):
-    frag2split = defaultdict(list)
-    frag2evidence = defaultdict(list)
-    vcf_positions = set()
-    fragment_intervals = IntervalTree()
-    for i, frag in enumerate(fragments):
-        fragment_intervals.addi(frag.vcf_idx_start, frag.vcf_idx_end+1, i)
-        for var in frag.variants:
-            vcf_positions.add(var.vcf_idx)
-    vcf_positions = sorted(vcf_positions)
-    for index, position in enumerate(vcf_positions[1:], start=1):
-        incident_frag_idx = None
-        for entry in sorted(fragment_intervals.at(position)):
-            i = entry.data
-            if fragments[i].vcf_idx_start < position:
-                if not incident_frag_idx:
-                    incident_frag_idx = i
-                else:
-                    incident_frag_idx = None
-                    break
-        if incident_frag_idx:
-            if vcf_positions[index - 1] not in frag2evidence[incident_frag_idx]:
-                frag2split[incident_frag_idx].append(position)
-            frag2evidence[incident_frag_idx].append(position)
-    split_fragments = []
-    for frag_index, frag in enumerate(fragments):
-        if not frag2split[frag_index]:
-            split_fragments.append(frag)
-        else:  # iteratively split fragment at each splitting location
-            cur_frag = frag
-            for elem in sorted(frag2split[frag_index]):
-                if cur_frag.vcf_idx_start < elem <= cur_frag.vcf_idx_end:
-                    left, right = cur_frag.split_at(elem)
-                    if left.vcf_idx_start:
-                        left.fragment_group_id = frag_index
-                        split_fragments.append(left)
-                    if not right.vcf_idx_start: break
-                    cur_frag = right
-            if cur_frag.vcf_idx_start:
-                cur_frag.fragment_group_id = frag_index
-                split_fragments.append(cur_frag)
-    return sorted(split_fragments, key=lambda frag: frag.vcf_idx_start)
 
 
 ################################

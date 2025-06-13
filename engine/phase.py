@@ -11,9 +11,8 @@ from seq.frags import generate_fragments
 import logging
 import numpy as np
 from joblib import Parallel, delayed
-import pickle
+import subprocess
 import random
-import tqdm
 
 print("***********************************************")
 print("*  ralphi (%s): haplotype assembly mode *" % engine.__version__)
@@ -57,10 +56,6 @@ chr_name_chunks = np.array_split(np.array(config.chr_names), config.n_procs)
 logging.info("Chromosomes/process partition: " + str([np.array2string(chk) for chk in chr_name_chunks]))
 Parallel(n_jobs=config.n_procs)(delayed(phase)(chr_name_chunks[i], deepcopy(config)) for i in range(config.n_procs))
 
-# logging.info("Merging results")
-# phasing_result = {}
-# for chromosome in tqdm.tqdm(config.chr_names):
-#     with open("%s/%s.pkl" % (config.out_dir, chromosome), 'rb') as chr_out:
-#         out = pickle.load(chr_out)
-#     phasing_result = phasing_result | out
-#vcf_writer.write_phased_vcf(config.vcf, phasing_result, config.output_vcf)
+logging.info("Merging results")
+chr_files = ["%s/%s.ralphi.vcf" % (config.out_dir, chromosome) for chromosome in config.chr_names]
+subprocess.run(['bcftools', 'concat', '-Oz', '-o', config.output_vcf] + chr_files)

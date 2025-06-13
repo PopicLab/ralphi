@@ -26,7 +26,7 @@ based on the maximum fragment cut (MFC) objective.
 
 * Clone the repository:  ```$> git clone git@github.com:PopicLab/ralphi.git```
 * ```$> cd ralphi```
-* Create new conda environment: ```$> conda create -n ralphi_env python=3.10 pip cxx-compiler```
+* Create new conda environment: ```$> conda create -n ralphi_env python=3.10 pip cxx-compiler bcftools=1.21```
 * Activate the environment: ```$> conda activate ralphi_env```
 * Install all the required packages: ```$> pip install -r install/requirements.txt```
 
