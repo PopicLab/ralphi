@@ -29,7 +29,10 @@ if __name__ == '__main__':
     torch.set_num_threads(config.num_cores_torch)
     # Load Datasets
     training_dataset = GraphDataset.load_dataset(config.panel_dataset_train)
+    logging.info("Training dataset... %s" % training_dataset.describe())
+
     validation_dataset = GraphDataset.load_dataset(config.panel_dataset_validate)
+    logging.info("Validation dataset... %s" % validation_dataset.describe())
     validation_dataset = GraphDataset.round_robin_validation(config.n_procs, validation_dataset)
 
     # Setup the agent and the training environment
@@ -58,8 +61,8 @@ if __name__ == '__main__':
             logging.info('Finished Episode %s, obtained a reward of %s at validation step %s' % (
                 episode_id, reward, model_checkpoint_id))
             model_checkpoint_id += 1
-        episode_reward = agent.run_episode(config, episode_id=episode_id)
-        agent.env = env_train
+        group = training_dataset.iloc[episode_id % len(training_dataset)]['group']
+        episode_reward = agent.run_episode(config, episode_id=episode_id, group=group)
         if episode_id % (10 * config.interval_episodes_to_validation) == 0:
             logging.info('Best validation reward obtained is %d at validation step %d' % (best_validation_reward, best_validation_reward_id))
         episode_id += 1

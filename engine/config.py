@@ -10,7 +10,7 @@ import wandb
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
-CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_DESIGN DATA_FILTER')
+CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_GENERATION DATA_SELECTION')
 
 MAIN_LOG = "MAIN"
 STATS_LOG_TRAIN = "STATS_TRAIN"
@@ -27,6 +27,7 @@ SHARED_DEFAULTS = {
     'device': "cpu",
     'debug': True,
     'seed': 1234,
+    'team_name': 'ralphi',
     'project_name': "ralphi",
     'run_name': "ralphi",
     'log_wandb': False,
@@ -103,15 +104,15 @@ PHASE_DEFAULTS.update({
     'store_indexes': False,
 })
 
-DATA_DESIGN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
-DATA_DESIGN_DEFAULTS.update({
+DATA_GENERATION_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
+DATA_GENERATION_DEFAULTS.update({
     'test_mode': False,
     'drop_chr': ['chr20'],
     'skip_singleton_graphs': True,
     'skip_trivial_graphs': True,
-    'size_train': None,
-    'size_validate': 200,
-    'filter_config': None,
+    'size': None,
+    'validation_ratio': 0.1,
+    'selection_config': None,
 })
 
 TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
@@ -192,10 +193,10 @@ class TrainingConfig(Config):
 
         # set up performance tracking
         if self.log_wandb:
-            wandb.init(project=self.project_name, entity="ralphi", dir=self.log_dir, config=self, name=self.run_name)
+            wandb.init(project=self.project_name, entity=self.team_name, dir=self.log_dir, config=self, name=self.run_name)
         else:
             # automatically results in ignoring all wandb calls
-            wandb.init(project=self.project_name, entity="ralphi", dir=self.log_dir, mode="disabled")
+            wandb.init(project=self.project_name, entity=self.team_name, dir=self.log_dir, mode="disabled")
 
         # logging
         logging.info(self)
@@ -217,7 +218,7 @@ class DataConfig(Config):
             self.set_defaults(DATA_DEFAULTS_SHORT)
         else:
             self.set_defaults(DATA_DEFAULTS_LONG)
-        self.set_defaults(DATA_DESIGN_DEFAULTS)
+        self.set_defaults(DATA_GENERATION_DEFAULTS)
         super().__init__(config_file)
 
         for f in os.listdir(self.out_dir):
@@ -226,12 +227,18 @@ class DataConfig(Config):
         # logging
         logging.info(self)
 
+        if self.selection_config:
+            self.selection_config = load_config(self.selection_config,
+                                                config_type=CONFIG_TYPE.DATA_SELECTION)
+            # Copy the selection config used in the local folder
+            with open(self.experiment_dir + '/selection_config.yaml', 'w') as outfile:
+                yaml.safe_dump(self.selection_config.__dict__, outfile, default_flow_style=False)
 
-class FilterConfig(Config):
+
+class SelectionConfig:
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
         self.set_defaults()
-
 
     def set_defaults(self):
         default_values = {
@@ -252,7 +259,7 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
         return PhaseConfig(fname, **config)
-    elif config_type == CONFIG_TYPE.DATA_DESIGN:
+    elif config_type == CONFIG_TYPE.DATA_GENERATION:
         return DataConfig(fname, **config)
-    elif config_type == CONFIG_TYPE.DATA_FILTER:
-        return FilterConfig(fname, **config)
+    elif config_type == CONFIG_TYPE.DATA_SELECTION:
+        return SelectionConfig(fname, **config)

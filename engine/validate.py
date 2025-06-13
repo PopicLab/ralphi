@@ -48,7 +48,7 @@ def validate(model_checkpoint_id, episode_id, validation_dataset, config):
             for metric in metrics_of_interest:
                 wandb.log({"Episode": episode_id, "Validation_" + metric + "_" + group: df[metric].sum()})
             wandb.log({"Episode": episode_id, "Validation_number_examples_" + group: len(df)})
-        log_wandb(validation_performance, "overall")
+        log_wandb(validation_performance, "Global")
         groups = validation_performance['group'].unique()
         for group in groups:
             df_group = validation_performance[validation_performance['group'] == group]

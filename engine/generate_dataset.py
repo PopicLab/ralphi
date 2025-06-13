@@ -13,9 +13,7 @@ if __name__ == '__main__':
     # -----------------
 
     # Load the config
-    config = config_utils.load_config(args.config, config_type=config_utils.CONFIG_TYPE.DATA_DESIGN)
+    config = config_utils.load_config(args.config, config_type=config_utils.CONFIG_TYPE.DATA_GENERATION)
 
     random.seed(config.seed)
-    graph_dataset = graphs.graph_dataset.GraphDataset(config)
-
-    graphs.graph_dataset.GraphDataset(config).generate_training_validation_datasets()
+    graphs.graph_dataset.GraphDataset(config)
