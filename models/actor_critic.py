@@ -66,7 +66,7 @@ class DiscreteActorCriticAgent:
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(self.env.config.device)
 
-    def run_episode(self, config, test_mode=False, episode_id=None):
+    def run_episode(self, config, test_mode=False, episode_id=None, group='Global'):
         done = False
         episode_reward = 0
         first = True
@@ -77,10 +77,13 @@ class DiscreteActorCriticAgent:
             episode_reward += reward
             if not test_mode: self.model.rewards.append(reward)
         if not test_mode:
-            self.update_model(episode_id)
+            groups = {'Global'}
+            groups.add(group)
+            self.update_model(episode_id, groups=groups)
             cut_size = self.env.get_cut_value()
-            wandb.log({"Episode": episode_id, "Training Episode Reward": episode_reward})
-            wandb.log({"Episode": episode_id, "Training Cut Size": cut_size})
+            for group in groups:
+                wandb.log({"Episode": episode_id, "Training Episode Reward " + group: episode_reward})
+                wandb.log({"Episode": episode_id, "Training Cut Size " + group: cut_size})
         return episode_reward
 
     def log_episode_stats(self, episode_id, reward, loss, runtime):
@@ -114,7 +117,7 @@ class DiscreteActorCriticAgent:
         self.model.actions.append((dist.log_prob(action), val[0]))
         return action.item()
 
-    def update_model(self, episode_id=None):
+    def update_model(self, episode_id=None, groups=None):
         if not self.learning_mode:
             self.set_learning_params()
             self.learning_mode = True
@@ -133,15 +136,18 @@ class DiscreteActorCriticAgent:
         # reset gradients
         self.optimizer.zero_grad()
         loss = torch.stack(loss_policy).sum() + torch.stack(loss_value).sum()
-        wandb.log({"Episode": episode_id, "loss": loss})
+        for group in groups:
+            wandb.log({"Episode": episode_id, "loss " + group: loss})
         loss.backward()
         self.optimizer.step()
 
         # reset rewards and action buffer
         del self.model.rewards[:]
         del self.model.actions[:]
-        wandb.log({"Episode": episode_id, "actor loss": torch.stack(loss_policy).sum().item()})
-        wandb.log({"Episode": episode_id, "critic loss": torch.stack(loss_value).sum().item()})
+        for group in groups:
+            wandb.log({"Episode": episode_id, "actor loss " + group: torch.stack(loss_policy).sum().item()})
+            wandb.log({"Episode": episode_id, "critic loss " + group: torch.stack(loss_value).sum().item()})
+
         return {
             constants.LossTypes.actor_loss: torch.stack(loss_policy).sum().item(),
             constants.LossTypes.critic_loss: torch.stack(loss_value).sum().item(),

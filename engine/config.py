@@ -6,12 +6,11 @@ import logging
 import sys
 import os
 import wandb
-import re
 
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
-CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST FRAGS')
+CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_GENERATION DATA_SELECTION')
 
 MAIN_LOG = "MAIN"
 STATS_LOG_TRAIN = "STATS_TRAIN"
@@ -28,8 +27,9 @@ SHARED_DEFAULTS = {
     'device': "cpu",
     'debug': True,
     'seed': 1234,
+    'team_name': 'ralphi',
     'project_name': "ralphi",
-    'run_name': "dual",
+    'run_name': "ralphi",
     'log_wandb': False,
 }
 
@@ -57,6 +57,7 @@ SHARED_DATA_DEFAULTS = {
     'num_pivots': 10,
     "min_highmapq_ratio": 0,
     'supp_distance_th': 1000000,
+    'log_reads': False,
 }
 
 DATA_DEFAULTS_SHORT = {
@@ -72,7 +73,7 @@ DATA_DEFAULTS_SHORT = {
     'max_isize': 1000,
     'max_discordance': 1.0,
     'skip_post': False,
-    'read_overlap_th': None
+    'read_overlap_th': None,
 }
 
 
@@ -101,25 +102,28 @@ PHASE_DEFAULTS.update({
     'load_components': False,
     'store_components': False,
     'store_indexes': False,
-    'log_reads': False,
 })
 
-TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS}
+DATA_GENERATION_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
+DATA_GENERATION_DEFAULTS.update({
+    'test_mode': False,
+    'drop_chr': ['chr20'],
+    'skip_singleton_graphs': True,
+    'skip_trivial_graphs': True,
+    'size': None,
+    'validation_ratio': 0.1,
+    'selection_config': None,
+})
+
+TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
 TRAIN_DEFAULTS.update({
     'test_mode': False,
     'gamma': 0.98,
     'lr': 0.00003,
     'epochs': 1,
-    'drop_chr20': True,
-    'min_graph_size': 1,
-    'max_graph_size': 5000,
-    'skip_singleton_graphs': True,
-    'skip_trivial_graphs': True,
-    'num_cores_validation': 8,
+    'n_procs': 8,
     'max_episodes': None, # maximum number of episodes to run
-    'interval_validate': 500,  # number of episodes between model validation runs
-    'panel_validation_frags': None,  # fragment files for validation
-    'panel_validation_vcfs': None,  # VCF files for validation
+    'interval_episodes_to_validation': 500,  # number of episodes between model validation runs
     'render_view': "weighted_view",
     'load_components': True,
     'store_components': True,
@@ -138,6 +142,9 @@ class Config:
         # setup the experiment directory structure
         Path(self.log_dir).mkdir(parents=True, exist_ok=True)
         Path(self.out_dir).mkdir(parents=True, exist_ok=True)
+
+        if self.chr_names is None:
+            self.chr_names = ['chr{}'.format(x) for x in range(1, 23)]
 
         # logging
         logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.getLevelName(self.logging_level),
@@ -175,58 +182,27 @@ class PhaseConfig(Config):
 class TrainingConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
-        self.set_defaults()
+        self.set_defaults(TRAIN_DEFAULTS)
         super().__init__(config_file)
         self.model_path = self.out_dir + "/ralphi_model_final.pt"
         self.best_model_path = self.out_dir + "/ralphi_model_best.pt"
         self.validation_output_vcf = self.out_dir + "/validation_output_vcf.vcf"
-
-        # logging
-        # main log file
-        self.log_file_main = self.log_dir + 'main.log'
-        file_handler = logging.FileHandler(self.log_file_main, mode='w')
-        file_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
-        stream_handler = logging.StreamHandler(sys.stdout)
-        stream_handler.setFormatter(file_handler.formatter)
-        logger_main = logging.getLogger(MAIN_LOG)
-        logger_main.setLevel(level=logging.INFO)
-        logger_main.addHandler(file_handler)
-        logger_main.addHandler(stream_handler)
-        # training stats log file
-        self.log_file_stats_train = self.log_dir + 'train_episodes_stats.csv'
-        file_handler = logging.FileHandler(self.log_file_stats_train, mode='w')
-        file_handler.setFormatter(logging.Formatter('%(message)s'))
-        logger_stats_train = logging.getLogger(STATS_LOG_TRAIN)
-        logger_stats_train.setLevel(level=logging.INFO)
-        logger_stats_train.addHandler(file_handler)
-        logger_stats_train.info(",".join(STATS_LOG_COLS_TRAIN))
-        # validation stats log file
-        self.log_file_stats_validate = self.log_dir + 'validate_episodes_stats.csv'
-        file_handler = logging.FileHandler(self.log_file_stats_validate, mode='w')
-        file_handler.setFormatter(logging.Formatter('%(message)s'))
-        logger_stats_validate = logging.getLogger(STATS_LOG_VALIDATE)
-        logger_stats_validate.setLevel(level=logging.INFO)
-        logger_stats_validate.addHandler(file_handler)
-        logger_stats_validate.info(",".join(STATS_LOG_COLS_VALIDATE))
-        logger_main.info(self)
 
         for f in os.listdir(self.out_dir):
             os.remove(os.path.join(self.out_dir, f))
 
         # set up performance tracking
         if self.log_wandb:
-            wandb.init(project=self.project_name, entity="ralphi", dir=self.log_dir, config=self, name=self.run_name)
+            wandb.init(project=self.project_name, entity=self.team_name, dir=self.log_dir, config=self, name=self.run_name)
         else:
             # automatically results in ignoring all wandb calls
-            wandb.init(project=self.project_name, entity="ralphi", dir=self.log_dir, mode="disabled")
+            wandb.init(project=self.project_name, entity=self.team_name, dir=self.log_dir, mode="disabled")
 
         # logging
-        logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO,
-                            handlers=[logging.FileHandler(self.log_dir + '/training.log', mode='w'),
-                                      logging.StreamHandler(sys.stdout)])
+        logging.info(self)
 
         # enforce light logging if using multithreading validation
-        if self.num_cores_validation > 1:
+        if self.n_procs > 1:
             self.light_logging = True
 
         if self.device == "cuda" or self.device == "cuda:0" or self.device == "cuda:1":
@@ -238,18 +214,36 @@ class TrainingConfig(Config):
 class DataConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
-        self.set_defaults()
+        if self.platform == "illumina":
+            self.set_defaults(DATA_DEFAULTS_SHORT)
+        else:
+            self.set_defaults(DATA_DEFAULTS_LONG)
+        self.set_defaults(DATA_GENERATION_DEFAULTS)
         super().__init__(config_file)
+
+        for f in os.listdir(self.out_dir):
+            os.remove(os.path.join(self.out_dir, f))
+
+        # logging
+        logging.info(self)
+
+        if self.selection_config:
+            self.selection_config = load_config(self.selection_config,
+                                                config_type=CONFIG_TYPE.DATA_SELECTION)
+            # Copy the selection config used in the local folder
+            with open(self.experiment_dir + '/selection_config.yaml', 'w') as outfile:
+                yaml.safe_dump(self.selection_config.__dict__, outfile, default_flow_style=False)
+
+
+class SelectionConfig:
+    def __init__(self, config_file, **entries):
+        self.__dict__.update(entries)
+        self.set_defaults()
 
     def set_defaults(self):
         default_values = {
-            'shuffle': True,
-            'seed': 1234,  # Random seed
-            'num_samples_per_category_default': 1000,
-            'drop_redundant': False,
-            'global_ranges': {},
-            'ordering_ranges': {},
-            'save_indexes_path': None
+            'shuffle': False,
+            'Global': {},
         }
         for k, v, in default_values.items():
             if not hasattr(self, k):
@@ -258,14 +252,14 @@ class DataConfig(Config):
 
 def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     # Load a YAML configuration file
+    if fname is None: return None
     with open(fname) as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
         return PhaseConfig(fname, **config)
-    elif config_type == CONFIG_TYPE.FRAGS:
-        return FragmentConfig(fname, **config)
-
-
-
+    elif config_type == CONFIG_TYPE.DATA_GENERATION:
+        return DataConfig(fname, **config)
+    elif config_type == CONFIG_TYPE.DATA_SELECTION:
+        return SelectionConfig(fname, **config)

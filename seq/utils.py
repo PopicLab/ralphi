@@ -65,4 +65,3 @@ if __name__ == "__main__":
         split_by_chr(args.vcf, [HetSNPOnly(None)])
     else:
         filter_vcf(args.vcf, [HetSNPOnly(None)])
-
