@@ -119,11 +119,11 @@ TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
 TRAIN_DEFAULTS.update({
     'test_mode': False,
     'gamma': 0.98,
-    'lr': 0.00003,
+    'lr': 0.000003,
     'epochs': 1,
     'n_procs': 8,
     'max_episodes': None, # maximum number of episodes to run
-    'interval_episodes_to_validation': 500,  # number of episodes between model validation runs
+    'interval_episodes_to_validation': 30000,  # number of episodes between model validation runs
     'render_view': "weighted_view",
     'load_components': True,
     'store_components': True,
