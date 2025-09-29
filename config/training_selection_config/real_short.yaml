@@ -1,0 +1,167 @@
+Global:
+  n_nodes:
+    min: 3
+    max: 5000
+real_short3-9_0-9:
+  n_nodes:
+    min: 3
+    max: 9
+  n_edges:
+    min: 0
+    max: 9
+real_short3-9_9-14:
+  n_nodes:
+    min: 3
+    max: 9
+  n_edges:
+    min: 9
+    max: 14
+real_short3-9_14-18:
+  n_nodes:
+    min: 3
+    max: 9
+  n_edges:
+    min: 14
+    max: 18
+real_short3-9_18:
+  n_nodes:
+    min: 3
+    max: 9
+  n_edges:
+    min: 18
+real_short10-49_0-59:
+  n_nodes:
+    min: 10
+    max: 49
+  n_edges:
+    min: 0
+    max: 59
+real_short10-49_59-101:
+  n_nodes:
+    min: 10
+    max: 49
+  n_edges:
+    min: 59
+    max: 101
+real_short10-49_101-191:
+  n_nodes:
+    min: 10
+    max: 49
+  n_edges:
+    min: 101
+    max: 191
+real_short10-49_191:
+  n_nodes:
+    min: 10
+    max: 49
+  n_edges:
+    min: 191
+real_short50-99_0-548:
+  n_nodes:
+    min: 50
+    max: 99
+  n_edges:
+    min: 0
+    max: 548
+real_short50-99_548-735:
+  n_nodes:
+    min: 50
+    max: 99
+  n_edges:
+    min: 548
+    max: 735
+real_short50-99_735-990:
+  n_nodes:
+    min: 50
+    max: 99
+  n_edges:
+    min: 735
+    max: 990
+real_short50-99_990:
+  n_nodes:
+    min: 50
+    max: 99
+  n_edges:
+    min: 990
+real_short100-199_0-1412:
+  n_nodes:
+    min: 100
+    max: 199
+  n_edges:
+    min: 0
+    max: 1412
+real_short100-199_1412-1866:
+  n_nodes:
+    min: 100
+    max: 199
+  n_edges:
+    min: 1412
+    max: 1866
+real_short100-199_1866-2485:
+  n_nodes:
+    min: 100
+    max: 199
+  n_edges:
+    min: 1866
+    max: 2485
+real_short100-199_2485:
+  n_nodes:
+    min: 100
+    max: 199
+  n_edges:
+    min: 2485
+real_short200-499_0-3616:
+  n_nodes:
+    min: 200
+    max: 499
+  n_edges:
+    min: 0
+    max: 3616
+real_short200-499_3616-4633:
+  n_nodes:
+    min: 200
+    max: 499
+  n_edges:
+    min: 3616
+    max: 4633
+real_short200-499_4633-6485:
+  n_nodes:
+    min: 200
+    max: 499
+  n_edges:
+    min: 4633
+    max: 6485
+real_short200-499_6485:
+  n_nodes:
+    min: 200
+    max: 499
+  n_edges:
+    min: 6485
+real_short500-5000_0-11511:
+  n_nodes:
+    min: 500
+    max: 5000
+  n_edges:
+    min: 0
+    max: 11511
+real_short500-5000_11511-15636:
+  n_nodes:
+    min: 500
+    max: 5000
+  n_edges:
+    min: 11511
+    max: 15636
+real_short500-5000_15636-27715:
+  n_nodes:
+    min: 500
+    max: 5000
+  n_edges:
+    min: 15636
+    max: 27715
+real_short500-5000_27715:
+  n_nodes:
+    min: 500
+    max: 5000
+  n_edges:
+    min: 27715
+shuffle: False

@@ -1,0 +1,167 @@
+Global:
+  n_nodes:
+    min: 3
+    max: 5000
+simu_ont3-9_0-9:
+  n_nodes:
+    min: 3
+    max: 9
+  n_edges:
+    min: 0
+    max: 9
+simu_ont3-9_9-14:
+  n_nodes:
+    min: 3
+    max: 9
+  n_edges:
+    min: 9
+    max: 14
+simu_ont3-9_14-18:
+  n_nodes:
+    min: 3
+    max: 9
+  n_edges:
+    min: 14
+    max: 18
+simu_ont3-9_18:
+  n_nodes:
+    min: 3
+    max: 9
+  n_edges:
+    min: 18
+simu_ont10-49_0-74:
+  n_nodes:
+    min: 10
+    max: 49
+  n_edges:
+    min: 0
+    max: 74
+simu_ont10-49_74-129:
+  n_nodes:
+    min: 10
+    max: 49
+  n_edges:
+    min: 74
+    max: 129
+simu_ont10-49_129-205:
+  n_nodes:
+    min: 10
+    max: 49
+  n_edges:
+    min: 129
+    max: 205
+simu_ont10-49_205:
+  n_nodes:
+    min: 10
+    max: 49
+  n_edges:
+    min: 205
+simu_ont50-99_0-428:
+  n_nodes:
+    min: 50
+    max: 99
+  n_edges:
+    min: 0
+    max: 428
+simu_ont50-99_428-565:
+  n_nodes:
+    min: 50
+    max: 99
+  n_edges:
+    min: 428
+    max: 565
+simu_ont50-99_565-710:
+  n_nodes:
+    min: 50
+    max: 99
+  n_edges:
+    min: 565
+    max: 710
+simu_ont50-99_710:
+  n_nodes:
+    min: 50
+    max: 99
+  n_edges:
+    min: 710
+simu_ont100-199_0-1049:
+  n_nodes:
+    min: 100
+    max: 199
+  n_edges:
+    min: 0
+    max: 1049
+simu_ont100-199_1049-1288:
+  n_nodes:
+    min: 100
+    max: 199
+  n_edges:
+    min: 1049
+    max: 1288
+simu_ont100-199_1288-1588:
+  n_nodes:
+    min: 100
+    max: 199
+  n_edges:
+    min: 1288
+    max: 1588
+simu_ont100-199_1588:
+  n_nodes:
+    min: 100
+    max: 199
+  n_edges:
+    min: 1588
+simu_ont200-499_0-2355:
+  n_nodes:
+    min: 200
+    max: 499
+  n_edges:
+    min: 0
+    max: 2355
+simu_ont200-499_2355-3002:
+  n_nodes:
+    min: 200
+    max: 499
+  n_edges:
+    min: 2355
+    max: 3002
+simu_ont200-499_3002-3909:
+  n_nodes:
+    min: 200
+    max: 499
+  n_edges:
+    min: 3002
+    max: 3909
+simu_ont200-499_3909:
+  n_nodes:
+    min: 200
+    max: 499
+  n_edges:
+    min: 3909
+simu_ont500-5000_0-6318:
+  n_nodes:
+    min: 500
+    max: 5000
+  n_edges:
+    min: 0
+    max: 6318
+simu_ont500-5000_6318-7873:
+  n_nodes:
+    min: 500
+    max: 5000
+  n_edges:
+    min: 6318
+    max: 7873
+simu_ont500-5000_7873-10820:
+  n_nodes:
+    min: 500
+    max: 5000
+  n_edges:
+    min: 7873
+    max: 10820
+simu_ont500-5000_10820:
+  n_nodes:
+    min: 500
+    max: 5000
+  n_edges:
+    min: 10820
+shuffle: False
