@@ -1,0 +1,3 @@
+lr: 0.000003
+panel_dataset_train: ['/path/to/ordered/combined/short/dataset']
+panel_dataset_validate: ['/path/short/real/validation', '/path/short/simulated/validation']

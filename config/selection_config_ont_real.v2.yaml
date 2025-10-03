@@ -9,6 +9,8 @@ real_ont3-9_0-8:
   n_edges:
     min: 0
     max: 8
+  size_train: 350
+  size_validate: 35
 real_ont3-9_8-12:
   n_nodes:
     min: 3
@@ -16,6 +18,8 @@ real_ont3-9_8-12:
   n_edges:
     min: 8
     max: 12
+  size_train: 350
+  size_validate: 35
 real_ont3-9_12-16:
   n_nodes:
     min: 3
@@ -23,12 +27,16 @@ real_ont3-9_12-16:
   n_edges:
     min: 12
     max: 16
+  size_train: 350
+  size_validate: 35
 real_ont3-9_16:
   n_nodes:
     min: 3
     max: 9
   n_edges:
     min: 16
+  size_train: 350
+  size_validate: 35
 real_ont10-49_0-65:
   n_nodes:
     min: 10
@@ -36,6 +44,8 @@ real_ont10-49_0-65:
   n_edges:
     min: 0
     max: 65
+  size_train: 1900
+  size_validate: 190
 real_ont10-49_65-114:
   n_nodes:
     min: 10
@@ -43,6 +53,8 @@ real_ont10-49_65-114:
   n_edges:
     min: 65
     max: 114
+  size_train: 1900
+  size_validate: 190
 real_ont10-49_114-170:
   n_nodes:
     min: 10
@@ -50,12 +62,16 @@ real_ont10-49_114-170:
   n_edges:
     min: 114
     max: 170
+  size_train: 1900
+  size_validate: 190
 real_ont10-49_170:
   n_nodes:
     min: 10
     max: 49
   n_edges:
     min: 170
+  size_train: 1900
+  size_validate: 190
 real_ont50-99_0-303:
   n_nodes:
     min: 50
@@ -63,6 +79,8 @@ real_ont50-99_0-303:
   n_edges:
     min: 0
     max: 303
+  size_train: 1700
+  size_validate: 170
 real_ont50-99_303-382:
   n_nodes:
     min: 50
@@ -70,6 +88,8 @@ real_ont50-99_303-382:
   n_edges:
     min: 303
     max: 382
+  size_train: 1700
+  size_validate: 170
 real_ont50-99_382-482:
   n_nodes:
     min: 50
@@ -77,12 +97,16 @@ real_ont50-99_382-482:
   n_edges:
     min: 382
     max: 482
+  size_train: 1700
+  size_validate: 170
 real_ont50-99_482:
   n_nodes:
     min: 50
     max: 99
   n_edges:
     min: 482
+  size_train: 1700
+  size_validate: 170
 real_ont100-199_0-655:
   n_nodes:
     min: 100
@@ -90,6 +114,8 @@ real_ont100-199_0-655:
   n_edges:
     min: 0
     max: 655
+  size_train: 2100
+  size_validate: 210
 real_ont100-199_655-827:
   n_nodes:
     min: 100
@@ -97,6 +123,8 @@ real_ont100-199_655-827:
   n_edges:
     min: 655
     max: 827
+  size_train: 2100
+  size_validate: 210
 real_ont100-199_827-1074:
   n_nodes:
     min: 100
@@ -104,12 +132,16 @@ real_ont100-199_827-1074:
   n_edges:
     min: 827
     max: 1074
+  size_train: 2100
+  size_validate: 210
 real_ont100-199_1074:
   n_nodes:
     min: 100
     max: 199
   n_edges:
     min: 1074
+  size_train: 2100
+  size_validate: 210
 real_ont200-499_0-1606:
   n_nodes:
     min: 200
@@ -117,6 +149,8 @@ real_ont200-499_0-1606:
   n_edges:
     min: 0
     max: 1606
+  size_train: 2000
+  size_validate: 200
 real_ont200-499_1606-2194:
   n_nodes:
     min: 200
@@ -124,6 +158,8 @@ real_ont200-499_1606-2194:
   n_edges:
     min: 1606
     max: 2194
+  size_train: 2000
+  size_validate: 200
 real_ont200-499_2194-2930:
   n_nodes:
     min: 200
@@ -131,12 +167,16 @@ real_ont200-499_2194-2930:
   n_edges:
     min: 2194
     max: 2930
+  size_train: 2000
+  size_validate: 200
 real_ont200-499_2930:
   n_nodes:
     min: 200
     max: 499
   n_edges:
     min: 2930
+  size_train: 2000
+  size_validate: 200
 real_ont500-5000_0-5001:
   n_nodes:
     min: 500
@@ -144,6 +184,8 @@ real_ont500-5000_0-5001:
   n_edges:
     min: 0
     max: 5001
+  size_train: 1500
+  size_validate: 150
 real_ont500-5000_5001-6841:
   n_nodes:
     min: 500
@@ -151,6 +193,8 @@ real_ont500-5000_5001-6841:
   n_edges:
     min: 5001
     max: 6841
+  size_train: 1500
+  size_validate: 150
 real_ont500-5000_6841-10480:
   n_nodes:
     min: 500
@@ -158,10 +202,14 @@ real_ont500-5000_6841-10480:
   n_edges:
     min: 6841
     max: 10480
+  size_train: 1500
+  size_validate: 150
 real_ont500-5000_10480:
   n_nodes:
     min: 500
     max: 5000
   n_edges:
     min: 10480
+  size_train: 1500
+  size_validate: 150
 shuffle: False
