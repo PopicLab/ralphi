@@ -42,6 +42,7 @@ def phase(chr_names, config):  # runs phasing on the specified list of chromosom
         idx2var = var.extract_variants(env.solutions)
         for v in idx2var.values():
             v.assign_haplotype()
+        var.remove_singleton_blocks(idx2var)
         idx2var = var.postprocess(env.solutions, idx2var, config)
         vcf_writer.write_phased_vcf(config.vcf, idx2var,
                                     "%s/%s.ralphi.vcf" % (config.out_dir, chromosome), chromosome)
