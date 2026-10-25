@@ -54,6 +54,27 @@ def extract_variants(phased_frag_sets):
                 idx2variant[var.vcf_idx].phase_sets[ps].append((var, frag.n_copies, frag.number_duplicated))
     return idx2variant
 
+def remove_singleton_blocks(idx2var):
+    """
+    Postprocess phasing blocks to remove the ones with a single variant.
+    This might happen due to 0-weight edges in very rare cases.
+    """
+    singleton_vars = {}
+    for var in idx2var.values():
+        ps = var.phase_set
+        if ps is None: continue
+
+        if ps in singleton_vars:
+            # Duplicate
+            singleton_vars[ps] = None
+        else:
+            singleton_vars[ps] = var
+
+    for var in singleton_vars.values():
+        if var is not None: 
+            var.phase_set = None
+            var.h = None
+
 def update_phase_sets(max_phase_set, idx2var):
     """
     For variants we do not phase (haplotype "h" field set to 2) we need to update the phase sets of variants downstream in the block
