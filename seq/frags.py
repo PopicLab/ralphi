@@ -151,9 +151,19 @@ class NestedDict(defaultdict):
         return NestedDict(self.default_factory)
 
 
+def filter_hic_distance(reads, min_dist):
+    """Drop Hi-C fragments pairs that are too close due to self-ligation artifacts."""
+    keep = []
+    for i, read in enumerate(reads):
+        positions = [variant.position for variant in read]
+        if len(positions) < 2 or (max(positions) - min(positions)) >= min_dist:
+            keep.append(i)
+    return reads.subset(keep)
+
+
 def generate_fragments(config, chromosome):
     bam_reader = PhasedInputReader([config.bam], config.reference, None, ignore_read_groups=True,
-                                   mapq_threshold=config.mapq, only_snvs=True, overhang=config.realign_overhang)
+                                   mapq_threshold=config.mapq, only_snvs=True, overhang=config.realign_overhang, is_hic=config.is_hic)
     vcf_reader = whatshap.vcf.VcfReader(config.vcf, only_snvs=True)
     assert len(vcf_reader.samples) == 1
     variant_table = vcf_reader.fetch(chromosome)  # next(vcf_reader.__iter__())
