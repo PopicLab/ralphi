@@ -1,19 +1,16 @@
 #### REQUIRED ####
+vcf: "path/to/vcf"   # path to the VCF variant file (must be compressed and indexed)
 model: "{RALPHI_ROOT}/data/models/ralphi.v1.long.pt"  # path to the pretrained ralphi model for ONT reads
+reference: "/path/to/fai"  # path to the reference FASTA file (needed for realignment)
 
 inputs:
   - platform: "illumina" # sequencing platform (options: ont, hifi, hic  or illumina)
     bam: "/path/to/bam"  # path to the BAM alignments file
-    vcf: "path/to/vcf"   # path to the VCF variant file (must be compressed and indexed)
   - platform: "ont"  # sequencing platform (options: ont, hifi, hic or illumina)
     bam: "/path/to/bam"  # path to the BAM alignments file
-    vcf: "path/to/vcf"   # path to the VCF variant file (must be compressed and indexed)
-    reference: "/path/to/fai"  # path to the reference FASTA file (needed for realignment)
+    realign: True  # if realignment has to be performed
 
 #### OPTIONAL ####
 chr_names: null  # list of chromosomes to process: null (all) or a specific list e.g. ["chr1", "chr21"]
 n_procs: 22  # number of cores (used to process chromosomes in parallel)
 num_cores_torch: 8  # number PyTorch threads (used for intraop parallelism)
-
-####DATA####
-enable_read_selection: True  # Any data related parameter specified outside of the inputs section will be applied to all inputs unless overridden in a specific input.

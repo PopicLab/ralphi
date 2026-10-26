@@ -35,6 +35,7 @@ SHARED_DEFAULTS = {
     'log_wandb': False,
     'skip_post': True,
     'inputs': [],
+    'reference': None,
 }
 
 MODEL_DEFAULTS = {
@@ -60,12 +61,12 @@ GRAPH_DEFAULTS = {
 SHARED_DATA_DEFAULTS = {
     'platform': None,
     'bam': None,
-    'reference': None,
     'mapq': 20,
     'no_filter': False,
     "min_highmapq_ratio": 0,
     'supp_distance_th': 1000000,
     'log_reads': False,
+    'realign': False
 }
 
 DATA_DEFAULTS_SHORT = {
@@ -98,6 +99,7 @@ DATA_DEFAULTS_LONG = {
     'skip_post': True,
     'enable_strand_filter': True,
     'read_overlap_th': 100,
+    'realign': True,
 }
 
 
@@ -134,16 +136,19 @@ TRAIN_DEFAULTS.update({
     'pretrained_model': None,
 })
 
+DATA_PARAMS = {
+    *SHARED_DATA_DEFAULTS, 
+    *DATA_DEFAULTS_SHORT, 
+    *DATA_DEFAULTS_LONG 
+}
 
-ALL_PARAMS = set(
-    TRAIN_DEFAULTS | 
-    DATA_GENERATION_DEFAULTS | 
-    PHASE_DEFAULTS | 
-    SHARED_DATA_DEFAULTS | 
-    DATA_DEFAULTS_SHORT | 
-    DATA_DEFAULTS_LONG |
-    MODEL_DEFAULTS
-)
+ALL_PARAMS = {
+    *TRAIN_DEFAULTS,
+    *DATA_GENERATION_DEFAULTS, 
+    *PHASE_DEFAULTS,
+    *MODEL_DEFAULTS,
+    *DATA_PARAMS
+}
 
 
 class LogNamespace(SimpleNamespace):
@@ -162,37 +167,31 @@ def platform_preset(platform):
     return PLATFORM_PRESETS.get(platform, DATA_DEFAULTS_LONG)
 
 
-def resolve_input(entry, base_entries):
-    """Resolve an input block"""
-    platform = entry.get('platform', base_entries.get('platform', None))
+def resolve_input(entry):
+    platform = entry.get('platform', None)
     assert platform in PLATFORM_PRESETS, f"Unknown platform {platform}; expected one of {sorted(PLATFORM_PRESETS)}"
     
     # Get the platform defaults
     resolved = dict(SHARED_DATA_DEFAULTS)
     resolved.update(platform_preset(platform))
 
-    # Modify with the base_entries and the input entries
     resolved['platform'] = platform
 
     # Ensure the parameters in entry are valid for the inputs section
     provided_keys =  set(entry.keys())
-    if not provided_keys.issubset(ALL_PARAMS):
-        invalid_keys = provided_keys - ALL_PARAMS
+    if not provided_keys.issubset(DATA_PARAMS):
+        invalid_keys = provided_keys - DATA_PARAMS
         raise ValueError(f"Parameters invalid for the `inputs` section: {invalid_keys}")
-
-    # Replace default data related parameters with the base_config parameters 
-    for k, v in base_entries.items():
-        if k in resolved:
-            resolved[k] = v
 
     # Update with the input parameters
     resolved.update(entry)
     assert resolved.get('bam', None) is not None, 'The bam parameter must be specified for each input: %s' % entry 
 
-    if platform in ["ont", 'hifi'] and resolved['reference'] is None:
+    if platform in ["ont", 'hifi'] and not resolved['realign']:
         logging.warning("Reference genome is not specified for platform %s; " \
         "realignment is recommended for ont and hifi platforms; " \
         "realignment will be skipped.", platform)
+
     return LogNamespace(**resolved)
 
 
@@ -201,9 +200,10 @@ def resolve_inputs(config, entries):
     raw = getattr(config, 'inputs', None)
     if raw:
         # inputs was provided
-        config.inputs = [resolve_input(entry, entries) for entry in raw]
+        config.inputs = [resolve_input(entry) for entry in raw]
     else:
-        config.inputs = [resolve_input({'bam': getattr(config, 'bam', None)}, entries)]
+        data_entries = {param: entry for param, entry in entries.items() if param in DATA_PARAMS}
+        config.inputs = [resolve_input(data_entries)]
 
 
 class Config:

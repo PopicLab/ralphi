@@ -162,7 +162,13 @@ def generate_fragments(config, chromosome):
     all_fragments = []
     for inp in config.inputs:
         bams = inp.bam if isinstance(inp.bam, list) else [inp.bam]
-        bam_reader = PhasedInputReader(bams, inp.reference, None, ignore_read_groups=True,
+
+        reference = None
+        if inp.realign:
+            reference = config.reference
+            assert reference, 'A reference must be spcified when realign is set to True'
+
+        bam_reader = PhasedInputReader(bams, reference, None, ignore_read_groups=True,
                                        mapq_threshold=inp.mapq, only_snvs=True, overhang=inp.realign_overhang)
         reads, _ = bam_reader.read(variant_table.chromosome, variant_table.variants, None, read_vcf=False, args=inp)
         logging.debug("[%s] Number of reads loaded: %d", inp.platform, len(reads))

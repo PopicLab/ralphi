@@ -2,6 +2,7 @@
 platform: "ONT"  # sequencing platform (options: ONT or illumina)
 bam: "/path/to/bam"  # path to the BAM alignments file
 vcf: "path/to/vcf"   # path to the VCF variant file (must be compressed and indexed)
+realign: True # Enable read local realignment (recommended for long read data)
 reference: "/path/to/fai"  # path to the reference FASTA file (needed for realignment)
 model: "{RALPHI_ROOT}/data/models/ralphi.v1.long.pt"  # path to the pretrained ralphi model for ONT reads
 #### OPTIONAL ####
