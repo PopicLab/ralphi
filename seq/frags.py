@@ -81,7 +81,7 @@ class Fragment:
         self.haplotype = None
         self.true_haplotype = None
         self.vcf_positions = None
-        self.fragment_group_id = None
+        self.group_id = None
         self.number_duplicated = 1
 
     def __eq__(self, fragment):

@@ -248,7 +248,7 @@ class FragGraph:
         if self.node_id2hap_id is not None:
             node_id2hap_id = {i: self.node_id2hap_id[j] for (i, j) in enumerate(subg.nodes)}
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
-        return FragGraph(subg_relabeled, subg_frags, node_id2hap_id, compute_trivial)
+        return FragGraph(subg_relabeled, fragments=subg_frags, node_id2hap_id=node_id2hap_id, compute_trivial=compute_trivial)
 
     def get_component(self, p, edge_stack, current):
         component = []
@@ -275,9 +275,8 @@ class FragGraph:
             for bic in biconnected_components:
                 if articulation in bic:
                     count += 1
-            if self.fragments is not None:
-                self.fragments[articulation].group_id = articulation
-                self.fragments[articulation].number_duplicated = count
+            self.g.nodes[articulation]['group_id'] = articulation
+            self.g.nodes[articulation]['number_duplicated'] = count
         return biconnected_components
 
 
