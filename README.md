@@ -41,6 +41,7 @@ based on the maximum fragment cut (MFC) objective.
 To run: ```$> python engine/phase.py --config </path/to/config>```
 
 ```phase.py``` phases an input VCF file given a pre-trained model and an input BAM file.
+```link.py``` connects phasing blocks of an input VCF file given a pre-trained model and an input BAM file.
 The script accepts as input a YAML file with configuration parameters. The ```config/``` directory provides 
 a sample config file for the ONT platform (```config/ont.yaml```) and the Illumina platform (```config/illumina.yaml```),
 which lists the required and key optional parameters.

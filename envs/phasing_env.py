@@ -6,6 +6,7 @@ import utils.plotting as vis
 import graphs.frag_graph as graphs
 import networkx as nx
 import models.constants as constants
+from seq.frags import PhasingBlock
 
 
 class State:
@@ -124,9 +125,17 @@ class PhasingEnv(gym.Env):
     def finalize(self):
         if self.record:
             node_labels = self.state.g.ndata['cut_member_hap0'][:, 0].cpu().numpy().tolist()
-            for i, frag in enumerate(self.state.frag_graph.fragments):
-                frag.assign_haplotype(node_labels[i])
-            self.solutions.append(self.state.frag_graph.fragments)
+            if self.config.link:
+                g = self.state.frag_graph.g
+                phase_set_of = nx.get_node_attributes(g, 'phase_set')
+                group_id_of = nx.get_node_attributes(g, 'group_id')
+                solution = [PhasingBlock(group_id_of.get(node), phase_set_of[node], haplotype)
+                            for node, haplotype in zip(sorted(g.nodes()), node_labels)]
+                self.solutions.append(solution)
+            else:
+                for i, frag in enumerate(self.state.frag_graph.fragments):
+                    frag.assign_haplotype(node_labels[i])
+                self.solutions.append(self.state.frag_graph.fragments)
 
     def postprocess(self):
             self.solutions = graphs.connect_components(self.solutions)
@@ -141,13 +150,25 @@ class PhasingEnv(gym.Env):
 
     def process_error_free_instance(self):
         assert self.state.frag_graph.trivial
-        assert self.state.frag_graph.hap_a_frags is not None and self.state.frag_graph.hap_b_frags is not None, \
+        assert self.state.frag_graph.hap_a is not None and self.state.frag_graph.hap_b is not None, \
             "The solution was not precomputed"
-        for i, frag in enumerate(self.state.frag_graph.fragments):
-            if i in self.state.frag_graph.hap_a_frags: frag.assign_haplotype(0.0)
-            elif i in self.state.frag_graph.hap_b_frags: frag.assign_haplotype(1.0)
-            else: raise RuntimeError("Fragment wasn't assigned to any cluster")
-        self.solutions.append(self.state.frag_graph.fragments)
+        if self.config.link:
+            g = self.state.frag_graph.g
+            for ps in g.nodes:
+                if ps in self.state.frag_graph.hap_a: g.nodes[ps]['haplotype'] = 0.0
+                elif ps in self.state.frag_graph.hap_b: g.nodes[ps]['haplotype'] = 1.0
+                else: raise RuntimeError("Phasing Block wasn't assigned to any cluster")
+            phase_set_of = nx.get_node_attributes(g, 'phase_set')
+            group_id_of = nx.get_node_attributes(g, 'group_id')
+            solution = {phase_set_of[node]: (g.nodes[node]['haplotype'], group_id_of.get(node))
+                        for node in g.nodes}
+            self.solutions.append(solution)
+        else:
+            for i, frag in enumerate(self.state.frag_graph.fragments):
+                if i in self.state.frag_graph.hap_a: frag.assign_haplotype(0.0)
+                elif i in self.state.frag_graph.hap_b: frag.assign_haplotype(1.0)
+                else: raise RuntimeError("Fragment wasn't assigned to any cluster")
+            self.solutions.append(self.state.frag_graph.fragments)
 
     def get_solutions(self):
         node_labels = self.state.g.ndata['cut_member_hap0'][:, 0].cpu().numpy().tolist()

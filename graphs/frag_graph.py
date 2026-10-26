@@ -24,14 +24,14 @@ class FragGraph:
     Edges are inserted between fragments that cover the same variants
     """
 
-    def __init__(self, g, fragments, node_id2hap_id=None, compute_trivial=False):
+    def __init__(self, g, fragments=None, node_id2hap_id=None, compute_trivial=False):
         self.g = g
         self.fragments = fragments
         self.n_nodes = g.number_of_nodes()
         self.node_id2hap_id = node_id2hap_id
         self.trivial = None
-        self.hap_a_frags = None
-        self.hap_b_frags = None
+        self.hap_a = None
+        self.hap_b = None
         self.graph_properties = {}
         if compute_trivial: self.check_and_set_trivial()
 
@@ -62,7 +62,14 @@ class FragGraph:
         return frags_unique
 
     @staticmethod
-    def build(fragments, compute_trivial=False, compress=False):
+    def build(fragments, link, variant_to_phase_set=None, compute_trivial=False, compress=False):
+        if link:
+            return FragGraph.build_link(fragments, variant_to_phase_set, compute_trivial) 
+        else:
+            return FragGraph.build_phase(fragments,compute_trivial, compress)
+
+    @staticmethod
+    def build_phase(fragments, compute_trivial=False, compress=False):
         logging.debug("Input number of fragments: %d" % len(fragments))
         if compress and fragments:
             logging.debug("Compressing identical fragments")
@@ -90,6 +97,31 @@ class FragGraph:
                 # TODO(viq): differentiate between no overlap and half conflicts
                 if weight != 0: frag_graph.add_edge(i, j, weight=weight)
         return FragGraph(frag_graph, fragments, compute_trivial=compute_trivial)
+
+    @staticmethod
+    def build_link(fragments, variant_to_phase_set, compute_trivial=False):
+        logging.debug("Input number of fragments: %d" % len(fragments))
+        evidence = defaultdict(lambda: [0, 0])
+        for frag in fragments:
+            calls = []
+            for var in frag.variants:
+                phase_set, hap0_allele = variant_to_phase_set[var.vcf_idx]
+                calls.append((phase_set, var.allele == str(hap0_allele)))
+
+            for (ps1, is_hap0_1), (ps2, is_hap0_2) in itertools.combinations(calls, 2):
+                if ps1 == ps2: continue
+                key = (ps1, ps2) if ps1 < ps2 else (ps2, ps1)
+                evidence[key][0 if is_hap0_1 == is_hap0_2 else 1] += 1
+
+        frag_graph = nx.Graph()
+        for (ps1, ps2), (num_cis, num_trans) in evidence.items():
+                weight = 1.0 * (num_trans - num_cis)
+                if weight != 0:
+                    frag_graph.add_edge(ps1, ps2, weight=weight)
+
+        for node in frag_graph.nodes:
+            frag_graph.nodes[node]['phase_set'] = node
+        return FragGraph(frag_graph, compute_trivial=compute_trivial)
 
     def get_variants_set(self):
         vcf_positions = set()
@@ -190,8 +222,8 @@ class FragGraph:
             hap_a_partition, hap_b_partition = bipartite.sets(g_cc)
             hap_a = [list(connected_components[i]) for i in hap_a_partition]
             hap_b = [list(connected_components[i]) for i in hap_b_partition]
-            self.hap_a_frags = [f for cc in hap_a for f in cc]
-            self.hap_b_frags = [f for cc in hap_b for f in cc]
+            self.hap_a = [f for cc in hap_a for f in cc]
+            self.hap_b = [f for cc in hap_b for f in cc]
 
     def prune_edges_by_sign(self, op):
         g = self.g.copy()
@@ -205,8 +237,12 @@ class FragGraph:
 
     def extract_subgraph(self, connected_component, compute_trivial=False):
         subg = self.g.subgraph(connected_component)
-        subg_frags = [self.fragments[node] if not self.fragments[node].fragment_group_id else
-                      deepcopy(self.fragments[node]) for node in subg.nodes]
+
+        subg_frags = None
+        if self.fragments is not None:
+            subg_frags = [self.fragments[node] if not self.fragments[node].group_id else
+                        deepcopy(self.fragments[node]) for node in subg.nodes]
+            
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
         node_id2hap_id = None
         if self.node_id2hap_id is not None:
@@ -239,8 +275,9 @@ class FragGraph:
             for bic in biconnected_components:
                 if articulation in bic:
                     count += 1
-            self.fragments[articulation].fragment_group_id = articulation
-            self.fragments[articulation].number_duplicated = count
+            if self.fragments is not None:
+                self.fragments[articulation].group_id = articulation
+                self.fragments[articulation].number_duplicated = count
         return biconnected_components
 
 
@@ -261,19 +298,20 @@ def connect_components(components):
     def flip_hap(h): return h if h is None else (h + 1) % 2
     gid2components = {}
     component_map = {i: i for i in range(len(components))}
-    for cid, frag_list in enumerate(components):
-        for frag in frag_list:
-            if frag.fragment_group_id:
-                gid2components.setdefault(frag.fragment_group_id, []).append((cid, frag))
+    for cid, component in enumerate(components):
+        for node in component:
+            if node.group_id is not None:
+                gid2components.setdefault(node.group_id, []).append((cid, node))
 
-    for gid, group in gid2components.items():
-        hap = group[0][1].haplotype
+    for _, group in gid2components.items():
         cid_g = component_map[group[0][0]]
-        for cid, group_frag in group[1:]:
+        hap = group[0][1].haplotype
+
+        for cid, node in group[1:]:
             cid = component_map[cid]
-            if group_frag.haplotype != hap:
-                for frag in components[cid]:
-                    frag.assign_haplotype(flip_hap(frag.haplotype))
+            if node.haplotype != hap:
+                for cc_node in components[cid]:
+                    cc_node.assign_haplotype(flip_hap(cc_node.haplotype))
             components[cid_g].extend(components[cid])
             components[cid] = []
             aux = component_map[cid]
@@ -293,19 +331,19 @@ class FragGraphGen:
     def __iter__(self):
         if self.config.test_mode:
             fragments = frags.parse_frag_repr(self.config.fragments)
-            graph = FragGraph.build(fragments, compress=self.config.compress)
+            graph = FragGraph.build(fragments, link=self.config.link, variant_to_phase_set=self.config.variants, compress=self.config.compress)
             logging.debug("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
             for subgraph in tqdm.tqdm(graph.connected_components_subgraphs(self.config, self.features)):
                 yield subgraph
             yield None
         else:
             for _ in range(self.config.epochs):
-                for index, component_row in self.graph_dataset.iterrows():
+                for _, component_row in self.graph_dataset.iterrows():
                     with open(component_row.component_path, 'rb') as f:
                         subgraph = pickle.load(f)
                         logging.debug("Processing subgraph with %d nodes..." % subgraph.n_nodes)
                         if self.features: 
-                            subgraph.set_graph_properties(self.features, config=self.config)
+                            subgraph.set_graph_properties(self.features, self.config)
                         yield subgraph
             yield None
 

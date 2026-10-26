@@ -7,7 +7,17 @@ import whatshap
 import string
 from whatshap import readselect
 from whatshap.cli import PhasedInputReader
-from whatshap import merge
+
+
+class PhasingBlock:
+    def __init__(self, group_id, phase_set, haplotype):
+        self.group_id = group_id
+        self.phase_set = phase_set
+        self.haplotype = haplotype
+
+    def assign_haplotype(self, hap):
+        self.haplotype = hap
+
 
 class FragVariantHandle:
     def __init__(self, vcf_idx, allele, qscore=None):
@@ -151,6 +161,14 @@ class NestedDict(defaultdict):
         return NestedDict(self.default_factory)
 
 
+def select_phased_variants(sample, variant_table):
+    phases = variant_table.phases_of(sample)
+    unphased = {i for i, phase in enumerate(phases) if phase is None}
+    phased_variants = deepcopy(variant_table)
+    phased_variants.remove_rows_by_index(unphased)
+    return phased_variants
+
+
 def generate_fragments(config, chromosome):
     bam_reader = PhasedInputReader([config.bam], config.reference, None, ignore_read_groups=True,
                                    mapq_threshold=config.mapq, only_snvs=True, overhang=config.realign_overhang)
@@ -159,6 +177,22 @@ def generate_fragments(config, chromosome):
     variant_table = vcf_reader.fetch(chromosome)  # next(vcf_reader.__iter__())
     logging.debug("Processing %s", variant_table.chromosome)
     variant_table = select_phaseable_variants(vcf_reader.samples[0], variant_table)
+
+    vcf_idx_to_phase_set = {}
+    if config.link:
+        sample = vcf_reader.samples[0]
+        if not config.allow_unphased_variants:
+            # In link mode, remove unphased variants unless allow_unphased_variants is True
+            variant_table = select_phased_variants(sample, variant_table)
+        vcf_idx_to_phase_set = {v.index: (phase.block_id, phase.phase[0]) 
+                                 for v, phase in zip(variant_table.variants, variant_table.phases_of(sample)) if phase is not None}
+        if config.allow_unphased_variants:
+            # Give unique phase sets to unphased variants
+            unique_phase_id = max([phase for phase, _ in vcf_idx_to_phase_set.values()], default=0) + 1
+            for v, phase in zip(variant_table.variants, variant_table.phases_of(sample)):
+                if phase is None:
+                    vcf_idx_to_phase_set[v.index] = (unique_phase_id, 0)
+                    unique_phase_id += 1
     logging.debug("Number of variants loaded: %d", len(variant_table))
     reads, _ = bam_reader.read(variant_table.chromosome, variant_table.variants, None, read_vcf=False, args=config)
     logging.debug("Number of reads loaded: %d", len(reads))
@@ -173,7 +207,7 @@ def generate_fragments(config, chromosome):
         reads = reads.subset(readselect.readselection(reads, config.max_coverage))
     if config.log_reads: write_reads(reads, config.out_dir + "/output_reads.txt")
     logging.info("Selected %d reads covering %d variants in %s", len(reads), len(reads.get_positions()), chromosome)
-    return assemble_fragments(reads, variant_table.variants)
+    return assemble_fragments(reads, variant_table.variants), vcf_idx_to_phase_set
 
 def assemble_fragments(reads, variants):
     pos2idx = {}

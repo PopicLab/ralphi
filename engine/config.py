@@ -10,7 +10,7 @@ import wandb
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
-CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_GENERATION DATA_SELECTION')
+CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_GENERATION DATA_SELECTION LINK')
 
 MAIN_LOG = "MAIN"
 STATS_LOG_TRAIN = "STATS_TRAIN"
@@ -31,6 +31,8 @@ SHARED_DEFAULTS = {
     'project_name': "ralphi",
     'run_name': "ralphi",
     'log_wandb': False,
+    'link': False,
+    'allow_unphased_variants': True,
 }
 
 MODEL_DEFAULTS = {
@@ -172,6 +174,9 @@ class PhaseConfig(Config):
         self.__dict__.update(entries)
         super().__init__(config_file)
 
+        if self.link and self.enable_read_selection:
+            raise ValueError("Read downsampling cannot be used in link mode, please set enable_read_selection: False")
+
         if self.chr_names is None:
             self.chr_names = ['chr{}'.format(x) for x in range(1, 23)]
         self.device = torch.device("cpu")
@@ -258,6 +263,9 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
+        return PhaseConfig(fname, **config)
+    elif config_type == CONFIG_TYPE.LINK:
+        config['link'] = True
         return PhaseConfig(fname, **config)
     elif config_type == CONFIG_TYPE.DATA_GENERATION:
         return DataConfig(fname, **config)

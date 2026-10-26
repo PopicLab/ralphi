@@ -179,9 +179,9 @@ class GraphDataset:
             config.vcf = vcf
             if config.drop_chr and chromosome in config.drop_chr: continue
             logging.info("Building graphs for %s %s" % (config.bam, chromosome))
-            fragments = frags.generate_fragments(config, chromosome)
+            fragments, variants = frags.generate_fragments(config, chromosome)
             fragments = frags.parse_frag_repr(fragments)
-            graph = FragGraph.build(fragments, compress=self.config.compress)
+            graph = FragGraph.build(fragments, link=self.config.link, variant_to_phase_set=variants, compress=self.config.compress)
             connected_components = graph.connected_components_subgraphs(config, self.features,
                                                                         skip_trivial_graphs=self.config.skip_trivial_graphs)
             for component_index, component in enumerate(connected_components):

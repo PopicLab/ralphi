@@ -1,6 +1,5 @@
-from collections import defaultdict 
-import logging
-import operator
+from collections import Counter, defaultdict 
+import numpy as np
 
 class Variant:
     """
@@ -41,7 +40,42 @@ class Variant:
     def __str__(self):
         return "Variant: vcf_idx={} frag_graph_idx={} depth={}".format(self.vcf_idx, self.phase_set,
                                                                        len(self.phase_sets))
+    
 
+def update_phase_sets(solved_components):
+    remap = {}
+    for component in solved_components:
+        anchor = np.argmin([block.phase_set for block in component])
+        anchor_phase_set = component[anchor].phase_set
+        anchor_side = component[anchor].haplotype
+        for block in component:
+            remap[block.phase_set] = (anchor_phase_set, block.haplotype != anchor_side)
+    return remap
+
+def apply_link(variant_to_phase_set, phase_set_remap):
+    # Count number of variants in each phase set after remapping to unphase singleton variants
+    mapped_variants = {}
+    ps_counts = Counter()
+    
+    for vcf_idx, (phase_set, hap0_allele) in variant_to_phase_set.items():
+        new_phase_set, flip = phase_set_remap.get(phase_set, (phase_set, False))
+        mapped_variants[vcf_idx] = (new_phase_set, flip, hap0_allele)
+        ps_counts[new_phase_set] += 1
+
+    idx2var = {}
+    for vcf_idx, (new_phase_set, flip, hap0_allele) in mapped_variants.items():
+        v = Variant(vcf_idx)
+        
+        if ps_counts[new_phase_set] == 1:
+            # If the phase set only has 1 variant, it is unphased
+            v.phase_set = None
+            v.h = 2
+        else:
+            v.phase_set = new_phase_set
+            v.h = (1 - hap0_allele) if flip else hap0_allele
+            
+        idx2var[vcf_idx] = v
+    return idx2var
 
 def extract_variants(phased_frag_sets):
     idx2variant = {}
@@ -54,28 +88,7 @@ def extract_variants(phased_frag_sets):
                 idx2variant[var.vcf_idx].phase_sets[ps].append((var, frag.n_copies, frag.number_duplicated))
     return idx2variant
 
-def remove_singleton_blocks(idx2var):
-    """
-    Postprocess phasing blocks to remove the ones with a single variant.
-    This might happen due to 0-weight edges in very rare cases.
-    """
-    singleton_vars = {}
-    for var in idx2var.values():
-        ps = var.phase_set
-        if ps is None: continue
-
-        if ps in singleton_vars:
-            # Duplicate
-            singleton_vars[ps] = None
-        else:
-            singleton_vars[ps] = var
-
-    for var in singleton_vars.values():
-        if var is not None: 
-            var.phase_set = None
-            var.h = None
-
-def update_phase_sets(max_phase_set, idx2var):
+def split_unphased(max_phase_set, idx2var):
     """
     For variants we do not phase (haplotype "h" field set to 2) we need to update the phase sets of variants downstream in the block
     since the block is split, and also need to handle the case of multiple unphased variants within a block.
@@ -127,6 +140,6 @@ def split_eq_evidence(graphs, idx2var, max_phase_set=None, reads_num_th=50):
 
 def postprocess(graphs, idx2var, config):
     if config.skip_post: return idx2var
-    idx2var, max_phase_set = update_phase_sets(len(graphs), idx2var)
+    idx2var, max_phase_set = split_unphased(len(graphs), idx2var)
     split_eq_evidence(graphs, idx2var, max_phase_set)
     return idx2var
