@@ -163,7 +163,7 @@ def filter_hic_distance(reads, min_dist):
 
 def generate_fragments(config, chromosome):
     bam_reader = PhasedInputReader([config.bam], config.reference, None, ignore_read_groups=True,
-                                   mapq_threshold=config.mapq, only_snvs=True, overhang=config.realign_overhang, is_hic=config.is_hic)
+                                   mapq_threshold=config.mapq, only_snvs=True, overhang=config.realign_overhang)
     vcf_reader = whatshap.vcf.VcfReader(config.vcf, only_snvs=True)
     assert len(vcf_reader.samples) == 1
     variant_table = vcf_reader.fetch(chromosome)  # next(vcf_reader.__iter__())
@@ -172,6 +172,13 @@ def generate_fragments(config, chromosome):
     logging.debug("Number of variants loaded: %d", len(variant_table))
     reads, _ = bam_reader.read(variant_table.chromosome, variant_table.variants, None, read_vcf=False, args=config)
     logging.debug("Number of reads loaded: %d", len(reads))
+
+    # Hi-C only: discard short-range erroneous pairs
+    if config.is_hic and config.min_hic_distance:
+        reads = filter_hic_distance(reads, config.min_hic_distance)
+        logging.debug("[%s] Reads after Hi-C distance filter (>=%dbp): %d",
+                        config.platform, config.min_hic_distance, len(reads))
+            
     if config.log_reads: write_reads(reads, config.out_dir + "/input_reads.txt")
     if not config.no_filter:
         reads = select_variants(reads, config, variant_table)
@@ -247,7 +254,7 @@ def select_variants(reads, config, variant_table):
             filtered_variants.add(variant_position + 1)
 
         # no reads with high mapq cover this variant
-        if config.require_hiqh_mapq and not pos2coverage['high'][variant_position]:
+        if config.require_high_mapq and not pos2coverage['high'][variant_position]:
             filter_by_type['high_cov'] += 1
             filtered_variants.add(variant_position + 1)
 

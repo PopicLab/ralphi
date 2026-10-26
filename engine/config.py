@@ -108,6 +108,7 @@ DATA_DEFAULTS_HIC= {
     'read_overlap_th': None,
     'is_hic': True,
     'min_hic_distance': 1000,
+    'skip_post': True,
 }
 
 PHASE_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
@@ -183,6 +184,8 @@ class PhaseConfig(Config):
         self.__dict__.update(entries)
         if self.platform == "illumina":
             self.set_defaults(DATA_DEFAULTS_SHORT)
+        elif self.platform == "hic":
+            self.set_defaults(DATA_DEFAULTS_HIC)
         else:
             self.set_defaults(DATA_DEFAULTS_LONG)
         self.set_defaults(PHASE_DEFAULTS)
@@ -233,6 +236,8 @@ class DataConfig(Config):
         self.__dict__.update(entries)
         if self.platform == "illumina":
             self.set_defaults(DATA_DEFAULTS_SHORT)
+        elif self.platform == "hic":
+            self.set_defaults(DATA_DEFAULTS_HIC)
         else:
             self.set_defaults(DATA_DEFAULTS_LONG)
         self.set_defaults(DATA_GENERATION_DEFAULTS)
