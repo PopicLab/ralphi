@@ -59,6 +59,8 @@ The key parameters for phasing are listed below:
 * ```mapq```  [*optional*] minimum alignment mapping quality, reads below this threshold will be removed (default: 20)
 * ```filter_bad_reads```  [*optional*] remove low-quality highly-discordant reads (default: true for ONT)
 
+You can supply multiple BAM alignment files from different platforms, each with its own parameters, using the ```inputs``` parameter. For the required syntax, refer to the```config/hybrid``` config file.
+
 Two models are currently provided in the ```data/models``` directory: 
 (1) ralphi.v1.long.pt is recommended for ONT inputs and (2) ralphi.v1.short.pt is recommended for Illumina 
 short-read inputs.
