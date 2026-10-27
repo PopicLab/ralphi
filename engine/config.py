@@ -11,7 +11,7 @@ import wandb
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
-CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_GENERATION DATA_SELECTION LINK')
+CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_GENERATION DATA_SELECTION')
 
 MAIN_LOG = "MAIN"
 STATS_LOG_TRAIN = "STATS_TRAIN"
