@@ -127,11 +127,9 @@ class PhasingEnv(gym.Env):
             node_labels = self.state.g.ndata['cut_member_hap0'][:, 0].cpu().numpy().tolist()
             if self.config.link:
                 g = self.state.frag_graph.g
-                phase_set_of = nx.get_node_attributes(g, 'phase_set')
-                group_id_of = nx.get_node_attributes(g, 'group_id')
-                solution = [PhasingBlock(group_id_of[node], phase_set_of[node], haplotype)
-                            for node, haplotype in zip(sorted(g.nodes()), node_labels)]
-                self.solutions.append(solution)
+                solution = [PhasingBlock(data.get('group_id'), data['phase_set'], haplotype)
+                            for (_, data), haplotype in zip(sorted(g.nodes(data=True)), node_labels)
+        ]
             else:
                 for i, frag in enumerate(self.state.frag_graph.fragments):
                     frag.assign_haplotype(node_labels[i])
@@ -155,14 +153,12 @@ class PhasingEnv(gym.Env):
         if self.config.link:
             g = self.state.frag_graph.g
             for ps in g.nodes:
-                if ps in self.state.frag_graph.hap_a: g.nodes[ps]['haplotype'] = 0.0
-                elif ps in self.state.frag_graph.hap_b: g.nodes[ps]['haplotype'] = 1.0
+                if ps in self.state.frag_graph.hap_a: g.nodes[ps]['cut_member_hap0'] = 1.0
+                elif ps in self.state.frag_graph.hap_b: g.nodes[ps]['cut_member_hap0'] = 0.0
                 else: raise RuntimeError("Phasing Block wasn't assigned to any cluster")
-            phase_set_of = nx.get_node_attributes(g, 'phase_set')
-            group_id_of = nx.get_node_attributes(g, 'group_id')
-            haplotypes = nx.get_node_attributes(g, 'haplotype')
-            solution = [PhasingBlock(group_id_of[node], phase_set_of[node], haplotype)
-                            for node, haplotype in zip(sorted(g.nodes()), haplotypes)]
+            solution = [PhasingBlock(data.get('group_id'), data['phase_set'], data['cut_member_hap0'])
+                        for _, data in sorted(g.nodes(data=True))
+]
             self.solutions.append(solution)
         else:
             for i, frag in enumerate(self.state.frag_graph.fragments):
