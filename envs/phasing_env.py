@@ -129,7 +129,7 @@ class PhasingEnv(gym.Env):
                 g = self.state.frag_graph.g
                 phase_set_of = nx.get_node_attributes(g, 'phase_set')
                 group_id_of = nx.get_node_attributes(g, 'group_id')
-                solution = [PhasingBlock(group_id_of.get(node), phase_set_of[node], haplotype)
+                solution = [PhasingBlock(group_id_of[node], phase_set_of[node], haplotype)
                             for node, haplotype in zip(sorted(g.nodes()), node_labels)]
                 self.solutions.append(solution)
             else:
@@ -160,8 +160,9 @@ class PhasingEnv(gym.Env):
                 else: raise RuntimeError("Phasing Block wasn't assigned to any cluster")
             phase_set_of = nx.get_node_attributes(g, 'phase_set')
             group_id_of = nx.get_node_attributes(g, 'group_id')
-            solution = {phase_set_of[node]: (g.nodes[node]['haplotype'], group_id_of.get(node))
-                        for node in g.nodes}
+            haplotypes = nx.get_node_attributes(g, 'haplotype')
+            solution = [PhasingBlock(group_id_of[node], phase_set_of[node], haplotype)
+                            for node, haplotype in zip(sorted(g.nodes()), haplotypes)]
             self.solutions.append(solution)
         else:
             for i, frag in enumerate(self.state.frag_graph.fragments):
