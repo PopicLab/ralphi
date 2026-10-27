@@ -1,8 +1,7 @@
 #### REQUIRED ####
 vcf: "path/to/vcf"   # path to the VCF variant file (must be compressed and indexed)
-model: "{RALPHI_ROOT}/data/models/ralphi.v1.long.pt"  # path to the pretrained ralphi model for ONT reads
-reference: "/path/to/fai"  # path to the reference FASTA file (needed for realignment)
-
+model: "{RALPHI_ROOT}/data/models/ralphi.v2.long.pt"  # path to the pretrained ralphi model for ONT reads
+reference: "/path/to/fai"  # path to the reference FASTA file, required if realigm is True (if any of the input platforms is ont or hifi)
 inputs:
   - platform: "illumina" # sequencing platform (options: ont, hifi, hic  or illumina)
     bam: "/path/to/bam"  # path to the BAM alignments file

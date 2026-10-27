@@ -161,25 +161,17 @@ def generate_fragments(config, chromosome):
 
     all_fragments = []
     for inp in config.inputs:
-        bams = inp.bam if isinstance(inp.bam, list) else [inp.bam]
-
         reference = None
         if inp.realign:
             reference = config.reference
-            if not reference:
-                raise ValueError(f'A reference must be spcified when realign is set to True, realign is used for {inp}')
-
-        bam_reader = PhasedInputReader(bams, reference, None, ignore_read_groups=True,
+        bam_reader = PhasedInputReader([inp.bam], reference, None, ignore_read_groups=True,
                                        mapq_threshold=inp.mapq, only_snvs=True, overhang=inp.realign_overhang)
         reads, _ = bam_reader.read(variant_table.chromosome, variant_table.variants, None, read_vcf=False, args=inp)
         logging.debug("[%s] Number of reads loaded: %d", inp.platform, len(reads))
-            
         reads = select_variants(reads, inp)
-
         # keep only reads that cover at least two variants and have a sufficiently high MAPQ
         reads = reads.subset([i for i, read in enumerate(reads) if len(read) >= 2 and read.mapqs[0] >= inp.mapq])
         logging.debug("[%s] Number of reads covering two variants : %d", inp.platform, len(reads))
-
         if inp.enable_read_selection:
             logging.debug("[%s] Running read selection to a maximum coverage of: %dX",
                           inp.platform, inp.max_coverage)

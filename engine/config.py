@@ -20,7 +20,7 @@ STATS_LOG_COLS_TRAIN = ['Episode', 'Reward', 'CutValue' 'Losses', 'Runtime']
 STATS_LOG_COLS_VALIDATE = ['Descriptor', 'Episode', 'SumOfCuts', 'SumOfRewards', 'Switch Count', 'Mismatch Count',
                            'Flat Count', 'Phased Count', 'AN50', 'N50']
 
-REQUIRED_GLOBAL_PARAMS = {'vcf'}
+REQUIRED_GLOBAL_PARAMS = {'vcf', 'inputs'}
 REQUIRED_DATA_PARAMS = {'bam', 'platform'}
 
 SHARED_DEFAULTS = {
@@ -35,7 +35,6 @@ SHARED_DEFAULTS = {
     'run_name': "ralphi",
     'log_wandb': False,
     'skip_post': True,
-    'inputs': [],
     'reference': None,
 }
 
@@ -142,12 +141,11 @@ DATA_PARAMS = {
     *REQUIRED_DATA_PARAMS
 }
 
-ALL_PARAMS = {
+GLOBAL_PARAMS = {
     *TRAIN_DEFAULTS,
     *DATA_GENERATION_DEFAULTS, 
     *PHASE_DEFAULTS,
     *MODEL_DEFAULTS,
-    *DATA_PARAMS,
     *REQUIRED_GLOBAL_PARAMS
 }
 
@@ -168,49 +166,37 @@ def platform_preset(platform):
     return PLATFORM_PRESETS[platform]
 
 
-def resolve_input(entry):
+def resolve_input(entry, global_entries):
     if any(required_param not in entry for required_param in REQUIRED_DATA_PARAMS):
-        raise ValueError(f'Each input section must contain the parameters {REQUIRED_DATA_PARAMS}, please check the input {entry}')
-
-    platform = entry['platform']
-    
+        raise ValueError(f'Each input section must contain the parameters {REQUIRED_DATA_PARAMS}, please check the input {entry}')    
     # Get the platform defaults
     resolved = dict(SHARED_DATA_DEFAULTS)
-    resolved.update(platform_preset(platform))
-
-    resolved['platform'] = platform
-
+    resolved.update(platform_preset(entry['platform']))
     # Ensure the parameters in entry are valid for the inputs section
     provided_keys =  set(entry.keys())
     if not provided_keys.issubset(DATA_PARAMS):
         invalid_keys = provided_keys - DATA_PARAMS
         raise ValueError(f"Parameters invalid for the `inputs` section: {invalid_keys}")
-
     # Update with the input parameters
     resolved.update(entry)
-
-    if platform in ["ont", 'hifi'] and not resolved['realign']:
+    if entry['platform'] in ["ont", 'hifi'] and not resolved['realign']:
         logging.warning("realign is set to False for platform %s; " \
         "realignment is recommended for ont and hifi platforms; " \
         "realignment will be skipped.", entry)
-
     if resolved['enable_read_selection'] and resolved['read_overlap_th'] is None:
-        if platform == 'illumina':
+        if entry['platform'] == 'illumina':
             raise ValueError('Please note that downsampling is not recommended for illumina reads, if you use '\
                              f'enable_read_selection please specify read_overlap_th as the default is None. Issue in {entry}')
         raise ValueError(f'read_overlap_th must be specified if enable_read_selection, but got {entry}')
+    if resolved['realign'] and ('reference' not in global_entries or not global_entries['reference']):
+        raise ValueError(f'A reference must be specified when realign is set to True, realign is used for {entry}')
     return LogNamespace(**resolved)
 
 
-def resolve_inputs(config, entries):
-    """Get the list of inputs or the single platform parameter"""
-    raw = getattr(config, 'inputs', None)
-    if raw:
-        # An inputs section was provided
-        config.inputs = [resolve_input(entry) for entry in raw]
-    else:
-        data_entries = {param: entry for param, entry in entries.items() if param in DATA_PARAMS}
-        config.inputs = [resolve_input(data_entries)]
+def resolve_inputs(config):
+    if not config.inputs:
+        raise ValueError('The list of inputs provided is empty')
+    config.inputs = [resolve_input(entry, config) for entry in config.inputs]
 
 
 class Config:
@@ -248,17 +234,11 @@ class PhaseConfig(Config):
         self.set_defaults(PHASE_DEFAULTS)
         self.__dict__.update(entries)
         super().__init__(config_file)
-
-        resolve_inputs(self, entries)
-
+        resolve_inputs(self)
         # skip_post has a platform dependent default while not being a data processing parameter
         # We check if their is only one BAM file provided and if its platform is illumina to set the default 
-        platform = None
-        if len(self.inputs) == 1:
-            platform = self.inputs[0].platform
-        if 'skip_post' not in entries and platform == 'illumina':
+        if 'skip_post' not in entries and  len(self.inputs) == 1 and self.inputs[0].platform == 'illumina':
             self.skip_post = False
-
         if self.chr_names is None:
             self.chr_names = ['chr{}'.format(x) for x in range(1, 23)]
         self.device = torch.device("cpu")
@@ -300,7 +280,7 @@ class DataConfig(Config):
         self.set_defaults(DATA_GENERATION_DEFAULTS)
         super().__init__(config_file)
 
-        resolve_inputs(self, entries)
+        resolve_inputs(self)
 
         for f in os.listdir(self.out_dir):
             os.remove(os.path.join(self.out_dir, f))
@@ -336,13 +316,14 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     if fname is None: return None
     with open(fname) as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
-
     # Check for invalid input keys
     provided_keys = set(config.keys())
-    if not provided_keys.issubset(ALL_PARAMS):
-        invalid_keys = provided_keys - ALL_PARAMS
-        raise ValueError(f"Invalid configuration parameters provided: {invalid_keys}")
-    
+    if not provided_keys.issubset(GLOBAL_PARAMS):
+        invalid_keys = provided_keys - GLOBAL_PARAMS
+        raise ValueError(f"Invalid global parameters provided: {invalid_keys}")
+    if any(required_param not in provided_keys for required_param in REQUIRED_GLOBAL_PARAMS):
+        missing_keys = REQUIRED_GLOBAL_PARAMS - provided_keys
+        raise ValueError(f'Missing global parameters {missing_keys}.')
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
