@@ -20,9 +20,10 @@ STATS_LOG_COLS_TRAIN = ['Episode', 'Reward', 'CutValue' 'Losses', 'Runtime']
 STATS_LOG_COLS_VALIDATE = ['Descriptor', 'Episode', 'SumOfCuts', 'SumOfRewards', 'Switch Count', 'Mismatch Count',
                            'Flat Count', 'Phased Count', 'AN50', 'N50']
 
+REQUIRED_GLOBAL_PARAMS = {'vcf'}
+REQUIRED_DATA_PARAMS = {'bam', 'platform'}
 
 SHARED_DEFAULTS = {
-    'vcf': None,
     'logging_level': "INFO",
     'n_procs': 1,
     'num_cores_torch': 4,
@@ -59,8 +60,6 @@ GRAPH_DEFAULTS = {
 }
 
 SHARED_DATA_DEFAULTS = {
-    'platform': None,
-    'bam': None,
     'mapq': 20,
     'no_filter': False,
     "min_highmapq_ratio": 0,
@@ -139,7 +138,8 @@ TRAIN_DEFAULTS.update({
 DATA_PARAMS = {
     *SHARED_DATA_DEFAULTS, 
     *DATA_DEFAULTS_SHORT, 
-    *DATA_DEFAULTS_LONG 
+    *DATA_DEFAULTS_LONG,
+    *REQUIRED_DATA_PARAMS
 }
 
 ALL_PARAMS = {
@@ -147,7 +147,8 @@ ALL_PARAMS = {
     *DATA_GENERATION_DEFAULTS, 
     *PHASE_DEFAULTS,
     *MODEL_DEFAULTS,
-    *DATA_PARAMS
+    *DATA_PARAMS,
+    *REQUIRED_GLOBAL_PARAMS
 }
 
 
@@ -164,12 +165,14 @@ PLATFORM_PRESETS = {
 
 
 def platform_preset(platform):
-    return PLATFORM_PRESETS.get(platform, DATA_DEFAULTS_LONG)
+    return PLATFORM_PRESETS[platform]
 
 
 def resolve_input(entry):
-    platform = entry.get('platform', None)
-    assert platform in PLATFORM_PRESETS, f"Unknown platform {platform}; expected one of {sorted(PLATFORM_PRESETS)}"
+    if any(required_param not in entry for required_param in REQUIRED_DATA_PARAMS):
+        raise ValueError(f'Each input section must contain the paramters {REQUIRED_DATA_PARAMS}, please check the input {entry}')
+
+    platform = entry['platform']
     
     # Get the platform defaults
     resolved = dict(SHARED_DATA_DEFAULTS)
@@ -185,13 +188,17 @@ def resolve_input(entry):
 
     # Update with the input parameters
     resolved.update(entry)
-    assert resolved.get('bam', None) is not None, 'The bam parameter must be specified for each input: %s' % entry 
 
     if platform in ["ont", 'hifi'] and not resolved['realign']:
         logging.warning("Reference genome is not specified for platform %s; " \
         "realignment is recommended for ont and hifi platforms; " \
         "realignment will be skipped.", platform)
 
+    if resolved['enable_read_selection'] and resolved['read_overlap_th'] is None:
+        if platform == 'illumina':
+            raise ValueError('Please note that downsampling is not recommended for illumina reads, if you use '\
+                             f'enable_read_selection please specify read_overlap_th as the default is None. Issue in {entry}')
+        raise ValueError(f'read_overlap_th must be specified if enable_read_selection, but got {entry}')
     return LogNamespace(**resolved)
 
 
@@ -199,7 +206,7 @@ def resolve_inputs(config, entries):
     """Get the list of inputs or the single platform parameter"""
     raw = getattr(config, 'inputs', None)
     if raw:
-        # inputs was provided
+        # An inputs section was provided
         config.inputs = [resolve_input(entry) for entry in raw]
     else:
         data_entries = {param: entry for param, entry in entries.items() if param in DATA_PARAMS}
@@ -244,8 +251,10 @@ class PhaseConfig(Config):
 
         resolve_inputs(self, entries)
 
-        platform = getattr(self, 'platform', None)
-        if platform is None and len(self.inputs) == 1:
+        # skip_post has a platform dependent default while not being a data processing parameter
+        # We check if their is only one BAM file provided and if its platform is illumina to set the default 
+        platform = None
+        if len(self.inputs) == 1:
             platform = self.inputs[0].platform
         if 'skip_post' not in entries and platform == 'illumina':
             self.skip_post = False

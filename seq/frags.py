@@ -166,7 +166,8 @@ def generate_fragments(config, chromosome):
         reference = None
         if inp.realign:
             reference = config.reference
-            assert reference, 'A reference must be spcified when realign is set to True'
+            if not reference:
+                raise ValueError(f'A reference must be spcified when realign is set to True, realign is used for {inp}')
 
         bam_reader = PhasedInputReader(bams, reference, None, ignore_read_groups=True,
                                        mapq_threshold=inp.mapq, only_snvs=True, overhang=inp.realign_overhang)
@@ -244,52 +245,51 @@ def select_variants(reads, config):
     # 2. apply filters at each variant site
     filtered_variants = set()
     filter_by_type = NestedDict(int)
-    if not config.no_filter:
-        for variant_position in pos2coverage['all']:
-            # too many reads cover this variant
-            if pos2coverage['all'][variant_position] >= config.max_snp_coverage:
-                filter_by_type['max_cov'] += 1
+    for variant_position in pos2coverage['all']:
+        # too many reads cover this variant
+        if pos2coverage['all'][variant_position] >= config.max_snp_coverage:
+            filter_by_type['max_cov'] += 1
+            filtered_variants.add(variant_position + 1)
+
+        # no reads with high mapq cover this variant
+        if config.require_high_mapq and not pos2coverage['high'][variant_position]:
+            filter_by_type['high_cov'] += 1
+            filtered_variants.add(variant_position + 1)
+
+            # the fraction of high mapq reads covering this variant is too low
+            if pos2coverage['high'][variant_position] / pos2coverage['all'][variant_position] < config.min_highmapq_ratio:
+                filter_by_type['high_cov_ratio'] += 1
                 filtered_variants.add(variant_position + 1)
 
-            # no reads with high mapq cover this variant
-            if config.require_high_mapq and not pos2coverage['high'][variant_position]:
-                filter_by_type['high_cov'] += 1
+        if config.enable_strand_filter and pos2coverage['all'][variant_position] >= config.min_coverage_strand:
+            # filter variants covered by only one strand
+            if len(pos2strands[variant_position]) == 1:
+                filter_by_type['strand'] += 1
                 filtered_variants.add(variant_position + 1)
 
-                # the fraction of high mapq reads covering this variant is too low
-                if pos2coverage['high'][variant_position] / pos2coverage['all'][variant_position] < config.min_highmapq_ratio:
-                    filter_by_type['high_cov_ratio'] += 1
+        # filter variants covered only by a single allele
+        if len(pos2alleles['all'][variant_position]) == 1:
+            (allele,) = pos2alleles['all'][variant_position]
+            if allele == -1:  # only bad alleles cover the variant, always filter
+                filter_by_type['single_allele_bad'] += 1
+                filtered_variants.add(variant_position + 1)
+            elif allele == 0 and pos2coverage['all'][variant_position] >= config.min_coverage_to_filter:
+                filter_by_type['single_allele_ref'] += 1
+                filtered_variants.add(variant_position + 1)
+            elif allele == 1 and pos2coverage['all'][variant_position] >= config.min_coverage_to_filter:
+                filter_by_type['single_allele_alt'] += 1
+                filtered_variants.add(variant_position + 1)
+        else:  # we have at least two different alleles
+            if len(pos2alleles['all'][variant_position]) == 2 and -1 in pos2alleles['all'][variant_position]:
+                # one of the alleles is a bad allele, the others are either all ALT or REF
+                if 0 in pos2alleles['all'][variant_position] and pos2coverage['all'][variant_position] >= \
+                        config.min_coverage_to_filter:
+                    filter_by_type['double_allele_with_ref_and_bad'] += 1
                     filtered_variants.add(variant_position + 1)
-
-            if config.enable_strand_filter and pos2coverage['all'][variant_position] >= config.min_coverage_strand:
-                # filter variants covered by only one strand
-                if len(pos2strands[variant_position]) == 1:
-                    filter_by_type['strand'] += 1
+                elif 1 in pos2alleles['all'][variant_position] and pos2coverage['all'][variant_position] >= \
+                        config.min_coverage_to_filter:
+                    filter_by_type['double_allele_with_alt_and_bad'] += 1
                     filtered_variants.add(variant_position + 1)
-
-            # filter variants covered only by a single allele
-            if len(pos2alleles['all'][variant_position]) == 1:
-                (allele,) = pos2alleles['all'][variant_position]
-                if allele == -1:  # only bad alleles cover the variant, always filter
-                    filter_by_type['single_allele_bad'] += 1
-                    filtered_variants.add(variant_position + 1)
-                elif allele == 0 and pos2coverage['all'][variant_position] >= config.min_coverage_to_filter:
-                    filter_by_type['single_allele_ref'] += 1
-                    filtered_variants.add(variant_position + 1)
-                elif allele == 1 and pos2coverage['all'][variant_position] >= config.min_coverage_to_filter:
-                    filter_by_type['single_allele_alt'] += 1
-                    filtered_variants.add(variant_position + 1)
-            else:  # we have at least two different alleles
-                if len(pos2alleles['all'][variant_position]) == 2 and -1 in pos2alleles['all'][variant_position]:
-                    # one of the alleles is a bad allele, the others are either all ALT or REF
-                    if 0 in pos2alleles['all'][variant_position] and pos2coverage['all'][variant_position] >= \
-                            config.min_coverage_to_filter:
-                        filter_by_type['double_allele_with_ref_and_bad'] += 1
-                        filtered_variants.add(variant_position + 1)
-                    elif 1 in pos2alleles['all'][variant_position] and pos2coverage['all'][variant_position] >= \
-                            config.min_coverage_to_filter:
-                        filter_by_type['double_allele_with_alt_and_bad'] += 1
-                        filtered_variants.add(variant_position + 1)
 
 
     logging.debug("Number of variants filtered: %d" % len(filtered_variants))
