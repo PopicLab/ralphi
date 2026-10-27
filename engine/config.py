@@ -190,9 +190,9 @@ def resolve_input(entry):
     resolved.update(entry)
 
     if platform in ["ont", 'hifi'] and not resolved['realign']:
-        logging.warning("Reference genome is not specified for platform %s; " \
+        logging.warning("realign is set to False for platform %s; " \
         "realignment is recommended for ont and hifi platforms; " \
-        "realignment will be skipped.", platform)
+        "realignment will be skipped.", entry)
 
     if resolved['enable_read_selection'] and resolved['read_overlap_th'] is None:
         if platform == 'illumina':
