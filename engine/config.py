@@ -170,7 +170,7 @@ def platform_preset(platform):
 
 def resolve_input(entry):
     if any(required_param not in entry for required_param in REQUIRED_DATA_PARAMS):
-        raise ValueError(f'Each input section must contain the paramters {REQUIRED_DATA_PARAMS}, please check the input {entry}')
+        raise ValueError(f'Each input section must contain the parameters {REQUIRED_DATA_PARAMS}, please check the input {entry}')
 
     platform = entry['platform']
     
