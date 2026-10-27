@@ -49,7 +49,6 @@ MODEL_DEFAULTS = {
     'weight_norm': False,
     'clip': False,
     'normalization': False,
-    'flip': False,
 }
 
 GRAPH_DEFAULTS = {
@@ -103,6 +102,7 @@ DATA_DEFAULTS_LONG = {
     'read_overlap_th': 100,
     'realign': True,
 }
+
 
 DATA_DEFAULTS_HIC= {
     "mbq": 13,

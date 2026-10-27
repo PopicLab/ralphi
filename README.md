@@ -50,14 +50,17 @@ The key parameters for phasing are listed below:
 * ```vcf``` [*required*] path to the VCF variant file (must be compressed and indexed)
 * ```bam``` [*required*] path to the BAM alignment file 
 * ```platform``` [*required*] sequencing platform (options: ```illumina```, ```ont```, ```hifi``` or ```hic```) 
-* ```reference``` [*required* only for ONT] path to the reference FASTA file used for local realignment
 * ```model``` [*required*] path to the pretrained ```ralphi``` model (available under ```data/models```)
+* ```realign``` [*optional*] enbles local realignment (default: true for ONT and HiFi)
+* ```reference``` [*required* when realign] path to the reference FASTA file used for local realignment
 * ```chr_names``` [*optional*] list of chromosomes to process: null (all) or a specific list e.g. ["chr1", "chr21"] (default: null)
 * ```n_proc```  [*optional*] number of cores to use for phasing (default: 1)
-* ```enable_read_selection```  [*optional*] enables Whatshap-based read downsampling (default: true for ONT)
+* ```enable_read_selection```  [*optional*] enables Whatshap-based read downsampling (default: true for ONT and HiFi)
 * ```max_coverage```  [*optional*] target coverage for read downsampling (default: 15)
 * ```mapq```  [*optional*] minimum alignment mapping quality, reads below this threshold will be removed (default: 20)
-* ```filter_bad_reads```  [*optional*] remove low-quality highly-discordant reads (default: true for ONT)
+* ```filter_bad_reads```  [*optional*] remove low-quality highly-discordant reads (default: true for ONT and HiFi)
+
+You can supply multiple BAM alignment files from different platforms, each with its own parameters, using the ```inputs``` parameter. For the required syntax, refer to the```config/hybrid``` config file.
 
 Two models are currently provided in the ```data/models``` directory: 
 (1) ralphi.v1.long.pt is recommended for ONT inputs and (2) ralphi.v1.short.pt is recommended for Illumina 
