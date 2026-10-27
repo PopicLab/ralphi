@@ -10,4 +10,4 @@ num_cores_torch: 8  # number PyTorch threads (used for intraop parallelism)
 enable_read_selection: False  # Whatshap read downsampling isn't designed for Hi-C reads
 filter_bad_reads: False  # remove low-quality highly-discordant reads
 min_isize: 1000 # Filter out read pairs closer than min_hic_distance to remove self-ligation artefacts
-max_isize: .inf
+max_isize: .inf # maximum insert size (no maximum for hic by default)
