@@ -61,6 +61,7 @@ SHARED_DATA_DEFAULTS = {
     'log_reads': False,
     'is_hic': False,
     'min_hic_distance': 0,
+    'max_isize': float('inf'),
 }
 
 DATA_DEFAULTS_SHORT = {
