@@ -1,5 +1,6 @@
 import yaml
 from enum import Enum
+from types import SimpleNamespace
 import torch
 from pathlib import Path
 import logging
@@ -19,6 +20,8 @@ STATS_LOG_COLS_TRAIN = ['Episode', 'Reward', 'CutValue' 'Losses', 'Runtime']
 STATS_LOG_COLS_VALIDATE = ['Descriptor', 'Episode', 'SumOfCuts', 'SumOfRewards', 'Switch Count', 'Mismatch Count',
                            'Flat Count', 'Phased Count', 'AN50', 'N50']
 
+REQUIRED_GLOBAL_PARAMS = {'vcf', 'inputs'}
+REQUIRED_DATA_PARAMS = {'bam', 'platform'}
 
 SHARED_DEFAULTS = {
     'logging_level': "INFO",
@@ -31,9 +34,12 @@ SHARED_DEFAULTS = {
     'project_name': "ralphi",
     'run_name': "ralphi",
     'log_wandb': False,
+    'skip_post': True,
+    'reference': None,
 }
 
 MODEL_DEFAULTS = {
+    'model': None,
     'node_features_dim': 3,
     'hidden_dim': [264],
     'layer_type': "gcn",
@@ -42,32 +48,32 @@ MODEL_DEFAULTS = {
     'fragment_norm': False,
     'weight_norm': False,
     'clip': False,
-    'clip_node': False,
-    'advantage': "nstep",
     'normalization': False,
-    'flip': False
+}
+
+GRAPH_DEFAULTS = {
+    'chr_names': None,
+    'compress': True,
+    'approximate_betweenness': True,
+    'num_pivots': 10,
 }
 
 SHARED_DATA_DEFAULTS = {
     'mapq': 20,
     'no_filter': False,
-    'chr_names': None,
-    'compress': True,
-    'approximate_betweenness': True,
-    'num_pivots': 10,
     "min_highmapq_ratio": 0,
     'supp_distance_th': 1000000,
     'log_reads': False,
+    'realign': False
 }
 
 DATA_DEFAULTS_SHORT = {
-    'reference': None,
     'mbq': 13,
     "realign_overhang": None,
     'filter_bad_reads': False,
     'enable_read_selection': False,
     "max_snp_coverage": float('inf'),
-    'require_hiqh_mapq': False,
+    'require_high_mapq': False,
     "min_coverage_to_filter": float('inf'),
     'enable_strand_filter': False,
     'max_isize': 1000,
@@ -85,29 +91,29 @@ DATA_DEFAULTS_LONG = {
     'enable_read_selection': True,
     'max_coverage': 15,
     "max_snp_coverage": 200,
-    'require_hiqh_mapq': True,
+    'require_high_mapq': True,
     "min_coverage_to_filter": 8,
     "min_coverage_strand": 10,
     'skip_post': True,
     'enable_strand_filter': True,
     'read_overlap_th': 100,
+    'realign': True,
 }
 
-PHASE_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
+
+PHASE_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **GRAPH_DEFAULTS}
 PHASE_DEFAULTS.update({
     'max_graph_size': float('inf'),
     'skip_singleton_graphs': False,
     'skip_trivial_graphs': False,
     'test_mode': True,
     'load_components': False,
-    'store_components': False,
-    'store_indexes': False,
 })
 
-DATA_GENERATION_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
+DATA_GENERATION_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **GRAPH_DEFAULTS}
 DATA_GENERATION_DEFAULTS.update({
     'test_mode': False,
-    'drop_chr': ['chr20'],
+    'drop_chr': ['chr1','chr20'],
     'skip_singleton_graphs': True,
     'skip_trivial_graphs': True,
     'size': None,
@@ -115,7 +121,7 @@ DATA_GENERATION_DEFAULTS.update({
     'selection_config': None,
 })
 
-TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
+TRAIN_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **GRAPH_DEFAULTS}
 TRAIN_DEFAULTS.update({
     'test_mode': False,
     'gamma': 0.98,
@@ -124,12 +130,73 @@ TRAIN_DEFAULTS.update({
     'n_procs': 8,
     'max_episodes': None, # maximum number of episodes to run
     'interval_episodes_to_validation': 500,  # number of episodes between model validation runs
-    'render_view': "weighted_view",
     'load_components': True,
-    'store_components': True,
-    'store_indexes': True,
     'pretrained_model': None,
 })
+
+DATA_PARAMS = {
+    *SHARED_DATA_DEFAULTS, 
+    *DATA_DEFAULTS_SHORT, 
+    *DATA_DEFAULTS_LONG,
+    *REQUIRED_DATA_PARAMS
+}
+
+GLOBAL_PARAMS = {
+    *TRAIN_DEFAULTS,
+    *DATA_GENERATION_DEFAULTS, 
+    *PHASE_DEFAULTS,
+    *MODEL_DEFAULTS,
+    *REQUIRED_GLOBAL_PARAMS
+}
+
+
+class LogNamespace(SimpleNamespace):
+    def __repr__(self):
+        return repr(self.__dict__)
+    
+
+PLATFORM_PRESETS = {
+    "illumina": DATA_DEFAULTS_SHORT,
+    "ont": DATA_DEFAULTS_LONG,
+    "hifi": DATA_DEFAULTS_LONG,
+}
+
+
+def platform_preset(platform):
+    return PLATFORM_PRESETS[platform]
+
+
+def resolve_input(entry, global_entries):
+    if any(required_param not in entry for required_param in REQUIRED_DATA_PARAMS):
+        raise ValueError(f'Each input section must contain the parameters {REQUIRED_DATA_PARAMS}, please check the input {entry}')    
+    # Get the platform defaults
+    resolved = dict(SHARED_DATA_DEFAULTS)
+    resolved.update(platform_preset(entry['platform']))
+    # Ensure the parameters in entry are valid for the inputs section
+    provided_keys =  set(entry.keys())
+    if not provided_keys.issubset(DATA_PARAMS):
+        invalid_keys = provided_keys - DATA_PARAMS
+        raise ValueError(f"Parameters invalid for the `inputs` section: {invalid_keys}")
+    # Update with the input parameters
+    resolved.update(entry)
+    if entry['platform'] in ["ont", 'hifi'] and not resolved['realign']:
+        logging.warning("realign is set to False for platform %s; " \
+        "realignment is recommended for ont and hifi platforms; " \
+        "realignment will be skipped.", entry)
+    if resolved['enable_read_selection'] and resolved['read_overlap_th'] is None:
+        if entry['platform'] == 'illumina':
+            raise ValueError('Please note that downsampling is not recommended for illumina reads, if you use '\
+                             f'enable_read_selection please specify read_overlap_th as the default is None. Issue in {entry}')
+        raise ValueError(f'read_overlap_th must be specified if enable_read_selection, but got {entry}')
+    if resolved['realign'] and ('reference' not in global_entries or not global_entries['reference']):
+        raise ValueError(f'A reference must be specified when realign is set to True, realign is used for {entry}')
+    return LogNamespace(**resolved)
+
+
+def resolve_inputs(config):
+    if not config.inputs:
+        raise ValueError('The list of inputs provided is empty')
+    config.inputs = [resolve_input(entry, config) for entry in config.inputs]
 
 
 class Config:
@@ -164,14 +231,14 @@ class Config:
 class PhaseConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
-        if self.platform == "illumina":
-            self.set_defaults(DATA_DEFAULTS_SHORT)
-        else:
-            self.set_defaults(DATA_DEFAULTS_LONG)
         self.set_defaults(PHASE_DEFAULTS)
         self.__dict__.update(entries)
         super().__init__(config_file)
-
+        resolve_inputs(self)
+        # skip_post has a platform dependent default while not being a data processing parameter
+        # We check if their is only one BAM file provided and if its platform is illumina to set the default 
+        if 'skip_post' not in entries and  len(self.inputs) == 1 and self.inputs[0].platform == 'illumina':
+            self.skip_post = False
         if self.chr_names is None:
             self.chr_names = ['chr{}'.format(x) for x in range(1, 23)]
         self.device = torch.device("cpu")
@@ -201,10 +268,6 @@ class TrainingConfig(Config):
         # logging
         logging.info(self)
 
-        # enforce light logging if using multithreading validation
-        if self.n_procs > 1:
-            self.light_logging = True
-
         if self.device == "cuda" or self.device == "cuda:0" or self.device == "cuda:1":
             self.device = torch.device(self.device if torch.cuda.is_available() else "cpu")
         else:
@@ -214,12 +277,10 @@ class TrainingConfig(Config):
 class DataConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
-        if self.platform == "illumina":
-            self.set_defaults(DATA_DEFAULTS_SHORT)
-        else:
-            self.set_defaults(DATA_DEFAULTS_LONG)
         self.set_defaults(DATA_GENERATION_DEFAULTS)
         super().__init__(config_file)
+
+        resolve_inputs(self)
 
         for f in os.listdir(self.out_dir):
             os.remove(os.path.join(self.out_dir, f))
@@ -255,6 +316,14 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     if fname is None: return None
     with open(fname) as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
+    # Check for invalid input keys
+    provided_keys = set(config.keys())
+    if not provided_keys.issubset(GLOBAL_PARAMS):
+        invalid_keys = provided_keys - GLOBAL_PARAMS
+        raise ValueError(f"Invalid global parameters provided: {invalid_keys}")
+    if any(required_param not in provided_keys for required_param in REQUIRED_GLOBAL_PARAMS):
+        missing_keys = REQUIRED_GLOBAL_PARAMS - provided_keys
+        raise ValueError(f'Missing global parameters {missing_keys}.')
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
