@@ -210,7 +210,7 @@ def resolve_input(entry, global_entries):
             raise ValueError('Please note that downsampling is not recommended for illumina reads, if you use '\
                              f'enable_read_selection please specify read_overlap_th as the default is None. Issue in {entry}')
         raise ValueError(f'read_overlap_th must be specified if enable_read_selection, but got {entry}')
-    if resolved['realign'] and ('reference' not in global_entries or not global_entries['reference']):
+    if resolved['realign'] and (not hasattr(global_entries, 'reference') or not global_entries.reference):
         raise ValueError(f'A reference must be specified when realign is set to True, realign is used for {entry}')
     return LogNamespace(**resolved)
 
