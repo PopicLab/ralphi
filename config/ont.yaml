@@ -1,5 +1,5 @@
 #### REQUIRED ####
-platform: "ONT"  # sequencing platform (options: ONT or illumina)
+platform: "ont"  # sequencing platform (options: ont, hifi, illumina, or hic)
 bam: "/path/to/bam"  # path to the BAM alignments file
 vcf: "path/to/vcf"   # path to the VCF variant file (must be compressed and indexed)
 reference: "/path/to/fai"  # path to the reference FASTA file (needed for realignment)

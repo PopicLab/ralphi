@@ -47,7 +47,8 @@ MODEL_DEFAULTS = {
     'clip_node': False,
     'advantage': "nstep",
     'normalization': False,
-    'flip': False
+    'flip': False,
+    'min_isize': 0,
 }
 
 SHARED_DATA_DEFAULTS = {
@@ -60,6 +61,9 @@ SHARED_DATA_DEFAULTS = {
     "min_highmapq_ratio": 0,
     'supp_distance_th': 1000000,
     'log_reads': False,
+    'is_hic': False,
+    'min_hic_distance': 0,
+    'max_isize': float('inf'),
 }
 
 DATA_DEFAULTS_SHORT = {
@@ -93,6 +97,22 @@ DATA_DEFAULTS_LONG = {
     'skip_post': True,
     'enable_strand_filter': True,
     'read_overlap_th': 100,
+}
+
+DATA_DEFAULTS_HIC= {
+    "mbq": 13,
+    "realign_overhang": None,
+    'filter_bad_reads': False,
+    'max_discordance': 1.0,
+    'enable_read_selection': False,
+    "max_snp_coverage": 200,
+    'require_high_mapq': False,
+    "min_coverage_to_filter": float('inf'),
+    'enable_strand_filter': False,
+    'read_overlap_th': None,
+    'is_hic': True,
+    'skip_post': True,
+    'min_isize': 1000,
 }
 
 PHASE_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}
@@ -168,6 +188,8 @@ class PhaseConfig(Config):
         self.__dict__.update(entries)
         if self.platform == "illumina":
             self.set_defaults(DATA_DEFAULTS_SHORT)
+        elif self.platform == "hic":
+            self.set_defaults(DATA_DEFAULTS_HIC)
         else:
             self.set_defaults(DATA_DEFAULTS_LONG)
         self.set_defaults(PHASE_DEFAULTS)
@@ -221,6 +243,8 @@ class DataConfig(Config):
         self.__dict__.update(entries)
         if self.platform == "illumina":
             self.set_defaults(DATA_DEFAULTS_SHORT)
+        elif self.platform == "hic":
+            self.set_defaults(DATA_DEFAULTS_HIC)
         else:
             self.set_defaults(DATA_DEFAULTS_LONG)
         self.set_defaults(DATA_GENERATION_DEFAULTS)

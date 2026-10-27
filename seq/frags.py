@@ -196,6 +196,7 @@ def generate_fragments(config, chromosome):
     logging.debug("Number of variants loaded: %d", len(variant_table))
     reads, _ = bam_reader.read(variant_table.chromosome, variant_table.variants, None, read_vcf=False, args=config)
     logging.debug("Number of reads loaded: %d", len(reads))
+            
     if config.log_reads: write_reads(reads, config.out_dir + "/input_reads.txt")
     if not config.no_filter:
         reads = select_variants(reads, config, variant_table)
@@ -208,6 +209,7 @@ def generate_fragments(config, chromosome):
     if config.log_reads: write_reads(reads, config.out_dir + "/output_reads.txt")
     logging.info("Selected %d reads covering %d variants in %s", len(reads), len(reads.get_positions()), chromosome)
     return assemble_fragments(reads, variant_table.variants), vcf_idx_to_phase_set
+
 
 def assemble_fragments(reads, variants):
     pos2idx = {}
@@ -271,7 +273,7 @@ def select_variants(reads, config, variant_table):
             filtered_variants.add(variant_position + 1)
 
         # no reads with high mapq cover this variant
-        if config.require_hiqh_mapq and not pos2coverage['high'][variant_position]:
+        if config.require_high_mapq and not pos2coverage['high'][variant_position]:
             filter_by_type['high_cov'] += 1
             filtered_variants.add(variant_position + 1)
 
