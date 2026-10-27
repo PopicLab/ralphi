@@ -45,7 +45,8 @@ MODEL_DEFAULTS = {
     'clip_node': False,
     'advantage': "nstep",
     'normalization': False,
-    'flip': False
+    'flip': False,
+    'min_isize': 0,
 }
 
 SHARED_DATA_DEFAULTS = {
@@ -107,8 +108,8 @@ DATA_DEFAULTS_HIC= {
     'enable_strand_filter': False,
     'read_overlap_th': None,
     'is_hic': True,
-    'min_hic_distance': 1000,
     'skip_post': True,
+    'min_isize': 1000,
 }
 
 PHASE_DEFAULTS = {**SHARED_DEFAULTS, **MODEL_DEFAULTS, **SHARED_DATA_DEFAULTS}

@@ -151,16 +151,6 @@ class NestedDict(defaultdict):
         return NestedDict(self.default_factory)
 
 
-def filter_hic_distance(reads, min_dist):
-    """Drop Hi-C fragments pairs that are too close due to self-ligation artifacts."""
-    keep = []
-    for i, read in enumerate(reads):
-        positions = [variant.position for variant in read]
-        if len(positions) < 2 or (max(positions) - min(positions)) >= min_dist:
-            keep.append(i)
-    return reads.subset(keep)
-
-
 def generate_fragments(config, chromosome):
     bam_reader = PhasedInputReader([config.bam], config.reference, None, ignore_read_groups=True,
                                    mapq_threshold=config.mapq, only_snvs=True, overhang=config.realign_overhang)
@@ -172,12 +162,6 @@ def generate_fragments(config, chromosome):
     logging.debug("Number of variants loaded: %d", len(variant_table))
     reads, _ = bam_reader.read(variant_table.chromosome, variant_table.variants, None, read_vcf=False, args=config)
     logging.debug("Number of reads loaded: %d", len(reads))
-
-    # Hi-C only: discard short-range erroneous pairs
-    if config.is_hic and config.min_hic_distance:
-        reads = filter_hic_distance(reads, config.min_hic_distance)
-        logging.debug("[%s] Reads after Hi-C distance filter (>=%dbp): %d",
-                        config.platform, config.min_hic_distance, len(reads))
             
     if config.log_reads: write_reads(reads, config.out_dir + "/input_reads.txt")
     if not config.no_filter:
@@ -191,6 +175,7 @@ def generate_fragments(config, chromosome):
     if config.log_reads: write_reads(reads, config.out_dir + "/output_reads.txt")
     logging.info("Selected %d reads covering %d variants in %s", len(reads), len(reads.get_positions()), chromosome)
     return assemble_fragments(reads, variant_table.variants)
+
 
 def assemble_fragments(reads, variants):
     pos2idx = {}
