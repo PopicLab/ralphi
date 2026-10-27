@@ -182,6 +182,7 @@ def generate_fragments(config, chromosome):
     logging.info("Assembled %d fragments from %d input(s) in %s", len(all_fragments), len(config.inputs), chromosome)
     return all_fragments
 
+
 def assemble_fragments(reads, variants):
     pos2idx = {}
     for v in variants:

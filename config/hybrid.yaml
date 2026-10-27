@@ -8,7 +8,6 @@ inputs:
   - platform: "ont"  # sequencing platform (options: ont, hifi, hic or illumina)
     bam: "/path/to/bam"  # path to the BAM alignments file
     realign: True  # if realignment has to be performed
-
 #### OPTIONAL ####
 chr_names: null  # list of chromosomes to process: null (all) or a specific list e.g. ["chr1", "chr21"]
 n_procs: 22  # number of cores (used to process chromosomes in parallel)

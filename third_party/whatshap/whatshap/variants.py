@@ -240,11 +240,12 @@ class ReadSetReader:
                 # split read pairs that map discordantly
                 if alignment.bam_alignment.is_paired:
                     if alignment.bam_alignment.is_supplementary: continue
-                    if (abs(alignment.bam_alignment.template_length) > args.max_isize
+                    if ((not args.is_hic and alignment.bam_alignment.is_reverse == alignment.bam_alignment.mate_is_reverse)
                         or alignment.bam_alignment.template_length == 0
-                        or alignment.bam_alignment.mate_is_unmapped
                         or alignment.bam_alignment.next_reference_name != alignment.bam_alignment.reference_name
-                        or alignment.bam_alignment.is_reverse == alignment.bam_alignment.mate_is_reverse):
+                        or alignment.bam_alignment.mate_is_unmapped
+                        or abs(alignment.bam_alignment.template_length) > args.max_isize
+                        or abs(alignment.bam_alignment.template_length) < args.min_isize):
                         alignment.bam_alignment.qname += "_" + "12"[alignment.bam_alignment.is_read2]
                     else: alignment.bam_alignment.qname += "_MP"  # join read pairs
                     yield alignment

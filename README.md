@@ -42,14 +42,14 @@ To run: ```$> python engine/phase.py --config </path/to/config>```
 
 ```phase.py``` phases an input VCF file given a pre-trained model and an input BAM file.
 The script accepts as input a YAML file with configuration parameters. The ```config/``` directory provides 
-a sample config file for the ONT platform (```config/ont.yaml```) and the Illumina platform (```config/illumina.yaml```),
+a sample config file for the ONT platform (```config/ont.yaml```), the Illumina platform (```config/illumina.yaml```), and the Hi-C platform (```config/hic.yaml```),
 which lists the required and key optional parameters.
 
 The key parameters for phasing are listed below:
 
 * ```vcf``` [*required*] path to the VCF variant file (must be compressed and indexed)
 * ```bam``` [*required*] path to the BAM alignment file 
-* ```platform``` [*required*] sequencing platform (options: ```illumina``` or ```ONT```) 
+* ```platform``` [*required*] sequencing platform (options: ```illumina```, ```ont```, ```hifi``` or ```hic```) 
 * ```model``` [*required*] path to the pretrained ```ralphi``` model (available under ```data/models```)
 * ```realign``` [*optional*] enbles local realignment (default: true for ONT and HiFi)
 * ```reference``` [*required* when realign] path to the reference FASTA file used for local realignment

@@ -64,6 +64,9 @@ SHARED_DATA_DEFAULTS = {
     "min_highmapq_ratio": 0,
     'supp_distance_th': 1000000,
     'log_reads': False,
+    'is_hic': False,
+    'min_isize': 0,
+    'max_isize': float('inf'),
     'realign': False
 }
 
@@ -98,6 +101,23 @@ DATA_DEFAULTS_LONG = {
     'enable_strand_filter': True,
     'read_overlap_th': 100,
     'realign': True,
+}
+
+
+DATA_DEFAULTS_HIC= {
+    "mbq": 13,
+    "realign_overhang": None,
+    'filter_bad_reads': False,
+    'max_discordance': 1.0,
+    'enable_read_selection': False,
+    "max_snp_coverage": 200,
+    'require_high_mapq': False,
+    "min_coverage_to_filter": float('inf'),
+    'enable_strand_filter': False,
+    'read_overlap_th': None,
+    'is_hic': True,
+    'skip_post': True,
+    'min_isize': 1000,
 }
 
 
@@ -138,6 +158,7 @@ DATA_PARAMS = {
     *SHARED_DATA_DEFAULTS, 
     *DATA_DEFAULTS_SHORT, 
     *DATA_DEFAULTS_LONG,
+    *DATA_DEFAULTS_HIC,
     *REQUIRED_DATA_PARAMS
 }
 
@@ -159,6 +180,7 @@ PLATFORM_PRESETS = {
     "illumina": DATA_DEFAULTS_SHORT,
     "ont": DATA_DEFAULTS_LONG,
     "hifi": DATA_DEFAULTS_LONG,
+    "hic": DATA_DEFAULTS_HIC
 }
 
 
@@ -188,7 +210,7 @@ def resolve_input(entry, global_entries):
             raise ValueError('Please note that downsampling is not recommended for illumina reads, if you use '\
                              f'enable_read_selection please specify read_overlap_th as the default is None. Issue in {entry}')
         raise ValueError(f'read_overlap_th must be specified if enable_read_selection, but got {entry}')
-    if resolved['realign'] and ('reference' not in global_entries or not global_entries['reference']):
+    if resolved['realign'] and (not hasattr(global_entries, 'reference') or not global_entries.reference):
         raise ValueError(f'A reference must be specified when realign is set to True, realign is used for {entry}')
     return LogNamespace(**resolved)
 
@@ -279,9 +301,7 @@ class DataConfig(Config):
         self.__dict__.update(entries)
         self.set_defaults(DATA_GENERATION_DEFAULTS)
         super().__init__(config_file)
-
         resolve_inputs(self)
-
         for f in os.listdir(self.out_dir):
             os.remove(os.path.join(self.out_dir, f))
 
