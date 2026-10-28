@@ -42,41 +42,6 @@ class Variant:
                                                                        len(self.phase_sets))
     
 
-def update_phase_sets(solved_components):
-    remap = {}
-    for component in solved_components:
-        anchor = np.argmin([block.phase_set for block in component])
-        anchor_phase_set = component[anchor].phase_set
-        anchor_side = component[anchor].haplotype
-        for block in component:
-            remap[block.phase_set] = (anchor_phase_set, block.haplotype != anchor_side)
-    return remap
-
-def apply_link(variant_to_phase_set, phase_set_remap):
-    # Count number of variants in each phase set after remapping to unphase singleton variants
-    mapped_variants = {}
-    ps_counts = Counter()
-    
-    for vcf_idx, (phase_set, hap0_allele) in variant_to_phase_set.items():
-        new_phase_set, flip = phase_set_remap.get(phase_set, (phase_set, False))
-        mapped_variants[vcf_idx] = (new_phase_set, flip, hap0_allele)
-        ps_counts[new_phase_set] += 1
-
-    idx2var = {}
-    for vcf_idx, (new_phase_set, flip, hap0_allele) in mapped_variants.items():
-        v = Variant(vcf_idx)
-        
-        if ps_counts[new_phase_set] == 1:
-            # If the phase set only has 1 variant, it is unphased
-            v.phase_set = None
-            v.h = 2
-        else:
-            v.phase_set = new_phase_set
-            v.h = (1 - hap0_allele) if flip else hap0_allele
-            
-        idx2var[vcf_idx] = v
-    return idx2var
-
 def extract_variants(phased_frag_sets):
     idx2variant = {}
     for ps, fragments in enumerate(phased_frag_sets):

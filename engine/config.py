@@ -261,8 +261,9 @@ class PhaseConfig(Config):
         super().__init__(config_file)
         resolve_inputs(self)
         # skip_post has a platform dependent default while not being a data processing parameter
-        # We check if their is only one BAM file provided and if its platform is illumina to set the default 
-        if 'skip_post' not in entries and  len(self.inputs) == 1 and self.inputs[0].platform == 'illumina':
+        # We check if their is only one BAM file provided and if its platform is illumina to set the default
+        phase_inputs = [inp for inp in self.inputs if not inp.link]
+        if 'skip_post' not in entries and  len(phase_inputs) == 1 and phase_inputs.platform == 'illumina':
             self.skip_post = False
         if self.chr_names is None:
             self.chr_names = ['chr{}'.format(x) for x in range(1, 23)]
@@ -270,6 +271,16 @@ class PhaseConfig(Config):
         self.output_vcf = self.out_dir + "/ralphi.vcf"
         logging.info(self)
 
+    def to_link(self):
+        for param in LINK_PARAMS:
+            self.__dict__[param] = True
+        self.vcf = self.output_vcf
+        self.out_dir = self.out_dir + "/link_"
+        self.output_vcf = self.out_dir + "ralphi.vcf"
+        self.log_dir = self.log_dir + "/link_"
+
+        Path(self.log_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.out_dir).mkdir(parents=True, exist_ok=True)
 
 class LinkConfig(PhaseConfig):
     def __init__(self, config_file, **entries):
@@ -278,6 +289,8 @@ class LinkConfig(PhaseConfig):
                 raise ValueError(f'{param} must be True for link mode')
             config_file[param] = True
         super().__init__(config_file, **entries)
+        for inp in self.inputs:
+            inp.link = True
 
 
 class TrainingConfig(Config):

@@ -4,7 +4,6 @@ from gym import spaces
 import dgl
 import utils.plotting as vis
 import graphs.frag_graph as graphs
-import networkx as nx
 import models.constants as constants
 
 
