@@ -6,7 +6,6 @@ import utils.plotting as vis
 import graphs.frag_graph as graphs
 import networkx as nx
 import models.constants as constants
-from seq.frags import PhasingBlock
 
 
 class State:
@@ -125,15 +124,9 @@ class PhasingEnv(gym.Env):
     def finalize(self):
         if self.record:
             node_labels = self.state.g.ndata['cut_member_hap0'][:, 0].cpu().numpy().tolist()
-            if self.config.link:
-                g = self.state.frag_graph.g
-                solution = [PhasingBlock(data.get('group_id'), data['phase_set'], haplotype)
-                            for (_, data), haplotype in zip(sorted(g.nodes(data=True)), node_labels)
-        ]
-            else:
-                for i, frag in enumerate(self.state.frag_graph.fragments):
-                    frag.assign_haplotype(node_labels[i])
-                self.solutions.append(self.state.frag_graph.fragments)
+            for i, frag in enumerate(self.state.frag_graph.fragments):
+                frag.assign_haplotype(node_labels[i])
+            self.solutions.append(self.state.frag_graph.fragments)
 
     def postprocess(self):
             self.solutions = graphs.connect_components(self.solutions)

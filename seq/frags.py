@@ -1,30 +1,20 @@
-import argparse
-from collections import Counter, defaultdict
+from collections import defaultdict
 from copy import deepcopy
-from intervaltree import IntervalTree
 import logging
 import whatshap
 import string
 from whatshap import readselect
 from whatshap.cli import PhasedInputReader
-
-
-class PhasingBlock:
-    def __init__(self, group_id, phase_set, haplotype):
-        self.group_id = group_id
-        self.phase_set = phase_set
-        self.haplotype = haplotype
-
-    def assign_haplotype(self, hap):
-        self.haplotype = hap
+from whatshap.cli.vcf import VariantCallPhase
 
 
 class FragVariantHandle:
-    def __init__(self, vcf_idx, allele, qscore=None):
+    def __init__(self, vcf_idx, allele, qscore=None, phase_set=None):
         self.vcf_idx = vcf_idx
         self.allele = allele
         self.qscore = qscore
         self.haplotype = None
+        self.loaded_ps = phase_set
 
     def __str__(self):
         return "Variant: vcf_idx={} allele={} qscore={}".format(self.vcf_idx, self.allele, self.qscore)
@@ -81,8 +71,9 @@ class Fragment:
         self.haplotype = None
         self.true_haplotype = None
         self.vcf_positions = None
-        self.group_id = None
+        self.fragment_group_id = None
         self.number_duplicated = 1
+        self.vcf_idx2pos = {}
 
     def __eq__(self, fragment):
         return (self.vcf_idx_start, self.vcf_idx_end, self.n_variants, self.variants) == (
@@ -91,6 +82,12 @@ class Fragment:
     def __str__(self):
         return "\nread_id={} n_variants={} variants=\n".format(self.read_id, self.n_variants) + \
                '\n'.join(map(str, self.variants))
+
+    def get_variant(self, vcf_idx):
+        if not self.vcf_idx2pos:
+            self.vcf_idx2pos = {v.vcf_idx: pos for pos, v in enumerate(self.variants)}
+        return self.vcf_idx2pos[vcf_idx]
+        
 
     def overlap(self, fragment):
         if min(self.vcf_idx_end, fragment.vcf_idx_end) < max(self.vcf_idx_start, fragment.vcf_idx_start):
@@ -161,66 +158,96 @@ class NestedDict(defaultdict):
         return NestedDict(self.default_factory)
 
 
-def select_phased_variants(sample, variant_table):
-    phases = variant_table.phases_of(sample)
-    unphased = {i for i, phase in enumerate(phases) if phase is None}
-    phased_variants = deepcopy(variant_table)
-    phased_variants.remove_rows_by_index(unphased)
-    return phased_variants
+def get_phase_fragments(sample, variant_table, allow_unphased_variants):
+    phase_set_dict = defaultdict(list)
+    phase2phase_idx = {}
+    unique_phase_id = 0
+    for v, phase in zip(variant_table.variants, variant_table.phases_of(sample)):
+        gt = None
+        phase_idx = None
+        if phase is not None:
+            gt = phase.phase
+            phase_set = phase.block_id
+            if phase_set not in phase2phase_idx:
+                phase2phase_idx[phase_set] = unique_phase_id
+                unique_phase_id += 1
+            phase_idx = phase2phase_idx[phase_set]
+        elif allow_unphased_variants:
+            phase_idx = unique_phase_id
+            unique_phase_id += 1
+            gt = (0, 1)
+        if phase_idx is not None:
+            v.phase = VariantCallPhase(block_id=phase_idx, phase=gt)
+            phase_set_dict[phase_idx].append(v)
+    return assemble_fragments(phase_set_dict.values(), variant_table.variants, phased=True)
 
 
 def generate_fragments(config, chromosome):
-    bam_reader = PhasedInputReader([config.bam], config.reference, None, ignore_read_groups=True,
-                                   mapq_threshold=config.mapq, only_snvs=True, overhang=config.realign_overhang)
     vcf_reader = whatshap.vcf.VcfReader(config.vcf, only_snvs=True)
     assert len(vcf_reader.samples) == 1
     variant_table = vcf_reader.fetch(chromosome)  # next(vcf_reader.__iter__())
     logging.debug("Processing %s", variant_table.chromosome)
     variant_table = select_phaseable_variants(vcf_reader.samples[0], variant_table)
 
-    vcf_idx_to_phase_set = {}
-    if config.link:
+    phase_fragments = []
+    if config.use_phasing:
         sample = vcf_reader.samples[0]
-        if not config.allow_unphased_variants:
-            # In link mode, remove unphased variants unless allow_unphased_variants is True
-            variant_table = select_phased_variants(sample, variant_table)
-        vcf_idx_to_phase_set = {v.index: (phase.block_id, phase.phase[0]) 
-                                 for v, phase in zip(variant_table.variants, variant_table.phases_of(sample)) if phase is not None}
-        if config.allow_unphased_variants:
-            # Give unique phase sets to unphased variants
-            unique_phase_id = max([phase for phase, _ in vcf_idx_to_phase_set.values()], default=0) + 1
-            for v, phase in zip(variant_table.variants, variant_table.phases_of(sample)):
-                if phase is None:
-                    vcf_idx_to_phase_set[v.index] = (unique_phase_id, 0)
-                    unique_phase_id += 1
+        phase_fragments = get_phase_fragments(sample, variant_table, config.allow_unphased_variants)
     logging.debug("Number of variants loaded: %d", len(variant_table))
-    reads, _ = bam_reader.read(variant_table.chromosome, variant_table.variants, None, read_vcf=False, args=config)
-    logging.debug("Number of reads loaded: %d", len(reads))
-            
-    if config.log_reads: write_reads(reads, config.out_dir + "/input_reads.txt")
-    if not config.no_filter:
-        reads = select_variants(reads, config, variant_table)
-    # keep only reads that cover at least two variants and have a sufficiently high MAPQ
-    reads = reads.subset([i for i, read in enumerate(reads) if len(read) >= 2 and read.mapqs[0] >= config.mapq])
-    logging.debug("Number of reads covering two variants : %d", len(reads))
-    if config.enable_read_selection:
-        logging.debug("Running read selection to a maximum coverage of: %dX", config.max_coverage)
-        reads = reads.subset(readselect.readselection(reads, config.max_coverage))
-    if config.log_reads: write_reads(reads, config.out_dir + "/output_reads.txt")
-    logging.info("Selected %d reads covering %d variants in %s", len(reads), len(reads.get_positions()), chromosome)
-    return assemble_fragments(reads, variant_table.variants), vcf_idx_to_phase_set
+
+    all_fragments = []
+    for inp in config.inputs:
+        reference = None
+        if inp.realign:
+            reference = config.reference
+        bam_reader = PhasedInputReader([inp.bam], reference, None, ignore_read_groups=True,
+                                       mapq_threshold=inp.mapq, only_snvs=True, overhang=inp.realign_overhang)
+        reads, _ = bam_reader.read(variant_table.chromosome, variant_table.variants, None, read_vcf=False, args=inp)
+        logging.debug("[%s] Number of reads loaded: %d", inp.platform, len(reads))
+        reads = select_variants(reads, inp)
+        # keep only reads that cover at least two variants and have a sufficiently high MAPQ
+        reads = reads.subset([i for i, read in enumerate(reads) if len(read) >= 2 and read.mapqs[0] >= inp.mapq])
+        logging.debug("[%s] Number of reads covering two variants : %d", inp.platform, len(reads))
+        if inp.enable_read_selection:
+            logging.debug("[%s] Running read selection to a maximum coverage of: %dX",
+                          inp.platform, inp.max_coverage)
+            reads = reads.subset(readselect.readselection(reads, inp.max_coverage))
+        logging.info("[%s] Selected %d reads covering %d variants in %s",
+                     inp.platform, len(reads), len(reads.get_positions()), chromosome)
+        all_fragments.extend(assemble_fragments(reads, variant_table.variants))
+    logging.info("Assembled %d fragments from %d input(s) in %s", len(all_fragments), len(config.inputs), chromosome)
+    return all_fragments, phase_fragments
 
 
-def assemble_fragments(reads, variants):
+def assemble_fragments(reads, variants, phased=False):
     pos2idx = {}
     for v in variants:
         pos2idx[v.position] = v.index
-    fragments = []
-    for read in reads:
-        blocks = get_fragment_blocks(read, pos2idx)
-        block_allele_str = " ".join(str(b[0]) + " " + b[1] for b in blocks)
-        block_qual_str = "".join(str(c) if c in string.printable else '!' for b in blocks for c in b[2])
-        fragments.append(" ".join([str(len(blocks)), block_allele_str, block_qual_str]))
+    fragments= []
+    for read_id, read in enumerate(reads):
+        read_variants = []
+        for variant in read:
+            assert variant.allele != -1
+            vcf_idx = pos2idx[variant.position]
+            ps = variants[vcf_idx]
+            if ps:
+                ps = ps.phase.block_id
+            if phased:
+                # Fragment from phasing evidence, the allele arbitrarily corresponds to the first haplotype
+                allele = variants[vcf_idx].phase.phase[0]
+                qscore = None
+            else:
+                allele = variant.allele
+                qscore = chr(variant.quality + 33)
+            read_variants.append(FragVariantHandle(vcf_idx, allele, qscore=qscore, phase_set=ps))
+        read_name = 'frag_' + str(read_id)
+        if phased:
+            read_name = read_variants[0].phase_set
+        fragments.append(Fragment(read_id=read_name, variants=read_variants))
+    if phased:
+        fragments = sorted(fragments, key=lambda frag: frag.read_name)
+    else:
+        fragments = sorted(fragments, key=lambda frag: frag.vcf_idx_start)
     return fragments
 
 
@@ -248,7 +275,7 @@ def get_fragment_blocks(read, pos2idx):
         blocks.append((current_block_idx, current_block_alleles, current_block_quals))
     return blocks
 
-def select_variants(reads, config, variant_table):
+def select_variants(reads, config):
     pos2alleles = NestedDict(NestedDict(NestedDict(int)))
     pos2coverage = NestedDict(NestedDict(int))
     pos2strands = defaultdict(set)

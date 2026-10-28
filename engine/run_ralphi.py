@@ -45,7 +45,7 @@ def run_parallel(chr_names, config):  # runs phasing on the specified list of ch
 
         for chromosome in chr_names:
             # -------- load variants and reads to generate input fragments
-            config.fragments, config.variants = generate_fragments(config, chromosome)
+            config.fragments, config.phase_fragments = generate_fragments(config, chromosome)
             # -------- initialize the fragment graph environment and load the pre-trained agent
             env = envs.phasing_env.PhasingEnv(config, record_solutions=True)
             agent = models.actor_critic.DiscreteActorCriticAgent(env)
