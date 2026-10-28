@@ -291,20 +291,19 @@ def connect_components(components):
     def flip_hap(h): return h if h is None else (h + 1) % 2
     gid2components = {}
     component_map = {i: i for i in range(len(components))}
-    for cid, component in enumerate(components):
-        for node in component:
-            if node.group_id is not None:
-                gid2components.setdefault(node.group_id, []).append((cid, node))
+    for cid, frag_list in enumerate(components):
+        for frag in frag_list:
+            if frag.fragment_group_id:
+                gid2components.setdefault(frag.fragment_group_id, []).append((cid, frag))
 
-    for _, group in gid2components.items():
-        cid_g = component_map[group[0][0]]
+    for gid, group in gid2components.items():
         hap = group[0][1].haplotype
-
-        for cid, node in group[1:]:
+        cid_g = component_map[group[0][0]]
+        for cid, group_frag in group[1:]:
             cid = component_map[cid]
-            if node.haplotype != hap:
-                for cc_node in components[cid]:
-                    cc_node.assign_haplotype(flip_hap(cc_node.haplotype))
+            if group_frag.haplotype != hap:
+                for frag in components[cid]:
+                    frag.assign_haplotype(flip_hap(frag.haplotype))
             components[cid_g].extend(components[cid])
             components[cid] = []
             aux = component_map[cid]

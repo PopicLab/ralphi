@@ -262,7 +262,7 @@ class PhaseConfig(Config):
         resolve_inputs(self)
         # skip_post has a platform dependent default while not being a data processing parameter
         # We check if their is only one BAM file provided and if its platform is illumina to set the default
-        phase_inputs = [inp for inp in self.inputs if not inp.link]
+        phase_inputs = [inp for inp in self.inputs if not inp.link_bam]
         if 'skip_post' not in entries and  len(phase_inputs) == 1 and phase_inputs.platform == 'illumina':
             self.skip_post = False
         if self.chr_names is None:
@@ -290,7 +290,7 @@ class LinkConfig(PhaseConfig):
             config_file[param] = True
         super().__init__(config_file, **entries)
         for inp in self.inputs:
-            inp.link = True
+            inp.link_bam = True
 
 
 class TrainingConfig(Config):

@@ -197,7 +197,7 @@ def generate_fragments(config, chromosome):
 
     all_fragments = []
     for inp in config.inputs:
-        if config.link and not inp.link: continue
+        if config.link and not inp.link_bam: continue
         reference = None
         if inp.realign:
             reference = config.reference
