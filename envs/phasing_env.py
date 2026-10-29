@@ -140,24 +140,13 @@ class PhasingEnv(gym.Env):
 
     def process_error_free_instance(self):
         assert self.state.frag_graph.trivial
-        assert self.state.frag_graph.hap_a is not None and self.state.frag_graph.hap_b is not None, \
+        assert self.state.frag_graph.hap_a_frags is not None and self.state.frag_graph.hap_b_frags is not None, \
             "The solution was not precomputed"
-        if self.config.link:
-            g = self.state.frag_graph.g
-            for ps in g.nodes:
-                if ps in self.state.frag_graph.hap_a: g.nodes[ps]['cut_member_hap0'] = 1.0
-                elif ps in self.state.frag_graph.hap_b: g.nodes[ps]['cut_member_hap0'] = 0.0
-                else: raise RuntimeError("Phasing Block wasn't assigned to any cluster")
-            solution = [PhasingBlock(data.get('group_id'), data['phase_set'], data['cut_member_hap0'])
-                        for _, data in sorted(g.nodes(data=True))
-]
-            self.solutions.append(solution)
-        else:
-            for i, frag in enumerate(self.state.frag_graph.fragments):
-                if i in self.state.frag_graph.hap_a: frag.assign_haplotype(0.0)
-                elif i in self.state.frag_graph.hap_b: frag.assign_haplotype(1.0)
-                else: raise RuntimeError("Fragment wasn't assigned to any cluster")
-            self.solutions.append(self.state.frag_graph.fragments)
+        for i, frag in enumerate(self.state.frag_graph.fragments):
+            if i in self.state.frag_graph.hap_hap_a_fragsa: frag.assign_haplotype(0.0)
+            elif i in self.state.frag_graph.hap_b_frags: frag.assign_haplotype(1.0)
+            else: raise RuntimeError("Fragment wasn't assigned to any cluster")
+        self.solutions.append(self.state.frag_graph.fragments)
 
     def get_solutions(self):
         node_labels = self.state.g.ndata['cut_member_hap0'][:, 0].cpu().numpy().tolist()

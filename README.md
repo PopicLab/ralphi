@@ -65,7 +65,7 @@ The key parameters for ralphi are listed below:
 
 You can supply multiple BAM alignment files from different platforms, each with its own parameters, using the ```inputs``` parameter. For the required syntax, refer to the```config/hybrid``` config file.
 
-You can perform hierarchical phasing using ```phase.py```. In this case, the BAM files provided in ```inputs``` with a ```link_bam: False``` are first used to phase the variants in the input VCF. The remaining BAM files are then used to link together the obtained phasing blocks.
+You can perform hierarchical phasing using ```phase.py```. In this case, the BAM files provided in ```inputs``` with a ```link_bam: False``` are first used to phase the variants in the input VCF. The remaining BAM files are then used to link together the obtained phasing blocks. 
 
 Two models are currently provided in the ```data/models``` directory: 
 (1) ralphi.v1.long.pt is recommended for ONT inputs and (2) ralphi.v1.short.pt is recommended for Illumina 
@@ -73,6 +73,7 @@ short-read inputs.
 
 ```ralphi``` will output results in the parent directory of the YAML config file. The results include the phased VCF
 files for each input chromosome (under ```output/```; e.g. ```output/chr1.ralphi.vcf```) and execution logs.
+In the case of hierarchical phasing, the outputs of the final link step will be named ```output/link_ralphi.vcf``` and ```output/chri.ralphi.vcf```.
 
 <a name="workflow"></a>
 #### Recommended workflow 

@@ -263,7 +263,7 @@ class PhaseConfig(Config):
         # skip_post has a platform dependent default while not being a data processing parameter
         # We check if their is only one BAM file provided and if its platform is illumina to set the default
         phase_inputs = [inp for inp in self.inputs if not inp.link_bam]
-        if 'skip_post' not in entries and  len(phase_inputs) == 1 and phase_inputs.platform == 'illumina':
+        if 'skip_post' not in entries and  len(phase_inputs) == 1 and phase_inputs[0].platform == 'illumina':
             self.skip_post = False
         if self.chr_names is None:
             self.chr_names = ['chr{}'.format(x) for x in range(1, 23)]

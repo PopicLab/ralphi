@@ -103,14 +103,19 @@ class FragGraph:
         for frag in fragments:
             frag_is_hap0 = defaultdict(list)
             for var in frag.variants:
-                if var.loaded_phase_set is None: continue
-                matching_frag = phase_fragments[var.loaded_phase_set]
+                if var.loaded_ps is None: continue
+                matching_frag = phase_fragments[var.loaded_ps]
                 hap0_allele = matching_frag.get_variant(var.vcf_idx).allele
                 frag_is_hap0[var.loaded_ps].append(var.allele == hap0_allele)
             frag_items = list(frag_is_hap0.items())
             for ps_idx_i, (ps_i, var_ps_i) in enumerate(frag_items):
-                for  ps_j, var_ps_j in frag_items[ps_idx_i:]:
-                    total_agree = sum(1 if is_hap0_i == is_hap0_j else 0 for is_hap0_i in var_ps_i for is_hap0_j in var_ps_j)
+                for  ps_j, var_ps_j in frag_items[ps_idx_i+1:]:
+                    # Count the in-cis and in-trans evidence 
+                    trues_i = var_ps_i.count(True)
+                    falses_i = len(var_ps_i) - trues_i
+                    trues_j = var_ps_j.count(True)
+                    falses_j = len(var_ps_j) - trues_j
+                    total_agree = (trues_i * trues_j) + (falses_i * falses_j)
                     evidence[(ps_i, ps_j)][0] += total_agree
                     evidence[(ps_i, ps_j)][1] += len(var_ps_i) * len(var_ps_j) - total_agree
         frag_graph = nx.Graph()
@@ -235,7 +240,7 @@ class FragGraph:
 
     def extract_subgraph(self, connected_component, compute_trivial=False):
         subg = self.g.subgraph(connected_component)
-        subg_frags = [self.fragments[node] if not self.fragments[node].group_id else
+        subg_frags = [self.fragments[node] if not self.fragments[node].fragment_group_id else
                       deepcopy(self.fragments[node]) for node in subg.nodes]
         node_mapping = {j: i for (i, j) in enumerate(subg.nodes)}
         node_id2hap_id = None
