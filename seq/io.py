@@ -34,7 +34,7 @@ def write_phased_vcf(input_vcf, idx2var, output_vcf, chromosome):
             else:
                 mapping['GT'] = str(1) + "|" + str(0)
             mapping['PS'] = str(v.phase_set)
-            mapping['PD'] = str(len(v.frag_variants))
+            mapping['PD'] = str(len(v.frag_variants)) # Not currently used, always 0
             mapping['PQ'] = '0'
 
         else:  # unphased

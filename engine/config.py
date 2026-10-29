@@ -108,22 +108,6 @@ DATA_DEFAULTS_LONG = {
     'realign': True,
 }
 
-DATA_DEFAULTS_HIC= {
-    "mbq": 13,
-    "realign_overhang": None,
-    'filter_bad_reads': False,
-    'max_discordance': 1.0,
-    'enable_read_selection': False,
-    "max_snp_coverage": 200,
-    'require_high_mapq': False,
-    "min_coverage_to_filter": float('inf'),
-    'enable_strand_filter': False,
-    'read_overlap_th': None,
-    'is_hic': True,
-    'skip_post': True,
-    'min_isize': 1000,
-}
-
 
 DATA_DEFAULTS_HIC= {
     "mbq": 13,

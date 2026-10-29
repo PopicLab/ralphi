@@ -13,4 +13,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config_type = config_utils.CONFIG_TYPE.LINK
     config = config_utils.load_config(args.config, config_type=config_type)
-    run.initialize(args)
+    run.initialize(config)

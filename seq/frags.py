@@ -84,7 +84,7 @@ class Fragment:
 
     def get_variant(self, vcf_idx):
         if not self.vcf_idx2pos:
-            self.vcf_idx2pos = {v.vcf_idx: pos for pos, v in enumerate(self.variants)}
+            self.vcf_idx2pos = {v.vcf_idx: v for v in self.variants}
         return self.vcf_idx2pos[vcf_idx]
         
 
