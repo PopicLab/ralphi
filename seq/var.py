@@ -17,9 +17,11 @@ class Variant:
         c0 = 0
         c1 = 0
         for v, n_copies, n_duplicates in frag_set:
-            if (v.haplotype == 0 and v.allele == '0') or (v.haplotype == 1 and v.allele == '1'):
+            if v.haplotype not in (0, 1) or v.allele not in (0, 1):
+                continue
+            if v.haplotype == v.allele:
                 c0 += n_copies / n_duplicates
-            elif (v.haplotype == 0 and v.allele == '1') or (v.haplotype == 1 and v.allele == '0'):
+            else:
                 c1 += n_copies / n_duplicates
         return c0, c1, c0 + c1
 

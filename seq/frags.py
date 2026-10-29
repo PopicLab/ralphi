@@ -29,7 +29,7 @@ class Block:
         self.variants = []
         for i in range(len(alleles)):
             qscore = None if (qscores is None) else qscores[i]
-            self.variants.append(FragVariantHandle(vcf_idx + i, alleles[i], qscore))
+            self.variants.append(FragVariantHandle(vcf_idx + i, int(alleles[i]), qscore))
         self.n_variants = len(self.variants)
 
     def __str__(self):

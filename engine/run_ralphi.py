@@ -56,9 +56,9 @@ def run_parallel(chr_names, config):  # runs phasing on the specified list of ch
             # ------- output the phased VCF
             logging.info("Finished phasing, writing outputs for %s" % chromosome)
             idx2var = var.extract_variants(env.solutions)
-            var.remove_singleton_blocks(idx2var)
             for v in idx2var.values():
                 v.assign_haplotype()
+            var.remove_singleton_blocks(idx2var)
             if not config.link:
                 idx2var = var.postprocess(env.solutions, idx2var, config)
             vcf_writer.write_phased_vcf(config.vcf, idx2var,

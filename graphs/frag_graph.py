@@ -247,7 +247,7 @@ class FragGraph:
         if self.node_id2hap_id is not None:
             node_id2hap_id = {i: self.node_id2hap_id[j] for (i, j) in enumerate(subg.nodes)}
         subg_relabeled = nx.relabel_nodes(subg, node_mapping, copy=True)
-        return FragGraph(subg_relabeled, subg_frags, node_id2hap_id=node_id2hap_id, compute_trivial=compute_trivial)
+        return FragGraph(subg_relabeled, subg_frags, node_id2hap_id, compute_trivial)
 
     def get_component(self, p, edge_stack, current):
         component = []
