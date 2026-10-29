@@ -143,7 +143,7 @@ class PhasingEnv(gym.Env):
         assert self.state.frag_graph.hap_a_frags is not None and self.state.frag_graph.hap_b_frags is not None, \
             "The solution was not precomputed"
         for i, frag in enumerate(self.state.frag_graph.fragments):
-            if i in self.state.frag_graph.hap_hap_a_fragsa: frag.assign_haplotype(0.0)
+            if i in self.state.frag_graph.hap_a_frags: frag.assign_haplotype(0.0)
             elif i in self.state.frag_graph.hap_b_frags: frag.assign_haplotype(1.0)
             else: raise RuntimeError("Fragment wasn't assigned to any cluster")
         self.solutions.append(self.state.frag_graph.fragments)
