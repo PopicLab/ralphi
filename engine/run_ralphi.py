@@ -10,7 +10,7 @@ import numpy as np
 from joblib import Parallel, delayed
 import subprocess
 import random
-import os, sys
+import sys
 
 
 def initialize(config):
@@ -56,6 +56,7 @@ def run_parallel(chr_names, config):  # runs phasing on the specified list of ch
             # ------- output the phased VCF
             logging.info("Finished phasing, writing outputs for %s" % chromosome)
             idx2var = var.extract_variants(env.solutions)
+            var.remove_singleton_blocks(idx2var)
             for v in idx2var.values():
                 v.assign_haplotype()
             if not config.link:

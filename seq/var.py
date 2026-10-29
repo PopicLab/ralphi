@@ -1,5 +1,6 @@
-from collections import Counter, defaultdict 
-import numpy as np
+from collections import defaultdict 
+import logging
+import operator
 
 class Variant:
     """
@@ -40,7 +41,7 @@ class Variant:
     def __str__(self):
         return "Variant: vcf_idx={} frag_graph_idx={} depth={}".format(self.vcf_idx, self.phase_set,
                                                                        len(self.phase_sets))
-    
+
 
 def extract_variants(phased_frag_sets):
     idx2variant = {}
@@ -53,7 +54,28 @@ def extract_variants(phased_frag_sets):
                 idx2variant[var.vcf_idx].phase_sets[ps].append((var, frag.n_copies, frag.number_duplicated))
     return idx2variant
 
-def split_unphased(max_phase_set, idx2var):
+def remove_singleton_blocks(idx2var):
+    """
+    Postprocess phasing blocks to remove the ones with a single variant.
+    This might happen due to 0-weight edges in very rare cases.
+    """
+    singleton_vars = {}
+    for var in idx2var.values():
+        ps = var.phase_set
+        if ps is None: continue
+
+        if ps in singleton_vars:
+            # Duplicate
+            singleton_vars[ps] = None
+        else:
+            singleton_vars[ps] = var
+
+    for var in singleton_vars.values():
+        if var is not None: 
+            var.phase_set = None
+            var.h = None
+
+def update_phase_sets(max_phase_set, idx2var):
     """
     For variants we do not phase (haplotype "h" field set to 2) we need to update the phase sets of variants downstream in the block
     since the block is split, and also need to handle the case of multiple unphased variants within a block.
@@ -105,6 +127,6 @@ def split_eq_evidence(graphs, idx2var, max_phase_set=None, reads_num_th=50):
 
 def postprocess(graphs, idx2var, config):
     if config.skip_post: return idx2var
-    idx2var, max_phase_set = split_unphased(len(graphs), idx2var)
+    idx2var, max_phase_set = update_phase_sets(len(graphs), idx2var)
     split_eq_evidence(graphs, idx2var, max_phase_set)
     return idx2var

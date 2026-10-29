@@ -274,7 +274,7 @@ class FragGraph:
             for bic in biconnected_components:
                 if articulation in bic:
                     count += 1
-            self.fragments[articulation].group_id = articulation
+            self.fragments[articulation].fragment_group_id = articulation
             self.fragments[articulation].number_duplicated = count
         return biconnected_components
 
@@ -339,7 +339,7 @@ class FragGraphGen:
                         subgraph = pickle.load(f)
                         logging.debug("Processing subgraph with %d nodes..." % subgraph.n_nodes)
                         if self.features: 
-                            subgraph.set_graph_properties(self.features, self.config)
+                            subgraph.set_graph_properties(self.features, config=self.config)
                         yield subgraph
             yield None
 
