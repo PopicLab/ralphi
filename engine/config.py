@@ -286,9 +286,9 @@ class PhaseConfig(Config):
 class LinkConfig(PhaseConfig):
     def __init__(self, config_file, **entries):
         for param in LINK_PARAMS:
-            if param in config_file and not config_file[param]:
+            if param in entries and not entries[param]:
                 raise ValueError(f'{param} must be True for link mode')
-            config_file[param] = True
+            entries[param] = True
         super().__init__(config_file, **entries)
         for inp in self.inputs:
             inp.link_bam = True

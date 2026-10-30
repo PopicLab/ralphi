@@ -1,5 +1,4 @@
 from collections import defaultdict 
-import logging
 import operator
 
 class Variant:

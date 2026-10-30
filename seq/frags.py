@@ -177,13 +177,13 @@ def get_phase_fragments(sample, variant_table, allow_unphased_variants):
             unique_phase_id += 1
             gt = (0, 1)
         if phase_idx is not None:
-            phase_info_dict[v.position] = VariantCallPhase(block_id=phase_idx, phase=gt)
+            phase_info_dict[v.position] = VariantCallPhase(block_id=phase_idx, phase=gt, quality=None)
             phase_set_dict[phase_idx].append(v)
-    return phase_set_dict.values, phase_info_dict
+    return phase_set_dict.values(), phase_info_dict
 
 
 def generate_fragments(config, chromosome):
-    vcf_reader = whatshap.vcf.VcfReader(config.vcf, only_snvs=True)
+    vcf_reader = whatshap.vcf.VcfReader(config.vcf, only_snvs=True, phases=True)
     assert len(vcf_reader.samples) == 1
     variant_table = vcf_reader.fetch(chromosome)  # next(vcf_reader.__iter__())
     logging.debug("Processing %s", variant_table.chromosome)
@@ -242,10 +242,10 @@ def assemble_fragments(reads, pos2idx, phase_info_dict, phased=False):
             read_variants.append(FragVariantHandle(pos2idx[variant.position], allele, qscore=qscore, phase_set=ps))
         read_name = 'frag_' + str(read_id)
         if phased:
-            read_name = read_variants[0].phase_set
+            read_name = read_variants[0].loaded_ps
         fragments.append(Fragment(read_name=read_name, variants=read_variants))
     if phased:
-        fragments = sorted(fragments, key=lambda frag: frag.read_name)
+        fragments = sorted(fragments, key=lambda frag: frag.read_id)
     else:
         fragments = sorted(fragments, key=lambda frag: frag.vcf_idx_start)
     return fragments

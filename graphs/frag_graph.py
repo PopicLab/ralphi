@@ -119,7 +119,7 @@ class FragGraph:
                     evidence[(ps_i, ps_j)][0] += total_agree
                     evidence[(ps_i, ps_j)][1] += len(var_ps_i) * len(var_ps_j) - total_agree
         frag_graph = nx.Graph()
-        frag_graph.add_nodes_from([frag.read_name for frag in phase_fragments])
+        frag_graph.add_nodes_from([frag.read_id for frag in phase_fragments])
         for (ps1, ps2), (num_cis, num_trans) in evidence.items():
                 weight = 1.0 * (num_trans - num_cis)
                 if weight != 0:
@@ -306,6 +306,8 @@ def connect_components(components):
         cid_g = component_map[group[0][0]]
         for cid, group_frag in group[1:]:
             cid = component_map[cid]
+            if cid == cid_g:
+                continue
             if group_frag.haplotype != hap:
                 for frag in components[cid]:
                     frag.assign_haplotype(flip_hap(frag.haplotype))

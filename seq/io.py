@@ -16,17 +16,19 @@ def write_phased_vcf(input_vcf, idx2var, output_vcf, chromosome):
         vcf_reader.formats['PQ'] = _Format('PQ', 1, 'Integer', 'Phred QV indicating probability that this variant is '
                                                                'incorrectly phased relative to the haplotype')
     writer = Writer(open(output_vcf, 'w'), vcf_reader)
-    vcf_idx = 0
+    vcf_idx = 0 
     processed_chr = False
     for record in vcf_reader:
         if record.CHROM != chromosome:
             if processed_chr: break
             continue
+        if not record.is_snp:
+            writer.write_record(record)
+            continue
         processed_chr = True
         # update the genotype field
         record_format_keys = record.FORMAT.split(':')
-        mapping = {record_format_keys[i]: record.samples[0].data[i] for i in range(len(record_format_keys))}
-        gt = record.genotype(record.samples[0].sample).data.GT        
+        mapping = {record_format_keys[i]: record.samples[0].data[i] for i in range(len(record_format_keys))}      
         if vcf_idx in idx2var and idx2var[vcf_idx].h != None:  # phased
             v = idx2var[vcf_idx]
             if v.h == 0:
@@ -38,7 +40,7 @@ def write_phased_vcf(input_vcf, idx2var, output_vcf, chromosome):
             mapping['PQ'] = '0'
 
         else:  # unphased
-            mapping['GT'] = str(gt)
+            mapping['GT'] = str(record.genotype(record.samples[0].sample).data.GT  )
             mapping['PS'] = "."
             mapping['PD'] = "."
             mapping['PQ'] = '0'
