@@ -373,6 +373,8 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
+        if config.get('link', False):
+            raise ValueError('link must be left False when running phase.py, use link.py or, for hierarchical phasing the link_bam parameter in the inputs section.')
         return PhaseConfig(fname, **config)
     elif config_type == CONFIG_TYPE.LINK:
         return LinkConfig(fname, **config)
