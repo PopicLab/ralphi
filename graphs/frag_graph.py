@@ -1,6 +1,5 @@
 from copy import deepcopy
 
-import seq.frags as frags
 import networkx as nx
 import pickle
 import os
@@ -14,8 +13,7 @@ import tqdm
 import warnings
 
 from models import constants
-from seq.utils import extract_vcf_for_variants, construct_vcf_idx_to_record_dict
-import wandb
+from seq.utils import extract_vcf_for_variants
 
 
 class FragGraph:
@@ -62,7 +60,14 @@ class FragGraph:
         return frags_unique
 
     @staticmethod
-    def build(fragments, compute_trivial=False, compress=False):
+    def build(fragments, link, phase_fragments=None, compute_trivial=False, compress=False):
+        if link:
+            return FragGraph.build_link(fragments, phase_fragments, compute_trivial) 
+        else:
+            return FragGraph.build_phase(fragments,compute_trivial, compress)
+
+    @staticmethod
+    def build_phase(fragments, compute_trivial=False, compress=False):
         logging.debug("Input number of fragments: %d" % len(fragments))
         if compress and fragments:
             logging.debug("Compressing identical fragments")
@@ -90,6 +95,36 @@ class FragGraph:
                 # TODO(viq): differentiate between no overlap and half conflicts
                 if weight != 0: frag_graph.add_edge(i, j, weight=weight)
         return FragGraph(frag_graph, fragments, compute_trivial=compute_trivial)
+
+    @staticmethod
+    def build_link(fragments, phase_fragments, compute_trivial=False):
+        logging.debug("Input number of fragments: %d" % len(fragments))
+        evidence = defaultdict(lambda: [0, 0])
+        for frag in fragments:
+            frag_is_hap0 = defaultdict(list)
+            for var in frag.variants:
+                if var.loaded_ps is None: continue
+                matching_frag = phase_fragments[var.loaded_ps]
+                hap0_allele = matching_frag.get_variant(var.vcf_idx).allele
+                frag_is_hap0[var.loaded_ps].append(var.allele == hap0_allele)
+            frag_items = list(frag_is_hap0.items())
+            for ps_idx_i, (ps_i, var_ps_i) in enumerate(frag_items):
+                for  ps_j, var_ps_j in frag_items[ps_idx_i+1:]:
+                    # Count the in-cis and in-trans evidence 
+                    trues_i = var_ps_i.count(True)
+                    falses_i = len(var_ps_i) - trues_i
+                    trues_j = var_ps_j.count(True)
+                    falses_j = len(var_ps_j) - trues_j
+                    total_agree = (trues_i * trues_j) + (falses_i * falses_j)
+                    evidence[(ps_i, ps_j)][0] += total_agree
+                    evidence[(ps_i, ps_j)][1] += len(var_ps_i) * len(var_ps_j) - total_agree
+        frag_graph = nx.Graph()
+        frag_graph.add_nodes_from([frag.read_id for frag in phase_fragments])
+        for (ps1, ps2), (num_cis, num_trans) in evidence.items():
+                weight = 1.0 * (num_trans - num_cis)
+                if weight != 0:
+                    frag_graph.add_edge(ps1, ps2, weight=weight)
+        return FragGraph(frag_graph, fragments=phase_fragments, compute_trivial=compute_trivial)
 
     def get_variants_set(self):
         vcf_positions = set()
@@ -271,6 +306,8 @@ def connect_components(components):
         cid_g = component_map[group[0][0]]
         for cid, group_frag in group[1:]:
             cid = component_map[cid]
+            if cid == cid_g:
+                continue
             if group_frag.haplotype != hap:
                 for frag in components[cid]:
                     frag.assign_haplotype(flip_hap(frag.haplotype))
@@ -292,15 +329,14 @@ class FragGraphGen:
 
     def __iter__(self):
         if self.config.test_mode:
-            fragments = frags.parse_frag_repr(self.config.fragments)
-            graph = FragGraph.build(fragments, compress=self.config.compress)
+            graph = FragGraph.build(self.config.fragments, link=self.config.link, phase_fragments=self.config.phase_fragments, compress=self.config.compress)
             logging.debug("Built fragment graph with %d nodes and %d edges" % (graph.n_nodes, graph.g.number_of_edges()))
             for subgraph in tqdm.tqdm(graph.connected_components_subgraphs(self.config, self.features)):
                 yield subgraph
             yield None
         else:
             for _ in range(self.config.epochs):
-                for index, component_row in self.graph_dataset.iterrows():
+                for _, component_row in self.graph_dataset.iterrows():
                     with open(component_row.component_path, 'rb') as f:
                         subgraph = pickle.load(f)
                         logging.debug("Processing subgraph with %d nodes..." % subgraph.n_nodes)

@@ -11,7 +11,7 @@ import wandb
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
-CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_GENERATION DATA_SELECTION')
+CONFIG_TYPE = Enum("CONFIG_TYPE", 'TRAIN TEST DATA_GENERATION DATA_SELECTION LINK')
 
 MAIN_LOG = "MAIN"
 STATS_LOG_TRAIN = "STATS_TRAIN"
@@ -22,6 +22,7 @@ STATS_LOG_COLS_VALIDATE = ['Descriptor', 'Episode', 'SumOfCuts', 'SumOfRewards',
 
 REQUIRED_GLOBAL_PARAMS = {'vcf', 'inputs'}
 REQUIRED_DATA_PARAMS = {'bam', 'platform'}
+LINK_PARAMS = {'link', 'use_phasing'}
 
 SHARED_DEFAULTS = {
     'logging_level': "INFO",
@@ -34,8 +35,11 @@ SHARED_DEFAULTS = {
     'project_name': "ralphi",
     'run_name': "ralphi",
     'log_wandb': False,
+    'allow_unphased_variants': True,
     'skip_post': True,
     'reference': None,
+    'use_phasing': False,
+    'link': False,
 }
 
 MODEL_DEFAULTS = {
@@ -67,7 +71,8 @@ SHARED_DATA_DEFAULTS = {
     'is_hic': False,
     'min_isize': 0,
     'max_isize': float('inf'),
-    'realign': False
+    'realign': False,
+    'link_bam': False,
 }
 
 DATA_DEFAULTS_SHORT = {
@@ -254,18 +259,39 @@ class PhaseConfig(Config):
     def __init__(self, config_file, **entries):
         self.__dict__.update(entries)
         self.set_defaults(PHASE_DEFAULTS)
-        self.__dict__.update(entries)
         super().__init__(config_file)
         resolve_inputs(self)
         # skip_post has a platform dependent default while not being a data processing parameter
-        # We check if their is only one BAM file provided and if its platform is illumina to set the default 
-        if 'skip_post' not in entries and  len(self.inputs) == 1 and self.inputs[0].platform == 'illumina':
+        # We check if their is only one BAM file provided and if its platform is illumina to set the default
+        phase_inputs = [inp for inp in self.inputs if not inp.link_bam]
+        if 'skip_post' not in entries and  len(phase_inputs) == 1 and phase_inputs[0].platform == 'illumina':
             self.skip_post = False
         if self.chr_names is None:
             self.chr_names = ['chr{}'.format(x) for x in range(1, 23)]
         self.device = torch.device("cpu")
         self.output_vcf = self.out_dir + "/ralphi.vcf"
         logging.info(self)
+
+    def to_link(self):
+        for param in LINK_PARAMS:
+            self.__dict__[param] = True
+        self.vcf = self.output_vcf
+        self.out_dir = self.out_dir + "/link_"
+        self.output_vcf = self.out_dir + "ralphi.vcf"
+        self.log_dir = self.log_dir + "/link_"
+
+        Path(self.log_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.out_dir).mkdir(parents=True, exist_ok=True)
+
+class LinkConfig(PhaseConfig):
+    def __init__(self, config_file, **entries):
+        for param in LINK_PARAMS:
+            if param in entries and not entries[param]:
+                raise ValueError(f'{param} must be True for link mode')
+            entries[param] = True
+        super().__init__(config_file, **entries)
+        for inp in self.inputs:
+            inp.link_bam = True
 
 
 class TrainingConfig(Config):
@@ -347,7 +373,11 @@ def load_config(fname, config_type=CONFIG_TYPE.TRAIN):
     if config_type == CONFIG_TYPE.TRAIN:
         return TrainingConfig(fname, **config)
     elif config_type == CONFIG_TYPE.TEST:
+        if config.get('link', False):
+            raise ValueError('link must be left False when running phase.py, use link.py or, for hierarchical phasing the link_bam parameter in the inputs section.')
         return PhaseConfig(fname, **config)
+    elif config_type == CONFIG_TYPE.LINK:
+        return LinkConfig(fname, **config)
     elif config_type == CONFIG_TYPE.DATA_GENERATION:
         return DataConfig(fname, **config)
     elif config_type == CONFIG_TYPE.DATA_SELECTION:

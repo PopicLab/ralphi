@@ -1,20 +1,19 @@
-import argparse
-from collections import Counter, defaultdict
+from collections import defaultdict
 from copy import deepcopy
-from intervaltree import IntervalTree
 import logging
 import whatshap
-import string
 from whatshap import readselect
 from whatshap.cli import PhasedInputReader
-from whatshap import merge
+from whatshap.vcf import VariantCallPhase
+
 
 class FragVariantHandle:
-    def __init__(self, vcf_idx, allele, qscore=None):
+    def __init__(self, vcf_idx, allele, qscore=None, phase_set=None):
         self.vcf_idx = vcf_idx
         self.allele = allele
         self.qscore = qscore
         self.haplotype = None
+        self.loaded_ps = phase_set
 
     def __str__(self):
         return "Variant: vcf_idx={} allele={} qscore={}".format(self.vcf_idx, self.allele, self.qscore)
@@ -30,7 +29,7 @@ class Block:
         self.variants = []
         for i in range(len(alleles)):
             qscore = None if (qscores is None) else qscores[i]
-            self.variants.append(FragVariantHandle(vcf_idx + i, alleles[i], qscore))
+            self.variants.append(FragVariantHandle(vcf_idx + i, int(alleles[i]), qscore))
         self.n_variants = len(self.variants)
 
     def __str__(self):
@@ -73,6 +72,7 @@ class Fragment:
         self.vcf_positions = None
         self.fragment_group_id = None
         self.number_duplicated = 1
+        self.vcf_idx2pos = {}
 
     def __eq__(self, fragment):
         return (self.vcf_idx_start, self.vcf_idx_end, self.n_variants, self.variants) == (
@@ -81,6 +81,12 @@ class Fragment:
     def __str__(self):
         return "\nread_id={} n_variants={} variants=\n".format(self.read_id, self.n_variants) + \
                '\n'.join(map(str, self.variants))
+
+    def get_variant(self, vcf_idx):
+        if not self.vcf_idx2pos:
+            self.vcf_idx2pos = {v.vcf_idx: v for v in self.variants}
+        return self.vcf_idx2pos[vcf_idx]
+        
 
     def overlap(self, fragment):
         if min(self.vcf_idx_end, fragment.vcf_idx_end) < max(self.vcf_idx_start, fragment.vcf_idx_start):
@@ -151,16 +157,51 @@ class NestedDict(defaultdict):
         return NestedDict(self.default_factory)
 
 
+def get_phase_fragments(sample, variant_table, allow_unphased_variants):
+    phase_set_dict = defaultdict(list)
+    phase2phase_idx = {}
+    unique_phase_id = 0
+    phase_info_dict = {}
+    for v, phase in zip(variant_table.variants, variant_table.phases_of(sample)):
+        gt = None
+        phase_idx = None
+        if phase is not None:
+            gt = phase.phase
+            phase_set = phase.block_id
+            if phase_set not in phase2phase_idx:
+                phase2phase_idx[phase_set] = unique_phase_id
+                unique_phase_id += 1
+            phase_idx = phase2phase_idx[phase_set]
+        elif allow_unphased_variants:
+            phase_idx = unique_phase_id
+            unique_phase_id += 1
+            gt = (0, 1)
+        if phase_idx is not None:
+            phase_info_dict[v.position] = VariantCallPhase(block_id=phase_idx, phase=gt, quality=None)
+            phase_set_dict[phase_idx].append(v)
+    return phase_set_dict.values(), phase_info_dict
+
+
 def generate_fragments(config, chromosome):
-    vcf_reader = whatshap.vcf.VcfReader(config.vcf, only_snvs=True)
+    vcf_reader = whatshap.vcf.VcfReader(config.vcf, only_snvs=True, phases=True)
     assert len(vcf_reader.samples) == 1
     variant_table = vcf_reader.fetch(chromosome)  # next(vcf_reader.__iter__())
     logging.debug("Processing %s", variant_table.chromosome)
     variant_table = select_phaseable_variants(vcf_reader.samples[0], variant_table)
     logging.debug("Number of variants loaded: %d", len(variant_table))
-
+    pos2idx = {}
+    for v in variant_table.variants:
+        pos2idx[v.position] = v.index
+    phase_fragments = []
+    phase_info_dict = {}
+    if config.use_phasing:
+        sample = vcf_reader.samples[0]
+        phase_fragments, phase_info_dict = get_phase_fragments(sample, variant_table, config.allow_unphased_variants)
+        phase_fragments = assemble_fragments(phase_fragments, pos2idx, phase_info_dict, phased=True)
+        logging.debug("Number of phasing blocks loaded: %d", len(phase_fragments))
     all_fragments = []
     for inp in config.inputs:
+        if config.link != inp.link_bam: continue
         reference = None
         if inp.realign:
             reference = config.reference
@@ -178,21 +219,35 @@ def generate_fragments(config, chromosome):
             reads = reads.subset(readselect.readselection(reads, inp.max_coverage))
         logging.info("[%s] Selected %d reads covering %d variants in %s",
                      inp.platform, len(reads), len(reads.get_positions()), chromosome)
-        all_fragments.extend(assemble_fragments(reads, variant_table.variants))
+        all_fragments.extend(assemble_fragments(reads, pos2idx, phase_info_dict))
     logging.info("Assembled %d fragments from %d input(s) in %s", len(all_fragments), len(config.inputs), chromosome)
-    return all_fragments
+    return all_fragments, phase_fragments
 
 
-def assemble_fragments(reads, variants):
-    pos2idx = {}
-    for v in variants:
-        pos2idx[v.position] = v.index
-    fragments = []
-    for read in reads:
-        blocks = get_fragment_blocks(read, pos2idx)
-        block_allele_str = " ".join(str(b[0]) + " " + b[1] for b in blocks)
-        block_qual_str = "".join(str(c) if c in string.printable else '!' for b in blocks for c in b[2])
-        fragments.append(" ".join([str(len(blocks)), block_allele_str, block_qual_str]))
+def assemble_fragments(reads, pos2idx, phase_info_dict, phased=False):
+    fragments= []
+    for read_id, read in enumerate(reads):
+        read_variants = []
+        for variant in read:
+            ps = None
+            if variant.position in phase_info_dict:
+                ps = phase_info_dict[variant.position].block_id
+            if phased:
+                # Fragment from phasing evidence, the allele arbitrarily corresponds to the first haplotype
+                allele = phase_info_dict[variant.position].phase[0]
+                qscore = None
+            else:
+                allele = variant.allele
+                qscore = chr(variant.quality + 33)
+            read_variants.append(FragVariantHandle(pos2idx[variant.position], allele, qscore=qscore, phase_set=ps))
+        read_name = 'frag_' + str(read_id)
+        if phased:
+            read_name = read_variants[0].loaded_ps
+        fragments.append(Fragment(read_name=read_name, variants=read_variants))
+    if phased:
+        fragments = sorted(fragments, key=lambda frag: frag.read_id)
+    else:
+        fragments = sorted(fragments, key=lambda frag: frag.vcf_idx_start)
     return fragments
 
 
