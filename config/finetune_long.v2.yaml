@@ -1,0 +1,5 @@
+lr: 0.000003
+interval_episodes_to_validation: 30000
+panel_dataset_train: ['/path/to/ordered/combined/short/dataset']
+panel_dataset_validate: ['/path/short/real/validation', '/path/short/simulated/validation']
+pretrained_model: ['path/short/model']
